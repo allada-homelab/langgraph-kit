@@ -1,0 +1,7 @@
+{
+  "include": ["src/langgraph_kit"],
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "standard",
+  "venvPath": "../..",
+  "venv": ".venv"
+}

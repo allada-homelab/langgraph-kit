@@ -1,3 +1,6 @@
+# Test app (generated from python-template via Copier)
+testapp/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -1,0 +1,102 @@
+"""PostRunBackstopMiddleware — safe deterministic cleanup after run completion.
+
+Scoped narrowly to actions that are always safe: flushing observability,
+persisting run metadata, and recording completion summaries. Does NOT
+attempt to infer or auto-execute missing business-logic actions.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+from typing import Any
+
+from langchain.agents.middleware.types import AgentMiddleware as _AgentMiddleware
+from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.config import get_config
+
+logger = logging.getLogger(__name__)
+
+RUN_METADATA_NAMESPACE = ("run_metadata",)
+
+
+class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
+    """Runs deterministic cleanup after the agent completes.
+
+    Records:
+    - Run summary (message count, tool calls, errors, duration)
+    - Completion metadata to Store (if available)
+
+    Does NOT:
+    - Infer missing actions
+    - Execute high-stakes operations
+    - Make business decisions the model didn't explicitly take
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._run_start: float | None = None
+
+    async def abefore_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
+        self._run_start = time.time()
+        return None
+
+    async def aafter_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:
+        messages = state.get("messages", [])
+        duration = time.time() - self._run_start if self._run_start else 0.0
+
+        summary = _build_run_summary(messages, duration)
+
+        logger.info(
+            "Run complete: %d messages, %d tool calls, %d errors, %.1fs",
+            summary["message_count"],
+            summary["tool_calls"],
+            summary["tool_errors"],
+            summary["duration_seconds"],
+        )
+
+        # Persist to Store if available
+        store = getattr(runtime, "store", None)
+        if store is not None:
+            config = get_config()
+            thread_id = config.get("configurable", {}).get("thread_id", "unknown")
+            key = f"{thread_id}_{summary['completed_at']}"
+
+            try:
+                await store.aput(RUN_METADATA_NAMESPACE, key, summary)
+            except Exception:
+                logger.warning("Failed to persist run metadata", exc_info=True)
+
+        self._run_start = None
+        return None
+
+
+def _build_run_summary(messages: list[Any], duration: float) -> dict[str, Any]:
+    """Build a structured summary of the completed run."""
+    tool_calls = 0
+    tool_errors = 0
+    ai_messages = 0
+    last_content = ""
+
+    for msg in messages:
+        if isinstance(msg, AIMessage):
+            ai_messages += 1
+            if msg.tool_calls:
+                tool_calls += len(msg.tool_calls)
+            raw_content: Any = msg.content  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+            msg_content: str = raw_content if isinstance(raw_content, str) else ""
+            if msg_content.strip():
+                last_content = msg_content.strip()[:200]
+        elif isinstance(msg, ToolMessage):
+            if getattr(msg, "status", None) == "error":
+                tool_errors += 1
+
+    return {
+        "message_count": len(messages),
+        "ai_messages": ai_messages,
+        "tool_calls": tool_calls,
+        "tool_errors": tool_errors,
+        "duration_seconds": round(duration, 2),
+        "completed_at": str(int(time.time())),
+        "last_response_preview": last_content,
+    }

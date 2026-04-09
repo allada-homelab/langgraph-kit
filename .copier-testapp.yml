@@ -1,0 +1,9 @@
+project_name: "LangGraph Kit TestApp"
+stack_name: "lk-testapp"
+app_domain: "lk-testapp.localhost"
+repo_owner: "allada-homelab"
+repo_name: "lk-testapp"
+security_email: "admin@lk-testapp.localhost"
+dev_port_base: 10900
+include_langgraph: true
+langgraph_kit_version: "v0.1.0"
