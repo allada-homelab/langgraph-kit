@@ -40,6 +40,15 @@ class AgentConfig:
     # Plugin directory (optional — Python files with contribute() functions)
     plugins_dir: str = ""
 
+    # Token budget (0 = unlimited)
+    token_budget_per_thread: int = 0
+    budget_warning_pct: float = 0.80
+    budget_downgrade_model: str = ""
+
+    # Execution trace export
+    trace_export_enabled: bool = False
+    trace_max_per_thread: int = 20
+
 
 _config: AgentConfig = AgentConfig()
 

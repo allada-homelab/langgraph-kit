@@ -192,6 +192,29 @@ async def stream_agent_events(
         except Exception:
             logger.debug("Could not check interrupt state", exc_info=True)
 
+        # Emit trace summary if trace export is active
+        trace_handler = config.get("metadata", {}).get("_trace_handler")
+        if trace_handler is not None:
+            trace = trace_handler.get_trace()
+            yield f"data: {json.dumps({'trace': {'trace_id': trace.trace_id, 'duration_ms': round(trace.duration_ms, 2), 'span_count': trace.span_count}})}\n\n"
+            # Save trace to store if available
+            if store is not None:
+                try:
+                    from langgraph_kit.core.tracing.storage import TraceStore
+
+                    trace_store = TraceStore(store)
+                    await trace_store.save_trace(trace.thread_id, trace)
+                except Exception:
+                    logger.debug("Failed to persist trace", exc_info=True)
+
+        # Emit budget summary if token tracking is active
+        budget_callback = config.get("metadata", {}).get("_budget_callback")
+        if budget_callback is not None:
+            usage_list = budget_callback.get_accumulated()
+            if usage_list:
+                total = budget_callback.get_total()
+                yield f"data: {json.dumps({'budget': {'tokens_used': total.total_tokens, 'input_tokens': total.input_tokens, 'output_tokens': total.output_tokens, 'estimated_cost_usd': round(total.estimated_cost_usd, 6)}})}\n\n"
+
         yield "data: [DONE]\n\n"
     finally:
         if tracker and thread_id:

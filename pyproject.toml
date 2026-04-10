@@ -1,6 +1,6 @@
 [project]
 name = "langgraph-kit"
-version = "0.4.0"
+version = "0.5.0"
 description = "Reusable LangGraph agent toolkit with memory, tools, and orchestration"
 license = "AGPL-3.0-or-later"
 classifiers = [
@@ -25,9 +25,12 @@ google = ["langchain-google-genai>=2.0"]
 deepagents = ["deepagents>=0.4"]
 langfuse = ["langfuse>=4.0"]
 mcp = ["langchain-mcp-adapters>=0.2"]
+mcp-server = ["mcp>=1.0"]
 fastapi = ["fastapi>=0.100"]
+agui = ["ag-ui-protocol>=0.1"]
+a2a = ["a2a-sdk>=0.2"]
 all = [
-    "langgraph-kit[postgres,openai,anthropic,google,deepagents,langfuse,mcp,fastapi]",
+    "langgraph-kit[postgres,openai,anthropic,google,deepagents,langfuse,mcp,mcp-server,fastapi,agui,a2a]",
 ]
 dev = [
     "langgraph-kit[all]",

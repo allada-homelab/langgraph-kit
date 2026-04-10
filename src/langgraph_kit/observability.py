@@ -130,11 +130,32 @@ def build_agent_run_config(
         },
     }
 
+    callbacks: list[Any] = []
+
     handler = create_langfuse_handler()
     if handler is not None:
-        config["callbacks"] = [handler]
+        callbacks.append(handler)
         logger.info("Langfuse callback attached", extra={"agent_id": agent_id})
-    else:
-        logger.info("Langfuse callback not attached", extra={"agent_id": agent_id})
+
+    # Execution trace export
+    if cfg.trace_export_enabled:
+        from langgraph_kit.core.tracing.handler import TraceCallbackHandler
+
+        trace_handler = TraceCallbackHandler(agent_id=agent_id, thread_id=thread_id)
+        callbacks.append(trace_handler)
+        config["metadata"]["_trace_handler"] = trace_handler
+        logger.info("Trace export attached", extra={"agent_id": agent_id})
+
+    # Token budget tracking
+    if cfg.token_budget_per_thread > 0:
+        from langgraph_kit.core.cost.callback import TokenTrackingCallback
+
+        budget_callback = TokenTrackingCallback()
+        callbacks.append(budget_callback)
+        config["metadata"]["_budget_callback"] = budget_callback
+        logger.info("Budget tracking attached", extra={"agent_id": agent_id})
+
+    if callbacks:
+        config["callbacks"] = callbacks
 
     return config

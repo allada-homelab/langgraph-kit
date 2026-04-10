@@ -45,6 +45,9 @@ from langgraph_kit.models import (
     QueueMessageRequest,
     QueueMessageResponse,
     QueueStatusResponse,
+    ThreadListResponse,
+    ThreadMetadataResponse,
+    ThreadUpdateRequest,
 )
 from langgraph_kit.observability import build_agent_run_config, flush_langfuse
 from langgraph_kit.registry import get, get_dispatcher, list_agents
@@ -177,12 +180,69 @@ def _to_lc_messages(messages: list[ChatMessage]) -> list[Any]:
     result: list[Any] = []
     for m in messages:
         if m.role == "user":
-            result.append(HumanMessage(content=m.content))
+            if m.attachments:
+                content = _build_multipart_content(m)
+                result.append(HumanMessage(content=content))
+            else:
+                result.append(HumanMessage(content=m.content))
         elif m.role == "assistant":
             result.append(AIMessage(content=m.content))
         elif m.role == "system":
             result.append(SystemMessage(content=m.content))
     return result
+
+
+def _build_multipart_content(m: ChatMessage) -> list[dict[str, Any]]:
+    """Build a LangChain multi-part content list from a message with attachments."""
+    parts: list[dict[str, Any]] = []
+    if m.content.strip():
+        parts.append({"type": "text", "text": m.content})
+    for att in m.attachments:
+        if att.type.startswith("image/"):
+            parts.append({"type": "image_url", "image_url": {"url": att.data_url}})
+        elif att.type == "application/pdf":
+            # Many LLMs support PDF via the image_url path with data URLs
+            parts.append({"type": "image_url", "image_url": {"url": att.data_url}})
+        else:
+            # Text-based files: decode base64 and include as text
+            text_content = _decode_data_url_text(att.data_url)
+            parts.append({"type": "text", "text": f"[File: {att.name}]\n{text_content}"})
+    return parts
+
+
+def _extract_text_content(content: Any) -> str:
+    """Extract text from LangChain message content (str or multi-part list)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict):
+                if part.get("type") == "text":
+                    parts.append(part.get("text", ""))
+                elif part.get("type") == "image_url":
+                    parts.append("[image]")
+            elif isinstance(part, str):
+                parts.append(part)
+        return " ".join(parts)
+    return str(content)
+
+
+def _decode_data_url_text(data_url: str) -> str:
+    """Decode a base64 data URL to a UTF-8 string.
+
+    Falls back to the raw data URL if decoding fails.
+    """
+    import base64
+
+    try:
+        # data:text/plain;base64,SGVsbG8=
+        if ";base64," in data_url:
+            encoded = data_url.split(";base64,", 1)[1]
+            return base64.b64decode(encoded).decode("utf-8", errors="replace")
+    except Exception:
+        logger.debug("Failed to decode data URL", exc_info=True)
+    return data_url
 
 
 def _get_graph(agent_id: str) -> Any:
@@ -292,6 +352,11 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
             config["configurable"]["checkpoint_id"] = request.checkpoint_id
         store = _store_var.get(None) or getattr(http_request.app.state, "store", None)
 
+        # Track thread metadata
+        if store is not None:
+            first_msg = request.messages[-1].content if request.messages else None
+            await _ensure_thread(store, tid, current_user, agent_id, first_msg)
+
         return StreamingResponse(
             stream_agent_events(graph, input_data, config, store=store),
             media_type="text/event-stream",
@@ -318,6 +383,12 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
             endpoint="invoke",
         )
         input_data: dict[str, Any] = {"messages": _to_lc_messages(request.messages)}
+
+        # Track thread metadata
+        store = _store_var.get(None)
+        if store is not None:
+            first_msg = request.messages[-1].content if request.messages else None
+            await _ensure_thread(store, tid, current_user, agent_id, first_msg)
 
         try:
             result = await graph.ainvoke(input_data, config=config)
@@ -428,8 +499,9 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
                         role = "user"
                     elif msg.type == "system":
                         role = "system"
-                content = msg.content if hasattr(msg, "content") else str(msg)
-                if isinstance(content, str) and content.strip():
+                raw_content = msg.content if hasattr(msg, "content") else str(msg)
+                content = _extract_text_content(raw_content)
+                if content.strip():
                     result.append({"role": role, "content": content})
             return result
         except Exception:
@@ -618,4 +690,143 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
                 detail=f"Fork failed: {exc}",
             ) from exc
 
+    # ------------------------------------------------------------------
+    # Thread management endpoints
+    # ------------------------------------------------------------------
+
+    @router.get("/threads", response_model=ThreadListResponse)
+    async def list_threads(
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
+        agent_id: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> ThreadListResponse:
+        """List threads for the current user."""
+        store = _get_store(http_request)
+        from langgraph_kit.core.threads import ThreadManager
+
+        mgr = ThreadManager(store)
+        threads, total = await mgr.list_for_user(
+            str(current_user.id), agent_id=agent_id, limit=limit, offset=offset
+        )
+        return ThreadListResponse(
+            threads=[
+                ThreadMetadataResponse(**t.model_dump(mode="json")) for t in threads
+            ],
+            total=total,
+            limit=limit,
+            offset=offset,
+        )
+
+    @router.get("/threads/search", response_model=ThreadListResponse)
+    async def search_threads(
+        q: str,
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
+        limit: int = 20,
+    ) -> ThreadListResponse:
+        """Search threads by title or content."""
+        store = _get_store(http_request)
+        from langgraph_kit.core.threads import ThreadManager
+
+        mgr = ThreadManager(store)
+        threads = await mgr.search(str(current_user.id), q, limit=limit)
+        return ThreadListResponse(
+            threads=[
+                ThreadMetadataResponse(**t.model_dump(mode="json")) for t in threads
+            ],
+            total=len(threads),
+            limit=limit,
+            offset=0,
+        )
+
+    @router.get("/threads/{thread_id}", response_model=ThreadMetadataResponse)
+    async def get_thread_metadata(
+        thread_id: str,
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
+    ) -> ThreadMetadataResponse:
+        """Get metadata for a single thread."""
+        store = _get_store(http_request)
+        from langgraph_kit.core.threads import ThreadManager
+
+        mgr = ThreadManager(store)
+        meta = await mgr.get(thread_id)
+        if meta is None or meta.user_id != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Thread not found",
+            )
+        return ThreadMetadataResponse(**meta.model_dump(mode="json"))
+
+    @router.patch("/threads/{thread_id}", response_model=ThreadMetadataResponse)
+    async def update_thread_metadata(
+        thread_id: str,
+        body: ThreadUpdateRequest,
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
+    ) -> ThreadMetadataResponse:
+        """Update thread title or tags."""
+        store = _get_store(http_request)
+        from langgraph_kit.core.threads import ThreadManager
+
+        mgr = ThreadManager(store)
+        existing = await mgr.get(thread_id)
+        if existing is None or existing.user_id != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Thread not found",
+            )
+
+        updated = await mgr.update(thread_id, title=body.title, tags=body.tags)
+        if updated is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to update thread",
+            )
+        return ThreadMetadataResponse(**updated.model_dump(mode="json"))
+
+    @router.delete("/threads/{thread_id}")
+    async def delete_thread(
+        thread_id: str,
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
+    ) -> dict[str, bool]:
+        """Delete a thread's metadata."""
+        store = _get_store(http_request)
+        from langgraph_kit.core.threads import ThreadManager
+
+        mgr = ThreadManager(store)
+        existing = await mgr.get(thread_id)
+        if existing is None or existing.user_id != str(current_user.id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Thread not found",
+            )
+        deleted = await mgr.delete(thread_id)
+        return {"deleted": deleted}
+
     return router
+
+
+async def _ensure_thread(
+    store: Any,
+    thread_id: str,
+    current_user: Any,
+    agent_id: str,
+    first_message: str | None,
+) -> None:
+    """Create/update thread metadata as a fire-and-forget side effect."""
+    try:
+        from langgraph_kit.core.threads import ThreadManager
+
+        mgr = ThreadManager(store)
+        await mgr.ensure_thread(
+            thread_id=thread_id,
+            user_id=str(current_user.id),
+            agent_id=agent_id,
+            first_message=first_message,
+        )
+    except Exception:
+        logger.debug("Failed to ensure thread metadata", exc_info=True)

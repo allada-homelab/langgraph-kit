@@ -13,6 +13,12 @@ from .queue import (
     ThreadBusyTracker,
     ThreadQueue,
 )
+from .routing import (
+    AgentCapability,
+    KeywordRoutingStrategy,
+    LLMRoutingStrategy,
+    RoutingDecision,
+)
 from .workers import (
     CODING_VERIFIER_DEFINITION,
     CODING_WORKERS,
@@ -23,19 +29,23 @@ from .workers import (
 )
 
 __all__ = [
-    "AsyncTask",
-    "AsyncTaskManager",
-    "AsyncTaskStatus",
     "CODING_VERIFIER_DEFINITION",
     "CODING_WORKERS",
     "IMPLEMENTER_DEFINITION",
+    "R0_WORKERS",
+    "RESEARCHER_DEFINITION",
+    "VERIFIER_DEFINITION",
+    "AgentCapability",
+    "AsyncTask",
+    "AsyncTaskManager",
+    "AsyncTaskStatus",
+    "KeywordRoutingStrategy",
+    "LLMRoutingStrategy",
     "QueueSemantic",
     "QueuedInputMiddleware",
     "QueuedItem",
-    "R0_WORKERS",
-    "RESEARCHER_DEFINITION",
+    "RoutingDecision",
     "ThreadBusyTracker",
     "ThreadQueue",
-    "VERIFIER_DEFINITION",
     "build_async_task_tools",
 ]
