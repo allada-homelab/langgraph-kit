@@ -7,11 +7,8 @@ continuation policy, stop hooks, and multi-agent orchestration.
 
 from __future__ import annotations
 
-import contextvars
 import logging
 from typing import Any
-
-from langchain.agents.middleware.types import AgentMiddleware as _AgentMiddleware
 
 from langgraph_kit.core.context_management.pressure import PressureMonitor
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
@@ -28,12 +25,11 @@ from langgraph_kit.core.prompt_assembly.sections import (
     SectionStability,
 )
 from langgraph_kit.core.tools.registry import ToolRegistry
-from langgraph_kit.graphs._builder import (
-    build_backend_factory,
-    build_command_dispatcher,
-    build_middleware_stack,
-    register_standard_tools,
-)
+from langgraph_kit.core.graph_builder.backend import build_backend_factory
+from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
+from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
+from langgraph_kit.core.graph_builder.tools import register_standard_tools
+from langgraph_kit.core.orchestration.workers import R0_WORKERS
 from langgraph_kit.llm import build_llm
 
 logger = logging.getLogger(__name__)
@@ -120,147 +116,6 @@ _CORE_SECTIONS = [
 
 
 # ---------------------------------------------------------------------------
-# R0-009: Declarative worker definitions
-# ---------------------------------------------------------------------------
-
-WORKER_DEFINITIONS: list[dict[str, Any]] = [
-    {
-        "name": "researcher",
-        "description": (
-            "Deep codebase research and investigation. Use when you need to "
-            "explore multiple files, trace execution paths, or understand "
-            "architecture across a codebase."
-        ),
-        "system_prompt": (
-            "You are a research specialist. Investigate thoroughly, report "
-            "findings in a structured format with file paths and line numbers. "
-            "Stay within the assigned scope. Do not make changes — only report."
-        ),
-    },
-    {
-        "name": "implementer",
-        "description": (
-            "Focused code implementation within a bounded scope. Use when the "
-            "change is well-understood and the scope is clear."
-        ),
-        "system_prompt": (
-            "You are an implementation specialist. Make the requested changes "
-            "precisely and completely. Follow existing code conventions. "
-            "Report what you changed and any issues encountered."
-        ),
-    },
-    {
-        "name": "verifier",
-        "description": (
-            "Independent verification of changes. Use after implementation to "
-            "check correctness with a fresh perspective."
-        ),
-        "system_prompt": (
-            "You are a verification specialist. Review the changes for "
-            "correctness, edge cases, and adherence to requirements. "
-            "Do not fix issues — report them clearly so the supervisor "
-            "can decide next steps."
-        ),
-    },
-]
-
-
-# ---------------------------------------------------------------------------
-# R0-014: Stop hooks lifecycle
-# ---------------------------------------------------------------------------
-
-
-class StopHooksMiddleware(_AgentMiddleware):  # type: ignore[misc]
-    """Runs registered lifecycle hooks at turn boundaries.
-
-    Hooks are executed in order after the agent completes.
-    Non-blocking hooks log failures; blocking hooks propagate exceptions.
-    """
-
-    def __init__(self, hooks: list[Any] | None = None) -> None:
-        super().__init__()
-        self._hooks: list[Any] = hooks or []
-
-    def register_hook(self, hook: Any) -> None:
-        self._hooks.append(hook)
-
-    async def aafter_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
-        for hook in self._hooks:
-            try:
-                if hasattr(hook, "on_turn_complete"):
-                    await hook.on_turn_complete(state)
-            except Exception:
-                blocking = getattr(hook, "blocking", False)
-                if blocking:
-                    raise
-                logger.exception("Non-blocking hook failed: %s", hook)
-        return None
-
-
-# ---------------------------------------------------------------------------
-# R0-001: Runtime state tracking middleware
-# ---------------------------------------------------------------------------
-
-
-class RuntimeStateMiddleware(_AgentMiddleware):  # type: ignore[misc]
-    """Tracks structured state transitions and emits runtime metadata.
-
-    Uses contextvars for per-request state so concurrent invocations don't interfere.
-    """
-
-    _cv_state: contextvars.ContextVar[str] = contextvars.ContextVar(
-        "runtime_state", default="idle"
-    )
-    _cv_stop_reason: contextvars.ContextVar[str | None] = contextvars.ContextVar(
-        "runtime_stop_reason", default=None
-    )
-    _cv_turn_count: contextvars.ContextVar[int] = contextvars.ContextVar(
-        "runtime_turn_count", default=0
-    )
-
-    @property
-    def state(self) -> str:
-        return self._cv_state.get()
-
-    @property
-    def stop_reason(self) -> str | None:
-        return self._cv_stop_reason.get()
-
-    @property
-    def turn_count(self) -> int:
-        return self._cv_turn_count.get()
-
-    async def abefore_agent(self, _state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
-        self._cv_state.set("started")
-        self._cv_stop_reason.set(None)
-        self._cv_turn_count.set(self._cv_turn_count.get() + 1)
-        return None
-
-    async def awrap_model_call(self, request: Any, handler: Any) -> Any:
-        self._cv_state.set("streaming")
-        try:
-            result = await handler(request)
-            self._cv_state.set("completed")
-            self._cv_stop_reason.set("final_answer")
-            return result
-        except Exception as exc:
-            self._cv_state.set("failed")
-            self._cv_stop_reason.set(f"error: {type(exc).__name__}")
-            raise
-
-    async def awrap_tool_call(self, request: Any, handler: Any) -> Any:
-        prev = self._cv_state.get()
-        self._cv_state.set("tool_running")
-        try:
-            result = await handler(request)
-            self._cv_state.set(prev)
-            return result
-        except Exception:
-            self._cv_state.set("tool_failed")
-            raise
-
-
-# ---------------------------------------------------------------------------
 # Build function
 # ---------------------------------------------------------------------------
 
@@ -338,7 +193,7 @@ def build_r0_agent(
         tools=tool_registry.compile_tools(),
         system_prompt=system_prompt,
         middleware=middleware,
-        subagents=WORKER_DEFINITIONS,
+        subagents=R0_WORKERS,
         checkpointer=checkpointer,
         store=store,
         backend=build_backend_factory("r0_agent"),

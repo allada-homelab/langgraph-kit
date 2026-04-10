@@ -1,6 +1,6 @@
 [project]
 name = "langgraph-kit"
-version = "0.2.0"
+version = "0.3.0"
 description = "Reusable LangGraph agent toolkit with memory, tools, and orchestration"
 license = "AGPL-3.0-or-later"
 classifiers = [

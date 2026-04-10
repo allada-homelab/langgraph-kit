@@ -12,9 +12,7 @@ from typing import Any
 
 from langgraph_kit.core.context_management.pressure import PressureMonitor
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
-from langgraph_kit.core.orchestration.verification import (
-    CODING_VERIFIER_DEFINITION,
-)
+from langgraph_kit.core.orchestration.workers import CODING_WORKERS
 from langgraph_kit.core.prompt_assembly.activation import ACTIVATION_SECTIONS
 from langgraph_kit.core.prompt_assembly.coding_sections import (
     CODING_SEARCH_SECTIONS,
@@ -32,41 +30,20 @@ from langgraph_kit.core.prompt_assembly.sections import (
     SectionRegistry,
     SectionStability,
 )
+from langgraph_kit.core.graph_builder.backend import build_backend_factory
+from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
+from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
+from langgraph_kit.core.graph_builder.tools import register_standard_tools, register_tool
 from langgraph_kit.core.tools.capability import ToolRisk
 from langgraph_kit.core.tools.registry import ToolRegistry
 from langgraph_kit.core.tools.worktree import (
     WORKTREE_GUIDANCE_SECTION,
     build_worktree_tools,
 )
-from langgraph_kit.graphs._builder import (
-    _register_tool,
-    build_backend_factory,
-    build_command_dispatcher,
-    build_middleware_stack,
-    register_standard_tools,
-)
-from langgraph_kit.graphs.r0_agent import (
-    _CORE_SECTIONS,
-)
-from langgraph_kit.graphs.r0_agent import (
-    WORKER_DEFINITIONS as _R0_WORKER_DEFINITIONS,
-)
+from langgraph_kit.graphs.r0_agent import _CORE_SECTIONS
 from langgraph_kit.llm import build_llm
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Coding-specific worker definitions
-# ---------------------------------------------------------------------------
-
-# Reuse researcher and implementer from R0, replace verifier with R2-005
-_R0_WORKERS_BY_NAME = {w["name"]: w for w in _R0_WORKER_DEFINITIONS}
-CODING_WORKER_DEFINITIONS: list[dict[str, Any]] = [
-    _R0_WORKERS_BY_NAME["researcher"],
-    _R0_WORKERS_BY_NAME["implementer"],
-    CODING_VERIFIER_DEFINITION,  # R2-005 enhanced verifier
-]
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +75,7 @@ def build_coding_agent(
     # R2-004: Worktree tools (coding-specific)
     for i, tool_fn in enumerate(build_worktree_tools()):
         name = getattr(tool_fn, "__name__", f"worktree_tool_{i}")
-        _register_tool(
+        register_tool(
             tool_registry,
             tool_fn,
             id_prefix="worktree",
@@ -162,7 +139,7 @@ def build_coding_agent(
         tools=tool_registry.compile_tools(),
         system_prompt=system_prompt,
         middleware=middleware,
-        subagents=CODING_WORKER_DEFINITIONS,
+        subagents=CODING_WORKERS,
         checkpointer=checkpointer,
         store=store,
         backend=build_backend_factory("coding_agent"),
