@@ -15,7 +15,7 @@ Subpackages:
     evals     Evaluation framework for agent quality
 """
 
-from langgraph_kit._config import AgentConfig, configure, get_config
+from langgraph_kit._config import AgentConfig, configure, configure_from_settings, get_config
 from langgraph_kit.llm import build_llm
 from langgraph_kit.models import ChatMessage, InvokeRequest, InvokeResponse
 from langgraph_kit.observability import UserInfo, build_agent_run_config
@@ -32,6 +32,7 @@ __all__ = [
     "build_agent_run_config",
     "build_llm",
     "configure",
+    "configure_from_settings",
     "create_persistence",
     "get",
     "get_config",

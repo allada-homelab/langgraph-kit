@@ -1,21 +1,34 @@
-"""Optional FastAPI route factory for langgraph-kit.
+"""Optional FastAPI integration for langgraph-kit.
+
+Provides:
+- ``create_agent_router()`` — route factory for agent endpoints
+- ``create_app_lifespan()`` — one-call FastAPI lifespan handler
+- ``StoreDep`` / ``CheckpointerDep`` — FastAPI dependency injection
 
 Usage::
 
-    from langgraph_kit.contrib.fastapi import create_agent_router
+    from langgraph_kit import configure_from_settings
+    from langgraph_kit.contrib.fastapi import create_agent_router, create_app_lifespan
 
-    router = create_agent_router(get_current_user=CurrentUser)
-    app.include_router(router, prefix="/api/v1")
+    configure_from_settings(settings, field_map={"database_url": "SQLALCHEMY_DATABASE_URI"})
+    app = FastAPI(lifespan=create_app_lifespan())
+    app.include_router(create_agent_router(get_current_user=CurrentUser), prefix="/api/v1")
 """
 
+from __future__ import annotations
+
+import contextvars
 import json
 import logging
-from typing import Any
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
+from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
+from langgraph_kit._config import get_config
 from langgraph_kit.core.hitl.models import (
     ResumeRequest,
     ThreadStateResponse,
@@ -38,6 +51,119 @@ from langgraph_kit.registry import get, get_dispatcher, list_agents
 from langgraph_kit.streaming import stream_agent_events
 
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Context vars — set by create_app_lifespan(), read by DI deps
+# ---------------------------------------------------------------------------
+
+_store_var: contextvars.ContextVar[Any] = contextvars.ContextVar("langgraph_store")
+_checkpointer_var: contextvars.ContextVar[Any] = contextvars.ContextVar(
+    "langgraph_checkpointer"
+)
+
+
+# ---------------------------------------------------------------------------
+# FastAPI dependency injection
+# ---------------------------------------------------------------------------
+
+
+def get_store() -> Any:
+    """FastAPI dependency that returns the LangGraph store."""
+    try:
+        return _store_var.get()
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Store not available — agent lifespan not initialized",
+        ) from None
+
+
+def get_checkpointer() -> Any:
+    """FastAPI dependency that returns the LangGraph checkpointer."""
+    try:
+        return _checkpointer_var.get()
+    except LookupError:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Checkpointer not available — agent lifespan not initialized",
+        ) from None
+
+
+StoreDep = Annotated[Any, Depends(get_store)]
+CheckpointerDep = Annotated[Any, Depends(get_checkpointer)]
+
+
+# ---------------------------------------------------------------------------
+# App lifespan
+# ---------------------------------------------------------------------------
+
+
+def create_app_lifespan(
+    *,
+    register_agents: Callable[..., Any] | None = None,
+) -> Any:
+    """Return a FastAPI lifespan that initialises the full agent stack.
+
+    The lifespan handles:
+    1. ``init_langfuse()``
+    2. ``create_persistence()`` → (checkpointer, store)
+    3. MCP server connections (if configured)
+    4. Agent graph registration
+    5. yield (app serves requests)
+    6. MCP close + ``shutdown_langfuse()``
+
+    Parameters
+    ----------
+    register_agents:
+        Optional ``(checkpointer, store, mcp_tools) -> None`` callback.
+        If omitted, calls ``langgraph_kit.graphs.register_all()``.
+    """
+    from fastapi import FastAPI
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        from langgraph_kit.observability import init_langfuse, shutdown_langfuse
+        from langgraph_kit.persistence import create_persistence
+
+        init_langfuse()
+        mcp_mgr = None
+        try:
+            async with create_persistence() as (checkpointer, store):
+                # Set context vars (for DI deps)
+                _checkpointer_var.set(checkpointer)
+                _store_var.set(store)
+                # Set app.state (backwards compat)
+                app.state.checkpointer = checkpointer
+                app.state.store = store
+
+                # MCP servers
+                mcp_tools: list[Any] = []
+                config = get_config()
+                if config.mcp_servers:
+                    from langgraph_kit.core.plugins.mcp_client import (
+                        MCPClientManager,
+                    )
+
+                    mcp_mgr = MCPClientManager(config.mcp_servers)
+                    contribution = await mcp_mgr.connect_all()
+                    mcp_tools = contribution.tools
+                app.state.mcp_tools = mcp_tools
+
+                # Register agents
+                if register_agents is not None:
+                    register_agents(checkpointer, store, mcp_tools)
+                else:
+                    from langgraph_kit.graphs import register_all
+
+                    register_all(checkpointer, store, mcp_tools=mcp_tools)
+
+                yield
+        finally:
+            if mcp_mgr is not None:
+                await mcp_mgr.close()
+            shutdown_langfuse()
+
+    return lifespan
 
 
 def _to_lc_messages(messages: list[ChatMessage]) -> list[Any]:
@@ -93,14 +219,17 @@ async def _try_command(agent_id: str, messages: list[ChatMessage]) -> str | None
 
 
 def _get_store(request: Request) -> Any:
-    """Get the LangGraph Store from app state."""
-    store = getattr(request.app.state, "store", None)
-    if store is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Store not available",
-        )
-    return store
+    """Get the LangGraph Store from contextvar or app state (fallback)."""
+    try:
+        return _store_var.get()
+    except LookupError:
+        store = getattr(request.app.state, "store", None)
+        if store is None:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Store not available",
+            )
+        return store
 
 
 def create_agent_router(*, get_current_user: Any) -> APIRouter:
@@ -161,7 +290,7 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         )
         if request.checkpoint_id:
             config["configurable"]["checkpoint_id"] = request.checkpoint_id
-        store = getattr(http_request.app.state, "store", None)  # optional for streaming
+        store = _store_var.get(None) or getattr(http_request.app.state, "store", None)
 
         return StreamingResponse(
             stream_agent_events(graph, input_data, config, store=store),
@@ -406,7 +535,7 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
             current_user=current_user,
             endpoint="resume_stream",
         )
-        store = getattr(http_request.app.state, "store", None)  # optional for streaming
+        store = _store_var.get(None) or getattr(http_request.app.state, "store", None)
 
         responses = [r.model_dump(mode="json") for r in body.responses]
 
