@@ -1,6 +1,6 @@
 [project]
 name = "langgraph-kit"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reusable LangGraph agent toolkit with memory, tools, and orchestration"
 license = "AGPL-3.0-or-later"
 classifiers = [
@@ -10,24 +10,32 @@ requires-python = "==3.13.*"
 dependencies = [
     "pydantic>=2.0",
     "langgraph>=0.3",
-    "langgraph-checkpoint-postgres>=2.0",
     "langgraph-checkpoint-sqlite>=2.0",
     "langchain-core>=0.3",
-    "langchain-openai>=0.3",
-    "deepagents>=0.4",
-    "langfuse>=4.0",
-    "langchain-mcp-adapters>=0.2",
-    "structlog>=24.0",
 ]
 
 [project.urls]
 Repository = "https://github.com/allada-homelab/langgraph-kit"
 
 [project.optional-dependencies]
-fastapi = ["fastapi>=0.100"]
+postgres = ["langgraph-checkpoint-postgres>=2.0"]
+openai = ["langchain-openai>=0.3"]
 anthropic = ["langchain-anthropic>=0.3"]
 google = ["langchain-google-genai>=2.0"]
-dev = ["pytest>=8.0", "pytest-asyncio>=0.24", "coverage>=7.0", "ruff>=0.8"]
+deepagents = ["deepagents>=0.4"]
+langfuse = ["langfuse>=4.0"]
+mcp = ["langchain-mcp-adapters>=0.2"]
+fastapi = ["fastapi>=0.100"]
+all = [
+    "langgraph-kit[postgres,openai,anthropic,google,deepagents,langfuse,mcp,fastapi]",
+]
+dev = [
+    "langgraph-kit[all]",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+    "coverage>=7.0",
+    "ruff>=0.8",
+]
 
 [build-system]
 requires = ["hatchling"]
