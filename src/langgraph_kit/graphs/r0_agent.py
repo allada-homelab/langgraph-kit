@@ -16,7 +16,6 @@ from langgraph_kit.core.prompt_assembly.sections import (
 )
 from langgraph_kit.graphs._builder import build_deep_agent
 
-
 # ---------------------------------------------------------------------------
 # R0-003/004: Prompt sections — stable core + volatile context
 # ---------------------------------------------------------------------------
