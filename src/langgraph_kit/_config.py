@@ -110,7 +110,7 @@ def configure_from_settings(
         try:
             if not callable(getattr(type(settings), attr, None)):
                 settings_attrs[attr.lower()] = attr
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
 
     kwargs: dict[str, Any] = {}

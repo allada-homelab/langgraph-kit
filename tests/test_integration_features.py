@@ -6,17 +6,14 @@ All tests are re-runnable, use in-memory mocks, and require no external services
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
-from uuid import uuid4
 
 import pytest
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from tests.conftest import MockStore
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -64,7 +61,13 @@ class TestEnrichedRegistry:
 
     def test_register_with_metadata(self) -> None:
         """Setup: register an agent with full metadata. Verify all fields persist."""
-        from langgraph_kit.registry import AgentMetadata, register, get_metadata, list_agents, _registry, _metadata
+        from langgraph_kit.registry import (
+            AgentMetadata,
+            _metadata,
+            _registry,
+            get_metadata,
+            register,
+        )
 
         # Clean state
         _registry.clear()
@@ -91,7 +94,12 @@ class TestEnrichedRegistry:
         assert "image/png" in meta.input_modes
 
     def test_register_without_metadata_uses_defaults(self) -> None:
-        from langgraph_kit.registry import AgentMetadata, register, get_metadata, _registry, _metadata
+        from langgraph_kit.registry import (
+            _metadata,
+            _registry,
+            get_metadata,
+            register,
+        )
 
         _registry.clear()
         _metadata.clear()
@@ -103,7 +111,13 @@ class TestEnrichedRegistry:
         assert meta.tags == []
 
     def test_list_agents_includes_metadata_fields(self) -> None:
-        from langgraph_kit.registry import AgentMetadata, register, list_agents, _registry, _metadata
+        from langgraph_kit.registry import (
+            AgentMetadata,
+            _metadata,
+            _registry,
+            list_agents,
+            register,
+        )
 
         _registry.clear()
         _metadata.clear()
@@ -115,7 +129,7 @@ class TestEnrichedRegistry:
         assert agents[0]["tags"] == ["ai"]
 
     def test_get_all_returns_graphs(self) -> None:
-        from langgraph_kit.registry import register, get_all, _registry, _metadata
+        from langgraph_kit.registry import _metadata, _registry, get_all, register
 
         _registry.clear()
         _metadata.clear()
@@ -333,7 +347,7 @@ class TestTokenBudgetManager:
 
     def test_token_tracking_callback_extraction(self) -> None:
         """Test that the callback extracts usage from LLM responses."""
-        from langgraph_kit.core.cost.callback import _extract_usage, TokenUsage
+        from langgraph_kit.core.cost.callback import _extract_usage
 
         # Simulate OpenAI-style response
         response = MagicMock()
@@ -360,7 +374,11 @@ class TestConversationReplay:
 
     def test_recording_model_roundtrip(self) -> None:
         """Setup: create recording. Run: serialize/deserialize. Analyze: data preserved."""
-        from langgraph_kit.replay import ConversationRecording, LLMInteraction, ToolInteraction
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            LLMInteraction,
+            ToolInteraction,
+        )
 
         recording = ConversationRecording(
             id="rec-1",
@@ -395,7 +413,11 @@ class TestConversationReplay:
 
     def test_recording_properties(self) -> None:
         """Test tool_sequence and interaction filtering properties."""
-        from langgraph_kit.replay import ConversationRecording, LLMInteraction, ToolInteraction
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            LLMInteraction,
+            ToolInteraction,
+        )
 
         recording = ConversationRecording(
             interactions=[
@@ -437,7 +459,11 @@ class TestConversationReplay:
 
     def test_recorded_chat_model_sequential(self) -> None:
         """Setup: recording with 2 LLM interactions. Run: call model twice. Analyze: correct responses."""
-        from langgraph_kit.replay import ConversationRecording, LLMInteraction, RecordedChatModel
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            LLMInteraction,
+            RecordedChatModel,
+        )
 
         recording = ConversationRecording(
             interactions=[
@@ -462,7 +488,12 @@ class TestConversationReplay:
 
     def test_recorded_chat_model_raises_on_exhaustion(self) -> None:
         """Setup: recording with 1 interaction. Run: call twice. Analyze: raises mismatch."""
-        from langgraph_kit.replay import ConversationRecording, LLMInteraction, RecordedChatModel, ReplayMismatchError
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            LLMInteraction,
+            RecordedChatModel,
+            ReplayMismatchError,
+        )
 
         recording = ConversationRecording(
             interactions=[
@@ -478,7 +509,11 @@ class TestConversationReplay:
 
     def test_assertions_tool_sequence(self) -> None:
         """Test ReplayAssertions for tool sequence matching."""
-        from langgraph_kit.replay import ConversationRecording, ToolInteraction, ReplayAssertions
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            ReplayAssertions,
+            ToolInteraction,
+        )
 
         original = ConversationRecording(
             interactions=[
@@ -497,7 +532,11 @@ class TestConversationReplay:
         assertions.assert_same_tool_sequence()  # Should not raise
 
     def test_assertions_tool_sequence_mismatch(self) -> None:
-        from langgraph_kit.replay import ConversationRecording, ToolInteraction, ReplayAssertions
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            ReplayAssertions,
+            ToolInteraction,
+        )
 
         original = ConversationRecording(
             interactions=[ToolInteraction(sequence_num=1, tool_name="search")],
@@ -511,7 +550,11 @@ class TestConversationReplay:
             assertions.assert_same_tool_sequence()
 
     def test_assertions_tool_called(self) -> None:
-        from langgraph_kit.replay import ConversationRecording, ToolInteraction, ReplayAssertions
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            ReplayAssertions,
+            ToolInteraction,
+        )
 
         recording = ConversationRecording(
             interactions=[
@@ -527,7 +570,11 @@ class TestConversationReplay:
         assertions.assert_tool_not_called("delete")
 
     def test_assertions_final_output(self) -> None:
-        from langgraph_kit.replay import ConversationRecording, LLMInteraction, ReplayAssertions
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            LLMInteraction,
+            ReplayAssertions,
+        )
 
         recording = ConversationRecording(
             interactions=[
@@ -540,7 +587,11 @@ class TestConversationReplay:
         assertions.assert_final_output_matches(r"\d+")
 
     def test_standalone_assert_tool_sequence(self) -> None:
-        from langgraph_kit.replay import ConversationRecording, ToolInteraction, assert_tool_sequence
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            ToolInteraction,
+            assert_tool_sequence,
+        )
 
         recording = ConversationRecording(
             interactions=[
@@ -565,7 +616,7 @@ class TestA2AProtocol:
     def test_build_agent_card(self) -> None:
         """Setup: register agent with metadata. Run: build card. Analyze: valid A2A card."""
         from langgraph_kit.contrib.a2a import build_agent_card
-        from langgraph_kit.registry import AgentMetadata, register, _registry, _metadata
+        from langgraph_kit.registry import AgentMetadata, _metadata, _registry, register
 
         _registry.clear()
         _metadata.clear()
@@ -593,7 +644,7 @@ class TestA2AProtocol:
     def test_build_aggregated_card(self) -> None:
         """Setup: register multiple agents. Run: build aggregated card. Analyze: all agents as skills."""
         from langgraph_kit.contrib.a2a import build_aggregated_card
-        from langgraph_kit.registry import AgentMetadata, register, _registry, _metadata
+        from langgraph_kit.registry import AgentMetadata, _metadata, _registry, register
 
         _registry.clear()
         _metadata.clear()
@@ -612,7 +663,7 @@ class TestA2AProtocol:
     async def test_invoke_agent_a2a_success(self) -> None:
         """Setup: register mock agent. Run: invoke via A2A. Analyze: completed task."""
         from langgraph_kit.contrib.a2a import invoke_agent_a2a
-        from langgraph_kit.registry import register, _registry, _metadata
+        from langgraph_kit.registry import _metadata, _registry, register
 
         _registry.clear()
         _metadata.clear()
@@ -631,7 +682,7 @@ class TestA2AProtocol:
     async def test_invoke_agent_a2a_failure(self) -> None:
         """Setup: agent that raises. Run: invoke. Analyze: failed task."""
         from langgraph_kit.contrib.a2a import invoke_agent_a2a
-        from langgraph_kit.registry import register, _registry, _metadata
+        from langgraph_kit.registry import _metadata, _registry, register
 
         _registry.clear()
         _metadata.clear()
@@ -655,7 +706,10 @@ class TestSupervisorRouter:
     @pytest.mark.asyncio
     async def test_keyword_routing_matches_tags(self) -> None:
         """Setup: agents with tags. Run: route coding request. Analyze: picks coding agent."""
-        from langgraph_kit.core.orchestration.routing import AgentCapability, KeywordRoutingStrategy
+        from langgraph_kit.core.orchestration.routing import (
+            AgentCapability,
+            KeywordRoutingStrategy,
+        )
 
         caps = [
             AgentCapability(agent_id="general", name="General", description="General assistant", tags=["general", "chat"]),
@@ -671,7 +725,10 @@ class TestSupervisorRouter:
     @pytest.mark.asyncio
     async def test_keyword_routing_fallback(self) -> None:
         """Setup: agents with obscure tags. Run: unrelated request. Analyze: falls back to first."""
-        from langgraph_kit.core.orchestration.routing import AgentCapability, KeywordRoutingStrategy
+        from langgraph_kit.core.orchestration.routing import (
+            AgentCapability,
+            KeywordRoutingStrategy,
+        )
 
         caps = [
             AgentCapability(agent_id="agent-a", name="A", description="Handles alphas", tags=["alpha"]),
@@ -696,7 +753,10 @@ class TestSupervisorRouter:
     @pytest.mark.asyncio
     async def test_llm_routing_parses_json(self) -> None:
         """Setup: mock LLM returning JSON. Run: route. Analyze: parsed decision."""
-        from langgraph_kit.core.orchestration.routing import AgentCapability, LLMRoutingStrategy
+        from langgraph_kit.core.orchestration.routing import (
+            AgentCapability,
+            LLMRoutingStrategy,
+        )
 
         mock_llm = AsyncMock()
         mock_llm.ainvoke.return_value = MagicMock(
@@ -717,7 +777,10 @@ class TestSupervisorRouter:
     @pytest.mark.asyncio
     async def test_llm_routing_fallback_on_error(self) -> None:
         """Setup: LLM that fails. Run: route. Analyze: graceful fallback to first agent."""
-        from langgraph_kit.core.orchestration.routing import AgentCapability, LLMRoutingStrategy
+        from langgraph_kit.core.orchestration.routing import (
+            AgentCapability,
+            LLMRoutingStrategy,
+        )
 
         mock_llm = AsyncMock()
         mock_llm.ainvoke.side_effect = RuntimeError("API error")
@@ -870,7 +933,7 @@ class TestMCPServerMode:
 
     def test_create_mcp_server_registers_tools(self) -> None:
         """Setup: register agents. Run: create MCP server. Analyze: tools registered."""
-        from langgraph_kit.registry import AgentMetadata, register, _registry, _metadata
+        from langgraph_kit.registry import AgentMetadata, _metadata, _registry, register
 
         _registry.clear()
         _metadata.clear()
@@ -895,6 +958,7 @@ class TestMCPServerMode:
         with patch.dict("sys.modules", {"mcp": MagicMock(), "mcp.server": MagicMock(), "mcp.server.fastmcp": MagicMock(FastMCP=FakeMCP)}):
             # Need to reload the module to pick up the mock
             import importlib
+
             import langgraph_kit.contrib.mcp_server as mcp_mod
             importlib.reload(mcp_mod)
             mcp = mcp_mod.create_mcp_server("test-server")

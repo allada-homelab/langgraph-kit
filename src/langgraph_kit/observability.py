@@ -40,7 +40,7 @@ def langfuse_enabled() -> bool:
 
 def init_langfuse() -> Any | None:
     """Initialize the shared Langfuse client if tracing is configured."""
-    global _langfuse_client  # noqa: PLW0603
+    global _langfuse_client
 
     if not langfuse_enabled():
         logger.info("Langfuse disabled: missing host or API keys")
@@ -99,7 +99,7 @@ def flush_langfuse() -> None:
 
 def shutdown_langfuse() -> None:
     """Flush and close the Langfuse client on app shutdown."""
-    global _langfuse_client  # noqa: PLW0603
+    global _langfuse_client
 
     if _langfuse_client is None:
         return

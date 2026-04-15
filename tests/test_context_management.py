@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+
 from langgraph_kit.core.context_management.compaction import (
     CompactionMode,
     CompactionPromptPack,

@@ -11,7 +11,12 @@ import logging
 from typing import Any
 
 from langgraph_kit.core.context_management.pressure import PressureMonitor
+from langgraph_kit.core.graph_builder.backend import build_backend_factory
+from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
+from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
+from langgraph_kit.core.graph_builder.tools import register_standard_tools
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
+from langgraph_kit.core.orchestration.workers import R0_WORKERS
 from langgraph_kit.core.prompt_assembly.activation import ACTIVATION_SECTIONS
 from langgraph_kit.core.prompt_assembly.composer import PromptComposer
 from langgraph_kit.core.prompt_assembly.context_providers import (
@@ -25,11 +30,6 @@ from langgraph_kit.core.prompt_assembly.sections import (
     SectionStability,
 )
 from langgraph_kit.core.tools.registry import ToolRegistry
-from langgraph_kit.core.graph_builder.backend import build_backend_factory
-from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
-from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
-from langgraph_kit.core.graph_builder.tools import register_standard_tools
-from langgraph_kit.core.orchestration.workers import R0_WORKERS
 from langgraph_kit.llm import build_llm
 
 logger = logging.getLogger(__name__)

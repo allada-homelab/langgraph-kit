@@ -11,6 +11,13 @@ import logging
 from typing import Any
 
 from langgraph_kit.core.context_management.pressure import PressureMonitor
+from langgraph_kit.core.graph_builder.backend import build_backend_factory
+from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
+from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
+from langgraph_kit.core.graph_builder.tools import (
+    register_standard_tools,
+    register_tool,
+)
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 from langgraph_kit.core.orchestration.workers import CODING_WORKERS
 from langgraph_kit.core.prompt_assembly.activation import ACTIVATION_SECTIONS
@@ -30,10 +37,6 @@ from langgraph_kit.core.prompt_assembly.sections import (
     SectionRegistry,
     SectionStability,
 )
-from langgraph_kit.core.graph_builder.backend import build_backend_factory
-from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
-from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
-from langgraph_kit.core.graph_builder.tools import register_standard_tools, register_tool
 from langgraph_kit.core.tools.capability import ToolRisk
 from langgraph_kit.core.tools.registry import ToolRegistry
 from langgraph_kit.core.tools.worktree import (

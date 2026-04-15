@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 from langchain_core.messages import HumanMessage, SystemMessage
+
 from langgraph_kit.core.orchestration.queue import (
     QueuedInputMiddleware,
     QueuedItem,
