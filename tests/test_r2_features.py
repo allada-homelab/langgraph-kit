@@ -474,7 +474,7 @@ def test_build_coding_agent_returns_graph(mock_store: Any) -> None:
 
     with (
         patch.dict(sys.modules, module_patches),
-        patch("langgraph_kit.graphs.coding_agent.build_llm", return_value=fake_llm),
+        patch("langgraph_kit.graphs._builder.build_llm", return_value=fake_llm),
     ):
         graph, _dispatcher = build_coding_agent(checkpointer=checkpointer, store=mock_store)
 
