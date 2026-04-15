@@ -168,11 +168,6 @@ def build_supervisor_agent(
         # A more sophisticated version would use the LLM to synthesize.
         return {"messages": [AIMessage(content=pending)]}
 
-    def should_continue(state: dict[str, Any]) -> str:  # noqa: ARG001
-        """Decide whether to end or loop back for another delegation."""
-        # Simple heuristic: always end after one delegation cycle
-        return END
-
     # Build the graph
     graph = StateGraph(SupervisorState)
     graph.add_node("route", route_node)
@@ -182,6 +177,6 @@ def build_supervisor_agent(
     graph.set_entry_point("route")
     graph.add_edge("route", "delegate")
     graph.add_edge("delegate", "synthesize")
-    graph.add_conditional_edges("synthesize", should_continue, {END: END})
+    graph.add_edge("synthesize", END)
 
     return graph.compile(checkpointer=checkpointer)

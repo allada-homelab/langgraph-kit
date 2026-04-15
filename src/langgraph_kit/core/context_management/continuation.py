@@ -40,7 +40,7 @@ class ContinuationTracker:
         self._max_continuations = max_continuations
         self._stop_threshold = stop_threshold_pct
         self._dr_ratio = diminishing_returns_ratio
-        self._min_turns_for_dr = min_turns_for_dr
+        self._min_turns_for_dr = max(min_turns_for_dr, 3)  # needs ≥3 turns for split
 
         self._continuation_count: int = 0
         self._total_tokens: int = 0

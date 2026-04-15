@@ -114,14 +114,19 @@ def _check_suspicious_completion(
 
     # Signal 1: Recent tool error with no recovery attempt after
     if recent_tool_errors > 0:
-        # Check if the last few messages show a tool error followed by completion
+        # Walk backwards through the last 5 messages to find the last tool event.
+        # Only flag if the most recent tool-related message is an error (no recovery).
+        last_tool_was_error = False
         for i in range(len(window) - 1, max(len(window) - 5, -1), -1):
             msg = window[i]
-            if isinstance(msg, ToolMessage) and getattr(msg, "status", None) == "error":
-                return (
-                    f"There was a recent tool error that appears unrecovered. "
-                    f"({recent_tool_errors} error(s) in recent history.)"
-                )
+            if isinstance(msg, ToolMessage):
+                last_tool_was_error = getattr(msg, "status", None) == "error"
+                break
+        if last_tool_was_error:
+            return (
+                f"There was a recent tool error that appears unrecovered. "
+                f"({recent_tool_errors} error(s) in recent history.)"
+            )
 
     # Signal 2: No tools used despite task context
     if tool_calls_made < min_tool_calls:

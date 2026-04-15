@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from difflib import SequenceMatcher
 from typing import Any, ClassVar
 
 from langchain_core.language_models import (  # pyright: ignore[reportMissingModuleSource]
@@ -119,20 +120,10 @@ def _fuzzy_match(content: str, recorded_messages: list[dict[str, Any]]) -> bool:
     for msg in recorded_messages:
         recorded_content = msg.get("content", "")
         if isinstance(recorded_content, str) and recorded_content:
-            # Check if significant overlap exists (>50% of shorter string)
-            shorter = min(len(content), len(recorded_content))
-            if shorter == 0:
-                continue
-            common = _common_prefix_len(content.lower(), recorded_content.lower())
-            if common > shorter * 0.5:
+            # Check if significant overlap exists (>50% similarity)
+            ratio = SequenceMatcher(
+                None, content.lower(), recorded_content.lower()
+            ).ratio()
+            if ratio > 0.5:
                 return True
     return False
-
-
-def _common_prefix_len(a: str, b: str) -> int:
-    """Return the length of the common prefix between two strings."""
-    length = min(len(a), len(b))
-    for i in range(length):
-        if a[i] != b[i]:
-            return i
-    return length

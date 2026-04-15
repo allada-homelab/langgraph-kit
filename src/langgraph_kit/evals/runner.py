@@ -146,7 +146,7 @@ class EvalRunner:
 
         # Compute aggregates
         for summary in report.metrics.values():
-            numeric_vals = [v for v in summary.values if isinstance(v, (int, float))]
+            numeric_vals = [v for v in summary.values if isinstance(v, (int, float)) and not isinstance(v, bool)]
             if numeric_vals:
                 summary.mean = round(sum(numeric_vals) / len(numeric_vals), 3)
                 summary.pass_rate = round(
