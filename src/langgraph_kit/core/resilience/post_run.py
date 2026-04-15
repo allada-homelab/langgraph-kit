@@ -7,6 +7,7 @@ attempt to infer or auto-execute missing business-logic actions.
 
 from __future__ import annotations
 
+import contextvars
 import logging
 import time
 from typing import Any
@@ -18,6 +19,12 @@ from langgraph.config import get_config
 logger = logging.getLogger(__name__)
 
 RUN_METADATA_NAMESPACE = ("run_metadata",)
+
+# Per-request start time via ContextVar so concurrent invocations don't
+# overwrite each other's timestamps.
+_run_start_var: contextvars.ContextVar[float | None] = contextvars.ContextVar(
+    "post_run_start", default=None
+)
 
 
 class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
@@ -33,17 +40,14 @@ class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
     - Make business decisions the model didn't explicitly take
     """
 
-    def __init__(self) -> None:
-        super().__init__()
-        self._run_start: float | None = None
-
     async def abefore_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
-        self._run_start = time.time()
+        _run_start_var.set(time.time())
         return None
 
     async def aafter_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         messages = state.get("messages", [])
-        duration = time.time() - self._run_start if self._run_start else 0.0
+        run_start = _run_start_var.get()
+        duration = time.time() - run_start if run_start else 0.0
 
         summary = _build_run_summary(messages, duration)
 
@@ -67,7 +71,7 @@ class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
             except Exception:
                 logger.warning("Failed to persist run metadata", exc_info=True)
 
-        self._run_start = None
+        _run_start_var.set(None)
         return None
 
 

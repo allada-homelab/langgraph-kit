@@ -77,7 +77,7 @@ class PersistentMemoryManager:
 
         merged = existing.model_dump()
         merged.update(updates)
-        merged["updated_at"] = datetime.now(UTC).isoformat()
+        merged["updated_at"] = datetime.now(UTC)
 
         updated = MemoryRecord.model_validate(merged)
         ns = self._namespace(updated.scope, updated.type)
