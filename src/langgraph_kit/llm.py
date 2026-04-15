@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from langgraph_kit._config import get_config
+from langgraph_kit._config import AgentConfig, get_config
 
 
 def build_llm() -> Any:
@@ -32,7 +32,7 @@ def build_llm() -> Any:
     return _build_openai(model, config)
 
 
-def _build_openai(model: str, config: Any) -> Any:
+def _build_openai(model: str, config: AgentConfig) -> Any:
     """Build an OpenAI-compatible chat model."""
     from langchain_openai import (
         ChatOpenAI,  # pyright: ignore[reportMissingModuleSource]
@@ -46,7 +46,7 @@ def _build_openai(model: str, config: Any) -> Any:
     return ChatOpenAI(**kwargs)
 
 
-def _build_anthropic(model: str, config: Any) -> Any:
+def _build_anthropic(model: str, config: AgentConfig) -> Any:
     """Build an Anthropic Claude chat model."""
     from langchain_anthropic import (  # pyright: ignore[reportMissingModuleSource]
         ChatAnthropic,
@@ -60,7 +60,7 @@ def _build_anthropic(model: str, config: Any) -> Any:
     return ChatAnthropic(**kwargs)
 
 
-def _build_google(model: str, config: Any) -> Any:
+def _build_google(model: str, config: AgentConfig) -> Any:
     """Build a Google Gemini chat model."""
     from langchain_google_genai import (  # pyright: ignore[reportMissingModuleSource]
         ChatGoogleGenerativeAI,
