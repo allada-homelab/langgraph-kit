@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from pydantic import BaseModel
@@ -11,7 +11,7 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 
-class MitigationStrategy(str, Enum):
+class MitigationStrategy(StrEnum):
     """Available strategies for reducing context pressure."""
 
     NONE = "none"  # No action needed

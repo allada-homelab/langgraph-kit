@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class AsyncTaskStatus(str, Enum):
+class AsyncTaskStatus(StrEnum):
     RUNNING = "running"
     SUCCESS = "success"
     ERROR = "error"

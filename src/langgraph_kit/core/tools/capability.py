@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class ToolRisk(str, Enum):
+class ToolRisk(StrEnum):
     """Risk level for tool operations."""
 
     READ_ONLY = "read_only"
