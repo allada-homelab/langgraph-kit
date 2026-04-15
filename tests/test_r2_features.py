@@ -425,22 +425,21 @@ async def test_context_command_shows_status() -> None:
 
 
 def test_coding_worker_definitions_has_three() -> None:
-    from langgraph_kit.graphs.coding_agent import CODING_WORKER_DEFINITIONS
+    from langgraph_kit.core.orchestration.workers import CODING_WORKERS
 
-    assert len(CODING_WORKER_DEFINITIONS) == 3
-    names = [d["name"] for d in CODING_WORKER_DEFINITIONS]
+    assert len(CODING_WORKERS) == 3
+    names = [d["name"] for d in CODING_WORKERS]
     assert "researcher" in names
     assert "implementer" in names
     assert "verifier" in names
 
 
 def test_coding_verifier_differs_from_r0() -> None:
-    from langgraph_kit.graphs.coding_agent import CODING_WORKER_DEFINITIONS
-    from langgraph_kit.graphs.r0_agent import WORKER_DEFINITIONS
+    from langgraph_kit.core.orchestration.workers import CODING_WORKERS, R0_WORKERS
 
-    r0_verifier = next(d for d in WORKER_DEFINITIONS if d["name"] == "verifier")
+    r0_verifier = next(d for d in R0_WORKERS if d["name"] == "verifier")
     coding_verifier = next(
-        d for d in CODING_WORKER_DEFINITIONS if d["name"] == "verifier"
+        d for d in CODING_WORKERS if d["name"] == "verifier"
     )
 
     # The coding verifier should have the enhanced system prompt
@@ -476,7 +475,7 @@ def test_build_coding_agent_returns_graph(mock_store: Any) -> None:
         patch.dict(sys.modules, module_patches),
         patch("langgraph_kit.graphs.coding_agent.build_llm", return_value=fake_llm),
     ):
-        graph = build_coding_agent(checkpointer=checkpointer, store=mock_store)
+        graph, _dispatcher = build_coding_agent(checkpointer=checkpointer, store=mock_store)
 
     assert graph is fake_graph
     deepagents_mod.create_deep_agent.assert_called_once()

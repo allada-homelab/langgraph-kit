@@ -36,7 +36,7 @@ CODING_WORKFLOW_SECTIONS = [
             "edits were applied correctly."
         ),
         stability=SectionStability.STABLE,
-        priority=48,
+        priority=38,
     ),
 ]
 
@@ -63,6 +63,6 @@ CODING_SEARCH_SECTIONS = [
             "unintended side effects."
         ),
         stability=SectionStability.STABLE,
-        priority=47,
+        priority=35,
     ),
 ]

@@ -303,7 +303,7 @@ class TestPressureMiddleware:
         state: dict[str, list[MockMessage]] = {
             "messages": [MockMessage("hello", "human")],
         }
-        result = await middleware.abefore_agent(state)
+        result = await middleware.abefore_agent(state, None)
         # No pressure — should return None (no state update)
         assert result is None
 
@@ -326,7 +326,7 @@ class TestPressureMiddleware:
         all_messages: list[Any] = [*old_tool_messages, *recent_messages]
         state: dict[str, Any] = {"messages": all_messages}
 
-        result = await middleware.abefore_agent(state)
+        result = await middleware.abefore_agent(state, None)
 
         # Should return a state update with compacted messages
         assert result is not None

@@ -160,7 +160,7 @@ async def test_before_agent_resets_tracking(
     assert _agent_wrote_memory.get() is True
 
     # abefore_agent should reset
-    await middleware.abefore_agent({})
+    await middleware.abefore_agent({}, None)
     assert _agent_wrote_memory.get() is False
 
 
@@ -211,7 +211,7 @@ async def test_wrap_model_call_runs_extraction(
     messages = [MagicMock(type="human", content="hello")]
     state = {"messages": messages}
 
-    await middleware.aafter_agent(state)
+    await middleware.aafter_agent(state, None)
 
     mock_extractor.extract.assert_awaited_once()
     call_kwargs = mock_extractor.extract.call_args

@@ -505,7 +505,7 @@ def test_activation_sections_are_conditional() -> None:
 
 
 def test_activation_sections_have_conditions() -> None:
-    expected_conditions = {"deferred_tools", "skills", "extensions"}
+    expected_conditions = {"deferred_tools", "skills", "extensions", "async_tasks"}
     actual_conditions = {s.condition for s in ACTIVATION_SECTIONS}
     assert actual_conditions == expected_conditions
 

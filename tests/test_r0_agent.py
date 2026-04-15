@@ -7,22 +7,20 @@ from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from langgraph_kit.graphs.r0_agent import (
-    WORKER_DEFINITIONS,
-    RuntimeStateMiddleware,
-    StopHooksMiddleware,
-    build_r0_agent,
-)
+from langgraph_kit.core.orchestration.workers import R0_WORKERS
+from langgraph_kit.core.resilience.runtime_state import RuntimeStateMiddleware
+from langgraph_kit.core.resilience.stop_hooks import StopHooksMiddleware
+from langgraph_kit.graphs.r0_agent import build_r0_agent
 
 # ---------------------------------------------------------------------------
-# WORKER_DEFINITIONS tests
+# R0_WORKERS tests
 # ---------------------------------------------------------------------------
 
 
 def test_worker_definitions_valid() -> None:
-    """WORKER_DEFINITIONS has 3 entries with name, description, system_prompt."""
-    assert len(WORKER_DEFINITIONS) == 3
-    for defn in WORKER_DEFINITIONS:
+    """R0_WORKERS has 3 entries with name, description, system_prompt."""
+    assert len(R0_WORKERS) == 3
+    for defn in R0_WORKERS:
         assert "name" in defn
         assert "description" in defn
         assert "system_prompt" in defn
@@ -45,7 +43,7 @@ async def test_runtime_state_middleware_tracks_state() -> None:
     mw = RuntimeStateMiddleware()
     assert mw.state == "idle"
 
-    await mw.abefore_agent({})
+    await mw.abefore_agent({}, MagicMock())
     assert mw.state == "started"
     assert mw.turn_count == 1
 
@@ -54,7 +52,7 @@ async def test_runtime_state_middleware_tracks_state() -> None:
 async def test_runtime_state_middleware_model_call_success() -> None:
     """Mock handler, verify state transitions to 'completed'."""
     mw = RuntimeStateMiddleware()
-    await mw.abefore_agent({})
+    await mw.abefore_agent({}, MagicMock())
 
     mock_request = MagicMock()
     mock_response = MagicMock()
@@ -70,7 +68,7 @@ async def test_runtime_state_middleware_model_call_success() -> None:
 async def test_runtime_state_middleware_model_call_failure() -> None:
     """Mock handler raises, verify state='failed'."""
     mw = RuntimeStateMiddleware()
-    await mw.abefore_agent({})
+    await mw.abefore_agent({}, MagicMock())
 
     mock_request = MagicMock()
     mock_handler = AsyncMock(side_effect=ValueError("something broke"))
@@ -97,7 +95,7 @@ async def test_stop_hooks_middleware_runs_hooks() -> None:
 
     mw = StopHooksMiddleware(hooks=[hook])
 
-    await mw.aafter_agent({"messages": []})
+    await mw.aafter_agent({"messages": []}, MagicMock())
 
     hook.on_turn_complete.assert_awaited_once_with({"messages": []})
 
@@ -112,7 +110,7 @@ async def test_stop_hooks_middleware_non_blocking_failure() -> None:
     mw = StopHooksMiddleware(hooks=[hook])
 
     # Should not raise
-    await mw.aafter_agent({"messages": []})
+    await mw.aafter_agent({"messages": []}, MagicMock())
 
     hook.on_turn_complete.assert_awaited_once()
 
@@ -145,7 +143,7 @@ def test_build_r0_agent_returns_graph(mock_store: Any) -> None:
         patch.dict(sys.modules, module_patches),
         patch("langgraph_kit.graphs.r0_agent.build_llm", return_value=fake_llm),
     ):
-        graph = build_r0_agent(checkpointer=checkpointer, store=mock_store)
+        graph, _dispatcher = build_r0_agent(checkpointer=checkpointer, store=mock_store)
 
     assert graph is fake_graph
     deepagents_mod.create_deep_agent.assert_called_once()
