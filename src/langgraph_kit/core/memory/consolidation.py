@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Any
 
-from langgraph_kit.core.memory.models import MemoryRecord, MemoryScope
+from langgraph_kit.core.memory.models import MemoryRecord, MemoryScope, MemoryType
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 
 logger = logging.getLogger(__name__)
@@ -176,10 +176,6 @@ class MemoryConsolidator:
                         for sid in source_ids:
                             await self._memory.delete(sid, scope)
                         # Create merged record
-                        from langgraph_kit.core.memory.models import (
-                            MemoryType,
-                        )
-
                         record = MemoryRecord(
                             title=merged_data.get("title", "Merged"),
                             type=MemoryType(merged_data.get("type", "user")),

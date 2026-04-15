@@ -16,7 +16,6 @@ class MitigationStrategy(str, Enum):
 
     NONE = "none"  # No action needed
     MICROCOMPACT = "microcompact"  # Clear old tool outputs
-    SESSION_ASSISTED = "session_assisted"  # Use notebook as continuity anchor
     FULL_COMPACTION = "full_compaction"  # Summarize entire conversation
     STOP = "stop"  # Stop continuation entirely
 

@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 
 # Store namespaces that accumulate data
 _TOOL_RESULTS_NAMESPACE = ("tool_results",)
-_QUEUE_NAMESPACE_PREFIX = ("queue",)
 _BUSY_NAMESPACE = ("thread_busy",)
 
 
