@@ -105,7 +105,11 @@ class PressureMonitor:
                 return MitigationStrategy.MICROCOMPACT
             return MitigationStrategy.NONE
 
-        # High pressure: full strategies
+        # Critical pressure — escalation strategy:
+        # If there are large tool outputs, try the cheap/targeted MICROCOMPACT first.
+        # It runs without an LLM call and often frees enough space. If it doesn't,
+        # the next turn re-enters here with fewer large outputs and falls through
+        # to the more expensive FULL_COMPACTION.
         if signals.large_tool_outputs > 3:
             return MitigationStrategy.MICROCOMPACT
 
