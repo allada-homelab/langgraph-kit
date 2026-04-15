@@ -390,10 +390,9 @@ def test_get_conditions() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 8. MCPToolAdapter and MCPResourceReader (R1-011)
+# 8. MCPToolAdapter (R1-011)
 # ---------------------------------------------------------------------------
 from langgraph_kit.core.plugins.mcp import (
-    MCPResourceReader,
     MCPToolAdapter,
 )
 
@@ -435,58 +434,6 @@ def test_mcp_adapt_many() -> None:
     assert caps[1].risk == ToolRisk.MUTATING
     assert "admin" in caps[1].tags
 
-
-def test_mcp_resource_register_and_list() -> None:
-    reader = MCPResourceReader("docs_server")
-    reader.register_resource(
-        uri="docs://readme",
-        name="README",
-        description="Project readme",
-        read_fn=lambda: "# Hello",
-    )
-
-    resources = reader.list_resources()
-    assert len(resources) == 1
-    assert resources[0]["uri"] == "docs://readme"
-    assert resources[0]["name"] == "README"
-
-
-@pytest.mark.asyncio
-async def test_mcp_resource_read() -> None:
-    reader = MCPResourceReader("docs_server")
-    reader.register_resource(
-        uri="docs://readme",
-        name="README",
-        description="Project readme",
-        read_fn=lambda: "# Hello World",
-    )
-
-    content = await reader.read_resource("docs://readme")
-    assert content == "# Hello World"
-
-
-@pytest.mark.asyncio
-async def test_mcp_resource_read_async() -> None:
-    async def async_read() -> str:
-        return "async content"
-
-    reader = MCPResourceReader("async_server")
-    reader.register_resource(
-        uri="data://results",
-        name="Results",
-        description="Query results",
-        read_fn=async_read,
-    )
-
-    content = await reader.read_resource("data://results")
-    assert content == "async content"
-
-
-@pytest.mark.asyncio
-async def test_mcp_resource_read_not_found() -> None:
-    reader = MCPResourceReader("docs_server")
-    content = await reader.read_resource("docs://missing")
-    assert content is None
 
 
 # ---------------------------------------------------------------------------

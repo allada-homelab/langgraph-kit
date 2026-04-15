@@ -104,5 +104,3 @@ class ToolRegistry:
             return ""
         return "## Tool Guidance\n\n" + "\n\n".join(fragments)
 
-    def get_by_risk(self, risk: ToolRisk) -> list[ToolCapability]:
-        return [cap for cap in self._tools.values() if cap.risk == risk]

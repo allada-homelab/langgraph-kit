@@ -101,35 +101,3 @@ class SkillRegistry:
             return None
         return _get_body(Path(meta.path))
 
-    def search(self, query: str, limit: int = 5) -> list[SkillMetadata]:
-        """Keyword search across name, description, and tags."""
-        q = query.lower()
-        scored: list[tuple[int, SkillMetadata]] = []
-        for skill in self._skills.values():
-            score = 0
-            if q in skill.name.lower():
-                score += 3
-            if q in skill.description.lower():
-                score += 2
-            for tag in skill.tags:
-                if q in tag.lower():
-                    score += 1
-            if score > 0:
-                scored.append((score, skill))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [s for _, s in scored[:limit]]
-
-    def build_catalog_prompt(self) -> str:
-        """Build a prompt section listing all skill names and descriptions."""
-        if not self._skills:
-            return ""
-
-        lines = ["## Available Skills\n"]
-        for skill in self._skills.values():
-            desc = skill.description.split("\n")[0].strip()
-            tags = f" [{', '.join(skill.tags)}]" if skill.tags else ""
-            lines.append(f"- **{skill.name}**{tags}: {desc}")
-        lines.append(
-            "\nTo use a skill, call `read_skill(name)` to load its full instructions."
-        )
-        return "\n".join(lines)
