@@ -71,14 +71,6 @@ class ToolRegistry:
         *,
         profile: str | None = None,
         worker_type: str | None = None,
-    ) -> list[Any]:
-        return [cap.fn for cap in self.filter(profile=profile, worker_type=worker_type)]
-
-    def compile_tools_filtered(
-        self,
-        *,
-        profile: str | None = None,
-        worker_type: str | None = None,
         max_risk: ToolRisk | None = None,
     ) -> list[Any]:
         """Filter then compile tools to callable list."""

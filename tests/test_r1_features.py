@@ -390,16 +390,14 @@ def test_get_conditions() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 8. MCPToolAdapter (R1-011)
+# 8. adapt_mcp_tool / adapt_mcp_tools (R1-011)
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.plugins.mcp import (
-    MCPToolAdapter,
-)
+from langgraph_kit.core.plugins.mcp import adapt_mcp_tool, adapt_mcp_tools
 
 
 def test_mcp_adapt_tool() -> None:
-    adapter = MCPToolAdapter("test_server")
-    cap = adapter.adapt_tool(
+    cap = adapt_mcp_tool(
+        "test_server",
         name="read_doc",
         description="Read a document",
         fn=lambda: "content",
@@ -414,7 +412,6 @@ def test_mcp_adapt_tool() -> None:
 
 
 def test_mcp_adapt_many() -> None:
-    adapter = MCPToolAdapter("api_server")
     tool_defs = [
         {"name": "get_user", "description": "Get user info", "fn": lambda: None},
         {
@@ -425,7 +422,7 @@ def test_mcp_adapt_many() -> None:
             "tags": ["admin"],
         },
     ]
-    caps = adapter.adapt_many(tool_defs)
+    caps = adapt_mcp_tools("api_server", tool_defs)
 
     assert len(caps) == 2
     assert caps[0].id == "mcp_api_server_get_user"
