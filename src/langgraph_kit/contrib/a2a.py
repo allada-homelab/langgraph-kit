@@ -190,7 +190,7 @@ def create_a2a_router(*, get_current_user: Any = None) -> Any:  # noqa: ARG001
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="No text content found in message",
-            ) from None
+            )
 
         try:
             get(agent_id)

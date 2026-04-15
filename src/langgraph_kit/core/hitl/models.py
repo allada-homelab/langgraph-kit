@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ActionRequest(BaseModel):
     """Describes the action the agent wants to perform."""
 
     action: str
-    args: dict[str, Any] = {}
+    args: dict[str, Any] = Field(default_factory=dict)
 
 
 class HumanInterruptConfig(BaseModel):

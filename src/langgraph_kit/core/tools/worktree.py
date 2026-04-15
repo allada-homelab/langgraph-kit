@@ -93,18 +93,21 @@ def build_worktree_tools(repo_path: str | None = None) -> list[Any]:
             branch_name: Name for the new branch in the worktree.
             base_ref: Git ref to base the new branch on (default: HEAD).
         """
+        # Sanitize branch name for directory path (branches like "feature/foo"
+        # would create nested dirs)
+        dir_name = branch_name.replace("/", "-")
         rc, stdout, stderr = await _run_git(
             "worktree",
             "add",
             "-b",
             branch_name,
-            f"../{branch_name}",
+            f"../{dir_name}",
             base_ref,
             cwd=repo_path,
         )
         if rc != 0:
             return f"Error creating worktree: {stderr}"
-        return f"Worktree created: ../{branch_name} (branch: {branch_name})\n{stdout}"
+        return f"Worktree created: ../{dir_name} (branch: {branch_name})\n{stdout}"
 
     async def list_worktrees() -> str:
         """List all active git worktrees.
@@ -206,17 +209,25 @@ def build_worktree_tools(repo_path: str | None = None) -> list[Any]:
             cwd=repo_path,
         )
         if rc != 0:
-            # Try force removal if there are changes
+            # Force removal discards uncommitted changes — warn the caller
+            logger.warning(
+                "Worktree removal failed (%s), retrying with --force. "
+                "Uncommitted changes in the worktree will be lost.",
+                stderr.strip(),
+            )
+            dir_name = branch_name.replace("/", "-")
             rc2, _, stderr2 = await _run_git(
                 "worktree",
                 "remove",
                 "--force",
-                f"../{branch_name}",
+                f"../{dir_name}",
                 cwd=repo_path,
             )
             if rc2 != 0:
                 return f"Error removing worktree: {stderr2 or stderr}"
+            return f"Worktree removed (forced): ../{dir_name}"
 
-        return f"Worktree removed: ../{branch_name}"
+        dir_name = branch_name.replace("/", "-")
+        return f"Worktree removed: ../{dir_name}"
 
     return [create_worktree, list_worktrees, enter_worktree, exit_worktree]
