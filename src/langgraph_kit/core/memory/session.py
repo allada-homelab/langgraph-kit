@@ -93,38 +93,21 @@ class SessionNotebook:
     async def update_section(self, section: str, content: str) -> None:
         """Replace content of a specific section, preserving notebook structure."""
         notebook = await self.load()
-        header = f"## {section}\n"
-        if header not in notebook:
+        bounds = _find_section_bounds(notebook, section)
+        if bounds is None:
             return
-        # Find the section boundaries
-        start = notebook.index(header) + len(header)
-        # Find the next section header or end of string
-        next_header_pos = len(notebook)
-        for s in NOTEBOOK_SECTIONS:
-            marker = f"## {s}\n"
-            pos = notebook.find(marker, start)
-            if pos != -1 and pos < next_header_pos:
-                next_header_pos = pos
-
-        updated = (
-            notebook[:start] + content.strip() + "\n\n" + notebook[next_header_pos:]
-        )
+        start, end = bounds
+        updated = notebook[:start] + content.strip() + "\n\n" + notebook[end:]
         await self.save(updated.strip() + "\n")
 
     async def get_section(self, section: str) -> str:
         """Extract the content of a specific section."""
         notebook = await self.load()
-        header = f"## {section}\n"
-        if header not in notebook:
+        bounds = _find_section_bounds(notebook, section)
+        if bounds is None:
             return ""
-        start = notebook.index(header) + len(header)
-        next_header_pos = len(notebook)
-        for s in NOTEBOOK_SECTIONS:
-            marker = f"## {s}\n"
-            pos = notebook.find(marker, start)
-            if pos != -1 and pos < next_header_pos:
-                next_header_pos = pos
-        return notebook[start:next_header_pos].strip()
+        start, end = bounds
+        return notebook[start:end].strip()
 
     def should_update(self, messages_since: int, tool_calls_since: int) -> bool:
         """Decide if notebook should update based on activity thresholds."""
