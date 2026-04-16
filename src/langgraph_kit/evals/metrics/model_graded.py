@@ -13,6 +13,14 @@ logger = logging.getLogger(__name__)
 
 _PROMPTS_DIR = Path(__file__).parent / "prompts"
 
+_JUDGE_SYSTEM = (
+    "You are an evaluation judge. Score the interaction against the rubric "
+    "and reply with a single JSON object and nothing else: "
+    '{"score": <float 0.0-1.0>, "reason": "<one-sentence justification>"}. '
+    "Do not wrap the JSON in markdown. Do not include any other keys. "
+    "The score must be a number between 0.0 and 1.0 inclusive."
+)
+
 
 class LLMJudgeMetric(EvalMetric):
     """Evaluate traces using an LLM with a rubric prompt.
@@ -56,19 +64,26 @@ class LLMJudgeMetric(EvalMetric):
         ).replace("{{output}}", str(trace.output or "(no output)"))
 
         try:
-            from langchain_core.messages import (
-                HumanMessage,  # pyright: ignore[reportMissingModuleSource]
+            from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
+                HumanMessage,
+                SystemMessage,
             )
 
-            response = await self._llm.ainvoke([HumanMessage(content=prompt)])
+            response = await self._llm.ainvoke(
+                [SystemMessage(content=_JUDGE_SYSTEM), HumanMessage(content=prompt)]
+            )
             content = (
                 response.content if hasattr(response, "content") else str(response)
             )
 
-            # Parse JSON from response
             parsed = _extract_json(content)
-            score_val = float(parsed.get("score", 0.5))
-            reason = parsed.get("reason", "")
+            raw_score = parsed.get("score", 0.5)
+            try:
+                score_val = float(raw_score)
+            except (TypeError, ValueError):
+                score_val = 0.5
+            score_val = max(0.0, min(1.0, score_val))
+            reason = str(parsed.get("reason", ""))
             return EvalResult(value=round(score_val, 3), comment=reason)
         except Exception:
             logger.exception("LLM judge failed for metric '%s'", self.name)
