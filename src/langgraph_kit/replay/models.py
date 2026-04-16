@@ -28,6 +28,7 @@ class ToolInteraction(BaseModel):
     tool_name: str
     tool_input: dict[str, Any] = Field(default_factory=dict)
     tool_output: str = ""
+    status: Literal["success", "error"] = "success"
     duration_ms: float | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 

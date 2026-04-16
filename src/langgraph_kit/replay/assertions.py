@@ -97,11 +97,43 @@ class ReplayAssertions:
             raise AssertionError(msg)
 
     def assert_no_errors(self) -> None:
-        """Assert no tool interactions returned error outputs."""
-        for tool in self.replayed.tool_interactions:
-            if "error" in tool.tool_output.lower():
-                msg = f"Tool {tool.tool_name!r} returned error: {tool.tool_output[:200]}"
-                raise AssertionError(msg)
+        """Assert no tool interactions have error status."""
+        errors = [t for t in self.replayed.tool_interactions if t.status == "error"]
+        if errors:
+            details = "; ".join(
+                f"{t.tool_name}: {t.tool_output[:100]}" for t in errors
+            )
+            msg = f"{len(errors)} tool error(s): {details}"
+            raise AssertionError(msg)
+
+    def assert_output_similarity(self, *, min_ratio: float = 0.5) -> None:
+        """Assert the replayed output is sufficiently similar to the original.
+
+        Uses SequenceMatcher to compare the final LLM output text from both
+        recordings. Useful when exact matching is too strict but you want to
+        ensure the agent didn't produce wildly different output.
+        """
+        from difflib import SequenceMatcher
+
+        orig_output = self._get_final_output_from(self.original)
+        replay_output = self._get_final_output()
+        if not orig_output and not replay_output:
+            return  # Both empty is a match
+        ratio = SequenceMatcher(None, orig_output, replay_output).ratio()
+        if ratio < min_ratio:
+            msg = (
+                f"Output similarity {ratio:.2f} below threshold {min_ratio:.2f}.\n"
+                f"  original: {orig_output[:150]!r}\n"
+                f"  replayed: {replay_output[:150]!r}"
+            )
+            raise AssertionError(msg)
+
+    def _get_final_output_from(self, recording: ConversationRecording) -> str:
+        """Extract the final LLM output content from a recording."""
+        llm_interactions = recording.llm_interactions
+        if not llm_interactions:
+            return ""
+        return llm_interactions[-1].output_message.get("content", "")
 
     def _get_final_output(self) -> str:
         """Extract the final LLM output content from the replayed recording."""
@@ -109,7 +141,14 @@ class ReplayAssertions:
         if not llm_interactions:
             msg = "No LLM interactions in replayed recording"
             raise AssertionError(msg)
-        return llm_interactions[-1].output_message.get("content", "")
+        content = llm_interactions[-1].output_message.get("content", "")
+        if isinstance(content, list):
+            # Multi-part content — join text parts
+            return " ".join(
+                p.get("text", "") if isinstance(p, dict) else str(p)
+                for p in content
+            )
+        return content
 
 
 # ---------------------------------------------------------------------------

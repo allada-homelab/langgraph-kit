@@ -143,13 +143,50 @@ class ConversationRecorder(AsyncCallbackHandler):
 
         duration_ms = (time.monotonic() - pending["start_time"]) * 1000
 
+        output_str = str(output) if not isinstance(output, str) else output
+        # Detect error status from ToolErrorMiddleware's structured format
+        # or from ToolMessage objects with status="error"
+        status: str = "success"
+        if hasattr(output, "status") and output.status == "error":
+            status = "error"
+        elif output_str.startswith("Tool '") and "' failed." in output_str:
+            status = "error"
+
         self._sequence += 1
         self._interactions.append(
             ToolInteraction(
                 sequence_num=self._sequence,
                 tool_name=pending["tool_name"],
                 tool_input=pending["tool_input"],
-                tool_output=str(output) if not isinstance(output, str) else output,
+                tool_output=output_str,
+                status=status,  # type: ignore[arg-type]
+                duration_ms=round(duration_ms, 2),
+            )
+        )
+
+    async def on_tool_error(
+        self,
+        error: BaseException,
+        *,
+        run_id: Any,
+        **kwargs: Any,  # noqa: ARG002
+    ) -> None:
+        """Record tool errors as interactions with error status."""
+        key = str(run_id)
+        pending = self._pending_tool.pop(key, None)
+        if pending is None:
+            return
+
+        duration_ms = (time.monotonic() - pending["start_time"]) * 1000
+
+        self._sequence += 1
+        self._interactions.append(
+            ToolInteraction(
+                sequence_num=self._sequence,
+                tool_name=pending["tool_name"],
+                tool_input=pending["tool_input"],
+                tool_output=f"{type(error).__name__}: {error}",
+                status="error",
                 duration_ms=round(duration_ms, 2),
             )
         )
