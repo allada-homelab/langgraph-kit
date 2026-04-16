@@ -8,10 +8,18 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from langgraph_kit.core.resilience.completion_guard import (
+    CompletionGuardMiddleware,
+)
+from langgraph_kit.core.resilience.empty_turn import EmptyTurnMiddleware
+from langgraph_kit.core.resilience.post_run import (
+    PostRunBackstopMiddleware,
+)
+from langgraph_kit.core.resilience.tool_error import ToolErrorMiddleware
+
 # ---------------------------------------------------------------------------
 # 1. ToolErrorMiddleware
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.resilience.tool_error import ToolErrorMiddleware
 
 
 def _make_tool_request(name: str = "test_tool", call_id: str = "call_1") -> MagicMock:
@@ -95,7 +103,6 @@ async def test_tool_error_retries_exhausted() -> None:
 # ---------------------------------------------------------------------------
 # 2. EmptyTurnMiddleware
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.resilience.empty_turn import EmptyTurnMiddleware
 
 
 @pytest.mark.asyncio
@@ -182,9 +189,6 @@ async def test_empty_turn_no_messages() -> None:
 # ---------------------------------------------------------------------------
 # 3. CompletionGuardMiddleware
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.resilience.completion_guard import (
-    CompletionGuardMiddleware,
-)
 
 
 def _build_conversation(
@@ -300,9 +304,6 @@ async def test_guard_skips_short_conversations() -> None:
 # ---------------------------------------------------------------------------
 # 4. PostRunBackstopMiddleware
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.resilience.post_run import (
-    PostRunBackstopMiddleware,
-)
 
 
 @pytest.mark.asyncio

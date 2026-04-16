@@ -8,12 +8,48 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-# ---------------------------------------------------------------------------
-# 1. ResultPersistenceMiddleware
-# ---------------------------------------------------------------------------
 from langgraph_kit.core.context_management.result_persistence import (
     ResultPersistenceMiddleware,
 )
+from langgraph_kit.core.coordinator import (
+    COORDINATOR_SECTIONS,
+    CoordinatorMode,
+)
+from langgraph_kit.core.memory.agent_memory import AgentMemoryManager
+from langgraph_kit.core.memory.consolidation import (
+    MemoryConsolidator,
+)
+from langgraph_kit.core.memory.models import (
+    MemoryRecord,
+    MemoryScope,
+    MemoryType,
+)
+from langgraph_kit.core.memory.persistent import PersistentMemoryManager
+from langgraph_kit.core.memory.shared import (
+    SecretDetectedError,
+    SharedMemoryManager,
+)
+from langgraph_kit.core.plugins.mcp import adapt_mcp_tool, adapt_mcp_tools
+from langgraph_kit.core.plugins.registry import (
+    PluginContribution,
+    PluginRegistry,
+)
+from langgraph_kit.core.prompt_assembly.activation import (
+    ACTIVATION_SECTIONS,
+)
+from langgraph_kit.core.prompt_assembly.sections import (
+    PromptSection,
+    SectionStability,
+)
+from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
+from langgraph_kit.core.tools.deferred import (
+    DeferredToolRegistry,
+    build_tool_search,
+)
+
+# ---------------------------------------------------------------------------
+# 1. ResultPersistenceMiddleware
+# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -63,11 +99,6 @@ async def test_large_result_persisted_and_replaced(mock_store: Any) -> None:
 # ---------------------------------------------------------------------------
 # 2. DeferredToolRegistry + build_tool_search
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
-from langgraph_kit.core.tools.deferred import (
-    DeferredToolRegistry,
-    build_tool_search,
-)
 
 
 def _make_cap(
@@ -130,12 +161,6 @@ async def test_tool_search_returns_formatted() -> None:
 # ---------------------------------------------------------------------------
 # 3. AgentMemoryManager
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.memory.agent_memory import AgentMemoryManager
-from langgraph_kit.core.memory.models import (
-    MemoryRecord,
-    MemoryScope,
-    MemoryType,
-)
 
 
 def _make_record(
@@ -190,11 +215,6 @@ async def test_agent_memory_namespaced_separately(mock_store: Any) -> None:
 # ---------------------------------------------------------------------------
 # 4. SharedMemoryManager
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.memory.persistent import PersistentMemoryManager
-from langgraph_kit.core.memory.shared import (
-    SecretDetectedError,
-    SharedMemoryManager,
-)
 
 
 @pytest.mark.asyncio
@@ -257,9 +277,6 @@ def test_scan_for_secrets_detects_patterns() -> None:
 # ---------------------------------------------------------------------------
 # 5. MemoryConsolidator
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.memory.consolidation import (
-    MemoryConsolidator,
-)
 
 
 @pytest.mark.asyncio
@@ -318,14 +335,6 @@ async def test_consolidate_deletes_stale(mock_store: Any) -> None:
 # ---------------------------------------------------------------------------
 # 6. PluginRegistry
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.plugins.registry import (
-    PluginContribution,
-    PluginRegistry,
-)
-from langgraph_kit.core.prompt_assembly.sections import (
-    PromptSection,
-    SectionStability,
-)
 
 
 def test_register_and_collect_tools() -> None:
@@ -371,10 +380,6 @@ def test_multiple_plugins() -> None:
 # ---------------------------------------------------------------------------
 # 7. CoordinatorMode
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.coordinator import (
-    COORDINATOR_SECTIONS,
-    CoordinatorMode,
-)
 
 
 def test_coordinator_sections_have_condition() -> None:
@@ -392,7 +397,6 @@ def test_get_conditions() -> None:
 # ---------------------------------------------------------------------------
 # 8. adapt_mcp_tool / adapt_mcp_tools (R1-011)
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.plugins.mcp import adapt_mcp_tool, adapt_mcp_tools
 
 
 def test_mcp_adapt_tool() -> None:
@@ -436,9 +440,6 @@ def test_mcp_adapt_many() -> None:
 # ---------------------------------------------------------------------------
 # 9. Activation Prompts (R1-014)
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.prompt_assembly.activation import (
-    ACTIVATION_SECTIONS,
-)
 
 
 def test_activation_sections_are_conditional() -> None:
