@@ -961,7 +961,7 @@ class TestMCPServerMode:
 
             import langgraph_kit.contrib.mcp_server as mcp_mod
             importlib.reload(mcp_mod)
-            mcp = mcp_mod.create_mcp_server("test-server")
+            mcp_mod.create_mcp_server("test-server")
 
         assert len(registered_tools) == 2
         tool_names = {t["name"] for t in registered_tools}

@@ -71,10 +71,10 @@ from langgraph_kit.core.tools.deferred import (
 
 
 def _make_cap(
-    id: str, name: str, description: str = "", tags: list[str] | None = None
+    cap_id: str, name: str, description: str = "", tags: list[str] | None = None
 ) -> ToolCapability:
     return ToolCapability(
-        id=id,
+        id=cap_id,
         name=name,
         description=description or f"Description for {name}",
         fn=lambda: None,
@@ -140,12 +140,12 @@ from langgraph_kit.core.memory.models import (
 
 def _make_record(
     title: str = "Test",
-    type: MemoryType = MemoryType.PROJECT,
+    memory_type: MemoryType = MemoryType.PROJECT,
     scope: MemoryScope = MemoryScope.USER,
     body: str = "body",
 ) -> MemoryRecord:
     return MemoryRecord(
-        title=title, type=type, scope=scope, summary="summary", body=body
+        title=title, type=memory_type, scope=scope, summary="summary", body=body
     )
 
 
@@ -204,7 +204,7 @@ async def test_publish_to_team_succeeds(mock_store: Any) -> None:
 
     record = _make_record(
         title="Architecture notes",
-        type=MemoryType.PROJECT,
+        memory_type=MemoryType.PROJECT,
         scope=MemoryScope.PROJECT,
         body="We use hexagonal architecture.",
     )
@@ -221,7 +221,7 @@ async def test_publish_rejects_secrets(mock_store: Any) -> None:
 
     record = _make_record(
         title="Config",
-        type=MemoryType.PROJECT,
+        memory_type=MemoryType.PROJECT,
         body="api_key=sk-abc123secretkey1234567890abcdef",
     )
 
@@ -235,7 +235,7 @@ async def test_publish_rejects_non_shareable_type(mock_store: Any) -> None:
     smm = SharedMemoryManager(pmm)
 
     record = _make_record(
-        title="User pref", type=MemoryType.USER, body="I like dark mode"
+        title="User pref", memory_type=MemoryType.USER, body="I like dark mode"
     )
 
     with pytest.raises(ValueError, match="not shareable"):
