@@ -6,14 +6,16 @@ All tests are re-runnable, use in-memory mocks, and require no external services
 
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 
-from tests.conftest import MockStore
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from tests.conftest import MockStore
 
 # ---------------------------------------------------------------------------
 # Helpers

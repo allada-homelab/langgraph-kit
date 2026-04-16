@@ -394,8 +394,9 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
 
         try:
             result = await graph.ainvoke(input_data, config=config)
-            last = result["messages"][-1]
-            content: str = last.content if hasattr(last, "content") else str(last)
+            msgs = result.get("messages") or []
+            last = msgs[-1] if msgs else None
+            content: str = last.content if last and hasattr(last, "content") else str(last or "")
             return InvokeResponse(content=content, thread_id=tid)
         finally:
             flush_langfuse()
