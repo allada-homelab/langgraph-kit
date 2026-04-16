@@ -8,8 +8,39 @@ the user's response is fed back via the ``/resume`` endpoint.
 
 from __future__ import annotations
 
-import json
 from typing import Any
+
+
+def _format_response(response: Any) -> str:
+    """Render a HumanResponse-like payload as a human-readable string.
+
+    The resume endpoint feeds back either a ``HumanResponse`` dict or a
+    list of them. We return a single string so the agent can reason about
+    the outcome without parsing JSON.
+    """
+    # LangGraph's resume value may be a single response or a list.
+    if isinstance(response, list):
+        response = response[0] if response else {}
+
+    if not isinstance(response, dict):
+        return f"User response: {response!s}"
+
+    rtype = response.get("type")
+    args = response.get("args")
+
+    if rtype == "accept":
+        return "User accepted the action."
+    if rtype == "ignore":
+        return "User ignored the action. Do not proceed."
+    if rtype == "response":
+        msg = args if isinstance(args, str) else str(args or "")
+        return f"User rejected the action with message: {msg}" if msg else "User rejected the action."
+    if rtype == "edit":
+        if isinstance(args, dict):
+            return f"User edited the action. Updated args: {args}"
+        return f"User edited the action: {args!s}"
+
+    return f"User response: {response!r}"
 
 
 def build_approve_action_tool() -> Any:
@@ -47,6 +78,6 @@ def build_approve_action_tool() -> Any:
                 "description": description,
             }
         )
-        return json.dumps(response)
+        return _format_response(response)
 
     return approve_action
