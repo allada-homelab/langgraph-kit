@@ -37,17 +37,11 @@ class AgentConfig:
     # MCP servers (JSON string)
     mcp_servers: str = ""
 
-    # Plugin directory (optional — Python files with contribute() functions)
-    plugins_dir: str = ""
-
     # Token budget (0 = unlimited)
     token_budget_per_thread: int = 0
-    budget_warning_pct: float = 0.80
-    budget_downgrade_model: str = ""
 
     # Execution trace export
     trace_export_enabled: bool = False
-    trace_max_per_thread: int = 20
 
     def __repr__(self) -> str:
         """Mask secrets in repr to prevent accidental leakage in logs."""
@@ -110,7 +104,7 @@ def configure_from_settings(
         try:
             if not callable(getattr(type(settings), attr, None)):
                 settings_attrs[attr.lower()] = attr
-        except Exception:
+        except Exception:  # noqa: S112 — intentional: dir() can yield attrs that raise on getattr
             continue
 
     kwargs: dict[str, Any] = {}

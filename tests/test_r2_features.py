@@ -17,7 +17,7 @@ from langgraph_kit.core.commands.dispatch import (
     CommandDispatcher,
     CommandResult,
 )
-from langgraph_kit.core.orchestration.verification import (
+from langgraph_kit.core.orchestration.workers import (
     CODING_VERIFIER_DEFINITION,
 )
 from langgraph_kit.core.prompt_assembly.coding_sections import (

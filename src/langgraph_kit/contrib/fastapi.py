@@ -20,10 +20,12 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
-from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 from uuid import uuid4
+
+if TYPE_CHECKING:
+    from collections.abc import AsyncGenerator, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
