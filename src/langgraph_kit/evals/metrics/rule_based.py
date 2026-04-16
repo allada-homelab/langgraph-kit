@@ -15,6 +15,10 @@ _PII_PATTERNS = [
     re.compile(
         r"\bpassword\s*[:=]\s*['\"][^'\"]{4,}['\"]", re.IGNORECASE
     ),  # hardcoded passwords
+    # Phone: +1-555-123-4567, (555) 123-4567, 555.123.4567, 555-123-4567
+    re.compile(
+        r"(?:\+?\d{1,2}[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}\b"
+    ),
 ]
 
 
@@ -53,14 +57,11 @@ class HasToolCallsMetric(EvalMetric):
     data_type = "BOOLEAN"
 
     async def score(self, trace: TraceData) -> EvalResult:
-        # Check metadata for tool usage indicators
-        output = str(trace.output or "")
         metadata = trace.metadata
 
         has_tools = bool(
             metadata.get("tool_calls")
             or metadata.get("tools_used")
-            or "tool_call" in output.lower()
         )
         return EvalResult(
             value=has_tools,
@@ -101,14 +102,12 @@ class ErrorFreeMetric(EvalMetric):
     data_type = "BOOLEAN"
 
     async def score(self, trace: TraceData) -> EvalResult:
-        output = str(trace.output or "")
         metadata = trace.metadata
 
         has_error = bool(
             metadata.get("error")
             or metadata.get("status") == "error"
-            or "Error:" in output
-            or "Traceback" in output
+            or metadata.get("tool_errors", 0)
         )
         return EvalResult(
             value=not has_error,
