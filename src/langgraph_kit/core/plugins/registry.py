@@ -46,9 +46,6 @@ class PluginRegistry:
         self._plugins[contribution.plugin_id] = contribution
         logger.info("Plugin registered: %s", contribution.plugin_id)
 
-    def unregister(self, plugin_id: str) -> None:
-        self._plugins.pop(plugin_id, None)
-
     def get(self, plugin_id: str) -> PluginContribution | None:
         return self._plugins.get(plugin_id)
 
