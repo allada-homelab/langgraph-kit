@@ -10,7 +10,7 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 

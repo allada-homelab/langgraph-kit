@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware as _AgentMiddleware
