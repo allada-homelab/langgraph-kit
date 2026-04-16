@@ -19,14 +19,28 @@ _MAX_MESSAGE_CHARS = 2000  # truncate messages longer than this when formatting 
 
 _EXTRACTION_PROMPT = """You are a memory extraction worker. Your ONLY job is to identify durable, future-useful facts from the recent conversation that should be saved to long-term memory.
 
+Today's date: {today}
+
 ## Rules
 - Save ONLY facts that will matter in future conversations
 - Do NOT save: code patterns visible in the repo, file layouts, git history, temporary task state, debugging solutions already in code
-- Convert relative dates to absolute dates (e.g., "next Thursday" → "2026-04-09")
+- Convert relative dates to absolute dates using today's date above
 - For feedback memories: capture the rule, WHY it exists, and HOW to apply it
 - For project memories: capture the fact, WHY it matters, and HOW it affects decisions
 - Prefer UPDATING an existing memory over creating a duplicate
 - If nothing worth saving exists, return an empty list
+
+## Memory Types
+- "user": personal preferences, role, communication style, constraints
+- "feedback": correction or rule from the user about how to work ("always X", "never Y")
+- "project": project-specific facts (tech stack, deploy targets, naming conventions)
+- "reference": external links, API key locations, doc URLs, tool names
+
+## Scopes
+- "user": visible only to this user
+- "project": visible to anyone working on this project
+- "team": visible to the whole team
+- "assistant": internal to this assistant instance
 
 ## Existing Memories
 {existing_memories}
@@ -35,16 +49,22 @@ _EXTRACTION_PROMPT = """You are a memory extraction worker. Your ONLY job is to 
 {recent_messages}
 
 ## Output Format
-Return a JSON array of memory objects. Each object has:
-- "action": "create" or "update" or "delete"
+Return a JSON array. Each object has:
+- "action": "create" | "update" | "delete"
 - "id": (only for update/delete) the existing memory ID
-- "title": short name
+- "title": short descriptive name
 - "type": one of "user", "feedback", "project", "reference"
 - "scope": one of "user", "assistant", "project", "team"
 - "summary": one-line description
 - "body": full content
 
-Respond with ONLY the JSON array, no other text. If nothing to save, respond with [].
+## Example
+[
+  {{"action": "create", "title": "Prefers ruff over black", "type": "feedback", "scope": "user", "summary": "User corrected formatter choice", "body": "Always use ruff for formatting. User dislikes black's opinionated wrapping."}},
+  {{"action": "update", "id": "mem_abc", "title": "Deploy target", "type": "project", "scope": "project", "summary": "Deploy target changed", "body": "Production deploy moved from ECS to K8s as of 2026-03."}}
+]
+
+Respond with ONLY the JSON array. If nothing to save, respond with [].
 """
 
 
@@ -79,7 +99,10 @@ class AutoMemoryExtractor:
         existing_text = self._format_existing(existing)
         messages_text = self._format_messages(recent_messages)
 
+        from datetime import date
+
         prompt = _EXTRACTION_PROMPT.format(
+            today=date.today().isoformat(),
             existing_memories=existing_text or "(none)",
             recent_messages=messages_text,
         )

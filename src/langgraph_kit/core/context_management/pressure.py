@@ -67,12 +67,14 @@ class PressureMonitor:
                 if tokens > self._large_threshold:
                     large_outputs += 1
             elif isinstance(content, list):
-                # Multi-part messages
+                # Multi-part messages — also track large parts
                 for part in content:  # pyright: ignore[reportUnknownVariableType]
                     if isinstance(part, dict):
                         text_val: str = str(part.get("text", ""))  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
                         part_tokens = len(text_val) // 4
                         total_tokens += part_tokens
+                        if part_tokens > self._large_threshold:
+                            large_outputs += 1
 
         pct = total_tokens / self._window_limit if self._window_limit > 0 else 1.0
 

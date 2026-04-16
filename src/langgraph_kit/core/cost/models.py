@@ -49,18 +49,22 @@ class BudgetCheckResult(BaseModel):
 
 # ---------------------------------------------------------------------------
 # Cost lookup table (USD per 1M tokens, input/output)
+# Prices as of 2026-04. Used for budget estimates, not billing.
 # ---------------------------------------------------------------------------
 
 COST_PER_MILLION: dict[str, tuple[float, float]] = {
     # OpenAI
     "gpt-4o": (2.50, 10.00),
     "gpt-4o-mini": (0.15, 0.60),
+    "gpt-4.1": (2.00, 8.00),
+    "gpt-4.1-mini": (0.40, 1.60),
+    "gpt-4.1-nano": (0.10, 0.40),
     "gpt-4-turbo": (10.00, 30.00),
-    "gpt-4": (30.00, 60.00),
-    "gpt-3.5-turbo": (0.50, 1.50),
     "o1": (15.00, 60.00),
     "o1-mini": (3.00, 12.00),
+    "o3": (2.00, 8.00),
     "o3-mini": (1.10, 4.40),
+    "o4-mini": (1.10, 4.40),
     # Anthropic
     "claude-sonnet-4-6": (3.00, 15.00),
     "claude-opus-4-6": (15.00, 75.00),

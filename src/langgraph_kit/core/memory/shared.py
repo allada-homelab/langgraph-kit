@@ -22,9 +22,13 @@ _SECRET_PATTERNS = [
         r"(?:secret|token|password|passwd|pwd)\s*[:=]\s*\S+",
         r"Bearer\s+[A-Za-z0-9\-._~+/]+=*",
         r"-----BEGIN\s+(?:RSA\s+)?PRIVATE\s+KEY-----",
-        r"ghp_[A-Za-z0-9]{36}",  # GitHub PAT
-        r"sk-[A-Za-z0-9]{32,}",  # OpenAI-style key
+        r"gh[prost]_[A-Za-z0-9]{36,}",  # GitHub PATs and tokens (ghp_, gho_, ghr_, ghs_, ght_)
+        r"github_pat_[A-Za-z0-9_]{20,}",  # GitHub fine-grained PATs
+        r"sk-(?:proj-|ant-)?[A-Za-z0-9_\-]{32,}",  # OpenAI + Anthropic API keys
         r"AKIA[A-Z0-9]{16}",  # AWS access key
+        r"xox[bpras]-[A-Za-z0-9\-]{10,}",  # Slack tokens
+        r"sk_(?:live|test)_[A-Za-z0-9]{20,}",  # Stripe keys
+        r'"type"\s*:\s*"service_account"',  # GCP service account JSON
     ]
 ]
 

@@ -443,9 +443,11 @@ def test_coding_verifier_differs_from_r0() -> None:
         d for d in CODING_WORKERS if d["name"] == "verifier"
     )
 
-    # The coding verifier should have the enhanced system prompt
+    # Both use PASS/WARN/FAIL format, but the coding verifier has an enhanced prompt
     assert "PASS" in coding_verifier["system_prompt"]
-    assert "PASS" not in r0_verifier["system_prompt"]
+    assert "PASS" in r0_verifier["system_prompt"]
+    # The coding verifier should have additional coding-specific content
+    assert coding_verifier["system_prompt"] != r0_verifier["system_prompt"]
 
 
 # ---------------------------------------------------------------------------
