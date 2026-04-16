@@ -18,6 +18,9 @@ PROGRESS_SENTINEL = "__progress__:"
 SUGGESTIONS_SENTINEL = "__suggestions__:"
 CITATION_SENTINEL = "__citation__:"
 
+MAX_SUGGESTIONS = 6
+MAX_ACTION_LABEL_LEN = 80
+
 
 def build_progress_tool() -> Any:
     """Create the ``emit_progress`` tool for agents."""
@@ -37,6 +40,16 @@ def build_progress_tool() -> Any:
             current: Current step number (1-based)
             total: Total number of steps
         """
+        if total < 1:
+            return "Error: total must be >= 1"
+        if current < 1:
+            return "Error: current must be >= 1 (progress is 1-based)"
+        if current > total:
+            return f"Error: current ({current}) cannot exceed total ({total})"
+        step = step.strip()
+        if not step:
+            return "Error: step description must not be empty"
+
         payload = {"step": step, "current": current, "total": total}
         return PROGRESS_SENTINEL + json.dumps(payload)
 
@@ -57,7 +70,16 @@ def build_suggestions_tool() -> Any:
         Args:
             actions: List of short action labels (e.g. ["Run tests", "Review changes", "Deploy"])
         """
-        payload = {"actions": actions}
+        cleaned = [a.strip() for a in actions if isinstance(a, str) and a.strip()]
+        if not cleaned:
+            return "Error: actions must contain at least one non-empty label"
+        if len(cleaned) > MAX_SUGGESTIONS:
+            return f"Error: cannot suggest more than {MAX_SUGGESTIONS} actions (got {len(cleaned)})"
+        truncated = [
+            a if len(a) <= MAX_ACTION_LABEL_LEN else a[: MAX_ACTION_LABEL_LEN - 1] + "…"
+            for a in cleaned
+        ]
+        payload = {"actions": truncated}
         return SUGGESTIONS_SENTINEL + json.dumps(payload)
 
     return suggest_actions
@@ -81,6 +103,12 @@ def build_citation_tool() -> Any:
             source: URL or file path of the source
             snippet: Optional relevant excerpt from the source
         """
+        title = title.strip()
+        source = source.strip()
+        if not title:
+            return "Error: title must not be empty"
+        if not source:
+            return "Error: source must not be empty"
         payload = {"title": title, "source": source, "snippet": snippet}
         return CITATION_SENTINEL + json.dumps(payload)
 
