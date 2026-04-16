@@ -71,10 +71,10 @@ from langgraph_kit.core.tools.deferred import (
 
 
 def _make_cap(
-    id: str, name: str, description: str = "", tags: list[str] | None = None
+    cap_id: str, name: str, description: str = "", tags: list[str] | None = None
 ) -> ToolCapability:
     return ToolCapability(
-        id=id,
+        id=cap_id,
         name=name,
         description=description or f"Description for {name}",
         fn=lambda: None,
@@ -140,12 +140,12 @@ from langgraph_kit.core.memory.models import (
 
 def _make_record(
     title: str = "Test",
-    type: MemoryType = MemoryType.PROJECT,
+    memory_type: MemoryType = MemoryType.PROJECT,
     scope: MemoryScope = MemoryScope.USER,
     body: str = "body",
 ) -> MemoryRecord:
     return MemoryRecord(
-        title=title, type=type, scope=scope, summary="summary", body=body
+        title=title, type=memory_type, scope=scope, summary="summary", body=body
     )
 
 
@@ -204,7 +204,7 @@ async def test_publish_to_team_succeeds(mock_store: Any) -> None:
 
     record = _make_record(
         title="Architecture notes",
-        type=MemoryType.PROJECT,
+        memory_type=MemoryType.PROJECT,
         scope=MemoryScope.PROJECT,
         body="We use hexagonal architecture.",
     )
@@ -221,7 +221,7 @@ async def test_publish_rejects_secrets(mock_store: Any) -> None:
 
     record = _make_record(
         title="Config",
-        type=MemoryType.PROJECT,
+        memory_type=MemoryType.PROJECT,
         body="api_key=sk-abc123secretkey1234567890abcdef",
     )
 
@@ -235,7 +235,7 @@ async def test_publish_rejects_non_shareable_type(mock_store: Any) -> None:
     smm = SharedMemoryManager(pmm)
 
     record = _make_record(
-        title="User pref", type=MemoryType.USER, body="I like dark mode"
+        title="User pref", memory_type=MemoryType.USER, body="I like dark mode"
     )
 
     with pytest.raises(ValueError, match="not shareable"):
@@ -390,17 +390,14 @@ def test_get_conditions() -> None:
 
 
 # ---------------------------------------------------------------------------
-# 8. MCPToolAdapter and MCPResourceReader (R1-011)
+# 8. adapt_mcp_tool / adapt_mcp_tools (R1-011)
 # ---------------------------------------------------------------------------
-from langgraph_kit.core.plugins.mcp import (
-    MCPResourceReader,
-    MCPToolAdapter,
-)
+from langgraph_kit.core.plugins.mcp import adapt_mcp_tool, adapt_mcp_tools
 
 
 def test_mcp_adapt_tool() -> None:
-    adapter = MCPToolAdapter("test_server")
-    cap = adapter.adapt_tool(
+    cap = adapt_mcp_tool(
+        "test_server",
         name="read_doc",
         description="Read a document",
         fn=lambda: "content",
@@ -415,7 +412,6 @@ def test_mcp_adapt_tool() -> None:
 
 
 def test_mcp_adapt_many() -> None:
-    adapter = MCPToolAdapter("api_server")
     tool_defs = [
         {"name": "get_user", "description": "Get user info", "fn": lambda: None},
         {
@@ -426,7 +422,7 @@ def test_mcp_adapt_many() -> None:
             "tags": ["admin"],
         },
     ]
-    caps = adapter.adapt_many(tool_defs)
+    caps = adapt_mcp_tools("api_server", tool_defs)
 
     assert len(caps) == 2
     assert caps[0].id == "mcp_api_server_get_user"
@@ -435,58 +431,6 @@ def test_mcp_adapt_many() -> None:
     assert caps[1].risk == ToolRisk.MUTATING
     assert "admin" in caps[1].tags
 
-
-def test_mcp_resource_register_and_list() -> None:
-    reader = MCPResourceReader("docs_server")
-    reader.register_resource(
-        uri="docs://readme",
-        name="README",
-        description="Project readme",
-        read_fn=lambda: "# Hello",
-    )
-
-    resources = reader.list_resources()
-    assert len(resources) == 1
-    assert resources[0]["uri"] == "docs://readme"
-    assert resources[0]["name"] == "README"
-
-
-@pytest.mark.asyncio
-async def test_mcp_resource_read() -> None:
-    reader = MCPResourceReader("docs_server")
-    reader.register_resource(
-        uri="docs://readme",
-        name="README",
-        description="Project readme",
-        read_fn=lambda: "# Hello World",
-    )
-
-    content = await reader.read_resource("docs://readme")
-    assert content == "# Hello World"
-
-
-@pytest.mark.asyncio
-async def test_mcp_resource_read_async() -> None:
-    async def async_read() -> str:
-        return "async content"
-
-    reader = MCPResourceReader("async_server")
-    reader.register_resource(
-        uri="data://results",
-        name="Results",
-        description="Query results",
-        read_fn=async_read,
-    )
-
-    content = await reader.read_resource("data://results")
-    assert content == "async content"
-
-
-@pytest.mark.asyncio
-async def test_mcp_resource_read_not_found() -> None:
-    reader = MCPResourceReader("docs_server")
-    content = await reader.read_resource("docs://missing")
-    assert content is None
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +449,7 @@ def test_activation_sections_are_conditional() -> None:
 
 
 def test_activation_sections_have_conditions() -> None:
-    expected_conditions = {"deferred_tools", "skills", "extensions"}
+    expected_conditions = {"deferred_tools", "skills", "extensions", "async_tasks"}
     actual_conditions = {s.condition for s in ACTIVATION_SECTIONS}
     assert actual_conditions == expected_conditions
 

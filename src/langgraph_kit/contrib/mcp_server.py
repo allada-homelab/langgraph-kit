@@ -73,8 +73,6 @@ def _register_agent_tool(
         except Exception as exc:
             return f"Error invoking {agent_id}: {exc}"
 
-    # Override the function name for clarity in MCP tool listing
-    invoke_agent.__name__ = tool_name
 
 
 def mount_mcp_server(app: Any, mcp: Any, path: str = "/mcp") -> None:

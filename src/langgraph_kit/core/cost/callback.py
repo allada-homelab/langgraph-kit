@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import contextvars
 from typing import Any
 
 from langchain_core.callbacks import (  # pyright: ignore[reportMissingModuleSource]
@@ -10,11 +9,6 @@ from langchain_core.callbacks import (  # pyright: ignore[reportMissingModuleSou
 )
 
 from langgraph_kit.core.cost.models import TokenUsage, estimate_cost
-
-# Context var for accumulating usage across async tasks
-_usage_var: contextvars.ContextVar[list[TokenUsage]] = contextvars.ContextVar(
-    "token_usage_accumulator"
-)
 
 
 class TokenTrackingCallback(AsyncCallbackHandler):

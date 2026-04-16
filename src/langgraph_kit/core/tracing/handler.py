@@ -153,11 +153,15 @@ class TraceCallbackHandler(AsyncCallbackHandler):
         now = datetime.now(UTC).isoformat()
         duration = (time.monotonic() - self._start_mono) * 1000
 
-        # Close any unclosed spans
+        # Close any unclosed spans with their actual start time
         for span in self._open_spans.values():
             if span.ended_at is None:
                 span.ended_at = now
-                span.duration_ms = duration
+                start_time = self._span_start_times.get(span.span_id)
+                if start_time is not None:
+                    span.duration_ms = round((time.monotonic() - start_time) * 1000, 2)
+                else:
+                    span.duration_ms = duration
 
         return TraceRecord(
             trace_id=self._trace_id,
@@ -204,3 +208,4 @@ class TraceCallbackHandler(AsyncCallbackHandler):
             span.duration_ms = round((time.monotonic() - start_time) * 1000, 2)
         if error:
             span.metadata["error"] = error
+        self._open_spans.pop(run_id, None)

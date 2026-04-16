@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel
@@ -11,12 +11,11 @@ from pydantic import BaseModel
 logger = logging.getLogger(__name__)
 
 
-class MitigationStrategy(str, Enum):
+class MitigationStrategy(StrEnum):
     """Available strategies for reducing context pressure."""
 
     NONE = "none"  # No action needed
     MICROCOMPACT = "microcompact"  # Clear old tool outputs
-    SESSION_ASSISTED = "session_assisted"  # Use notebook as continuity anchor
     FULL_COMPACTION = "full_compaction"  # Summarize entire conversation
     STOP = "stop"  # Stop continuation entirely
 
@@ -105,7 +104,11 @@ class PressureMonitor:
                 return MitigationStrategy.MICROCOMPACT
             return MitigationStrategy.NONE
 
-        # High pressure: full strategies
+        # Critical pressure — escalation strategy:
+        # If there are large tool outputs, try the cheap/targeted MICROCOMPACT first.
+        # It runs without an LLM call and often frees enough space. If it doesn't,
+        # the next turn re-enters here with fewer large outputs and falls through
+        # to the more expensive FULL_COMPACTION.
         if signals.large_tool_outputs > 3:
             return MitigationStrategy.MICROCOMPACT
 

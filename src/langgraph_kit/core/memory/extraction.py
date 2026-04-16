@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import Any
 
+from langgraph_kit.core.memory._parsing import parse_json_array
 from langgraph_kit.core.memory.models import (
     MemoryRecord,
     MemoryScope,
@@ -16,7 +15,6 @@ from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 
 logger = logging.getLogger(__name__)
 
-_RE_JSON_ARRAY = re.compile(r"\[.*\]", re.DOTALL)
 _MAX_MESSAGE_CHARS = 2000  # truncate messages longer than this when formatting for LLM
 
 _EXTRACTION_PROMPT = """You are a memory extraction worker. Your ONLY job is to identify durable, future-useful facts from the recent conversation that should be saved to long-term memory.
@@ -171,25 +169,4 @@ class AutoMemoryExtractor:
 
     def _parse_response(self, raw: str) -> list[dict[str, Any]]:
         """Parse JSON array from LLM response."""
-        text = raw.strip()
-
-        # Try direct JSON parse
-        try:
-            parsed: Any = json.loads(text)
-            if isinstance(parsed, list):
-                return parsed  # type: ignore[no-any-return]
-        except json.JSONDecodeError:
-            pass
-
-        # Try extracting JSON array from surrounding text
-        match = _RE_JSON_ARRAY.search(text)
-        if match:
-            try:
-                parsed = json.loads(match.group(0))
-                if isinstance(parsed, list):
-                    return parsed  # type: ignore[no-any-return]
-            except json.JSONDecodeError:
-                pass
-
-        logger.warning("Failed to parse extraction response")
-        return []
+        return parse_json_array(raw, context="extraction response")

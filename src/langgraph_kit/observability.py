@@ -9,6 +9,10 @@ from langgraph_kit._config import get_config
 
 logger = logging.getLogger(__name__)
 
+# Module-level Langfuse client — initialized by init_langfuse(), reused by
+# flush/shutdown so they operate on the same client that holds the spans.
+_langfuse_client: Any = None
+
 
 @runtime_checkable
 class UserInfo(Protocol):
@@ -36,6 +40,8 @@ def langfuse_enabled() -> bool:
 
 def init_langfuse() -> Any | None:
     """Initialize the shared Langfuse client if tracing is configured."""
+    global _langfuse_client
+
     if not langfuse_enabled():
         logger.info("Langfuse disabled: missing host or API keys")
         return None
@@ -43,7 +49,7 @@ def init_langfuse() -> Any | None:
     from langfuse import Langfuse  # pyright: ignore[reportMissingModuleSource]
 
     config = get_config()
-    client = Langfuse(
+    _langfuse_client = Langfuse(
         public_key=config.langfuse_public_key,
         secret_key=config.langfuse_secret_key,
         host=config.langfuse_host,
@@ -59,7 +65,7 @@ def init_langfuse() -> Any | None:
             or config.environment,
         },
     )
-    return client
+    return _langfuse_client
 
 
 def create_langfuse_handler() -> Any | None:
@@ -73,33 +79,37 @@ def create_langfuse_handler() -> Any | None:
 
     config = get_config()
     logger.info("Creating Langfuse callback handler for agent run")
-    return CallbackHandler(public_key=config.langfuse_public_key)
+    return CallbackHandler(
+        public_key=config.langfuse_public_key,
+        secret_key=config.langfuse_secret_key,
+        host=config.langfuse_host,
+    )
 
 
 def flush_langfuse() -> None:
     """Flush any pending Langfuse spans without failing the request."""
-    if not langfuse_enabled():
+    if _langfuse_client is None:
         return
 
     try:
-        from langfuse import Langfuse  # pyright: ignore[reportMissingModuleSource]
-
-        Langfuse().flush()
+        _langfuse_client.flush()
     except Exception:
         logger.debug("Langfuse flush failed", exc_info=True)
 
 
 def shutdown_langfuse() -> None:
     """Flush and close the Langfuse client on app shutdown."""
-    if not langfuse_enabled():
+    global _langfuse_client
+
+    if _langfuse_client is None:
         return
 
     try:
-        from langfuse import Langfuse  # pyright: ignore[reportMissingModuleSource]
-
-        Langfuse().shutdown()
+        _langfuse_client.shutdown()
     except Exception:
         logger.debug("Langfuse shutdown failed", exc_info=True)
+    finally:
+        _langfuse_client = None
 
 
 # ---------------------------------------------------------------------------

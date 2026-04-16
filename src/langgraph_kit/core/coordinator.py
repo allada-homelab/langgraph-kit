@@ -76,7 +76,7 @@ class CoordinatorMode:
 
     def get_coordinator_tools(self) -> list[Any]:
         """Get tools filtered for coordinator mode — read-only only."""
-        return self._registry.compile_tools_filtered(max_risk=ToolRisk.READ_ONLY)
+        return self._registry.compile_tools(max_risk=ToolRisk.READ_ONLY)
 
     def get_coordinator_sections(self) -> list[PromptSection]:
         """Get prompt sections for coordinator mode."""

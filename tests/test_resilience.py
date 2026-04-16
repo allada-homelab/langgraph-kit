@@ -310,7 +310,7 @@ async def test_post_run_records_metadata(mock_store: Any, monkeypatch: Any) -> N
     mw = PostRunBackstopMiddleware()
 
     # Simulate run lifecycle
-    await mw.abefore_agent({})
+    await mw.abefore_agent({}, None)
 
     monkeypatch.setattr(
         "langgraph_kit.core.resilience.post_run.get_config",
@@ -345,7 +345,7 @@ async def test_post_run_counts_tool_calls_and_errors(
     mock_store: Any, monkeypatch: Any
 ) -> None:
     mw = PostRunBackstopMiddleware()
-    await mw.abefore_agent({})
+    await mw.abefore_agent({}, None)
 
     monkeypatch.setattr(
         "langgraph_kit.core.resilience.post_run.get_config",
@@ -384,7 +384,7 @@ async def test_post_run_counts_tool_calls_and_errors(
 @pytest.mark.asyncio
 async def test_post_run_handles_no_store() -> None:
     mw = PostRunBackstopMiddleware()
-    await mw.abefore_agent({})
+    await mw.abefore_agent({}, None)
 
     class NoStoreRuntime:
         store = None

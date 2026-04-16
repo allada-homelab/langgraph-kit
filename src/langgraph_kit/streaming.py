@@ -139,7 +139,7 @@ async def stream_agent_events(
             if chunk is None:
                 continue
             # Skip tool call chunks — only yield text tokens
-            if chunk.tool_call_chunks:
+            if getattr(chunk, "tool_call_chunks", None):
                 continue
             token = chunk.content
             if not isinstance(token, str) or not token:

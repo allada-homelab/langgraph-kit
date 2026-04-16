@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 
-class MemoryType(str, Enum):
+class MemoryType(StrEnum):
     """What kind of knowledge a memory record represents."""
 
     USER = "user"
@@ -19,7 +19,7 @@ class MemoryType(str, Enum):
     REFERENCE = "reference"
 
 
-class MemoryScope(str, Enum):
+class MemoryScope(StrEnum):
     """Visibility boundary for a memory record."""
 
     USER = "user"

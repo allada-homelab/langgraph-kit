@@ -6,7 +6,7 @@ import json
 import logging
 from typing import Any
 
-from langgraph_kit.core.plugins.mcp import MCPToolAdapter
+from langgraph_kit.core.plugins.mcp import adapt_mcp_tool
 from langgraph_kit.core.plugins.registry import PluginContribution
 from langgraph_kit.core.tools.capability import ToolCapability
 
@@ -53,9 +53,9 @@ class MCPClientManager:
 
             try:
                 tools = await self._connect_and_load(config, transport, server_name)
-                adapter = MCPToolAdapter(server_name)
                 for tool in tools:
-                    cap = adapter.adapt_tool(
+                    cap = adapt_mcp_tool(
+                        server_name,
                         name=tool.name,
                         description=tool.description or "",
                         fn=tool,

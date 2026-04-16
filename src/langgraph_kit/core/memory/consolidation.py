@@ -2,17 +2,14 @@
 
 from __future__ import annotations
 
-import json
 import logging
-import re
 from typing import Any
 
-from langgraph_kit.core.memory.models import MemoryRecord, MemoryScope
+from langgraph_kit.core.memory._parsing import parse_json_array
+from langgraph_kit.core.memory.models import MemoryRecord, MemoryScope, MemoryType
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 
 logger = logging.getLogger(__name__)
-
-_RE_JSON_ARRAY = re.compile(r"\[.*\]", re.DOTALL)
 
 _CONSOLIDATION_PROMPT = """You are a memory maintenance worker. Review the following memory records and identify improvements.
 
@@ -123,25 +120,7 @@ class MemoryConsolidator:
         return "\n\n".join(lines)
 
     def _parse_response(self, raw: str) -> list[dict[str, Any]]:
-        text = raw.strip()
-        try:
-            parsed: Any = json.loads(text)
-            if isinstance(parsed, list):
-                return parsed  # type: ignore[no-any-return]
-        except json.JSONDecodeError:
-            pass
-
-        match = _RE_JSON_ARRAY.search(text)
-        if match:
-            try:
-                parsed = json.loads(match.group(0))
-                if isinstance(parsed, list):
-                    return parsed  # type: ignore[no-any-return]
-            except json.JSONDecodeError:
-                pass
-
-        logger.warning("Failed to parse consolidation response")
-        return []
+        return parse_json_array(raw, context="consolidation response")
 
     async def _apply_actions(
         self,
@@ -176,10 +155,6 @@ class MemoryConsolidator:
                         for sid in source_ids:
                             await self._memory.delete(sid, scope)
                         # Create merged record
-                        from langgraph_kit.core.memory.models import (
-                            MemoryType,
-                        )
-
                         record = MemoryRecord(
                             title=merged_data.get("title", "Merged"),
                             type=MemoryType(merged_data.get("type", "user")),

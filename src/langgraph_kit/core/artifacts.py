@@ -10,7 +10,7 @@ from __future__ import annotations
 import contextvars
 import json
 import logging
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class ArtifactType(str, Enum):
+class ArtifactType(StrEnum):
     CODE = "code"
     MARKDOWN = "markdown"
     TABLE = "table"

@@ -49,6 +49,16 @@ class AgentConfig:
     trace_export_enabled: bool = False
     trace_max_per_thread: int = 20
 
+    def __repr__(self) -> str:
+        """Mask secrets in repr to prevent accidental leakage in logs."""
+        fields = []
+        for f in dataclasses.fields(self):
+            val = getattr(self, f.name)
+            if f.name in ("llm_api_key", "langfuse_secret_key", "langfuse_public_key") and val:
+                val = val[:4] + "***"
+            fields.append(f"{f.name}={val!r}")
+        return f"AgentConfig({', '.join(fields)})"
+
 
 _config: AgentConfig = AgentConfig()
 
@@ -100,7 +110,7 @@ def configure_from_settings(
         try:
             if not callable(getattr(type(settings), attr, None)):
                 settings_attrs[attr.lower()] = attr
-        except Exception:  # noqa: BLE001
+        except Exception:
             continue
 
     kwargs: dict[str, Any] = {}

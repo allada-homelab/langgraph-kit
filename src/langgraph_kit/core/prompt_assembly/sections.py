@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import hashlib
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 from pydantic import BaseModel, model_validator
 
 
-class SectionStability(str, Enum):
+class SectionStability(StrEnum):
     STABLE = "stable"
     VOLATILE = "volatile"
     CONDITIONAL = "conditional"

@@ -288,7 +288,7 @@ def _get_store(request: Request) -> Any:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Store not available",
-            )
+            ) from None
         return store
 
 

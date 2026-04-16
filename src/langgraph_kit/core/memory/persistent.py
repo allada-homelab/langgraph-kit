@@ -77,14 +77,14 @@ class PersistentMemoryManager:
 
         merged = existing.model_dump()
         merged.update(updates)
-        merged["updated_at"] = datetime.now(UTC).isoformat()
+        merged["updated_at"] = datetime.now(UTC)
 
         updated = MemoryRecord.model_validate(merged)
         ns = self._namespace(updated.scope, updated.type)
         await self._store.aput(ns, updated.id, updated.to_store_value())
 
-        # If the type changed, remove the record from the old namespace.
-        if existing.type != updated.type:
+        # If the type or scope changed, remove the record from the old namespace.
+        if existing.type != updated.type or existing.scope != updated.scope:
             old_ns = self._namespace(existing.scope, existing.type)
             await self._store.adelete(old_ns, record_id)
 

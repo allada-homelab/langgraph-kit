@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware as _AgentMiddleware
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class QueueSemantic(str, Enum):
+class QueueSemantic(StrEnum):
     """How the queued message should be interpreted by the agent."""
 
     APPEND = "append"

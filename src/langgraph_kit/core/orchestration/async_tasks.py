@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from datetime import UTC, datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class AsyncTaskStatus(str, Enum):
+class AsyncTaskStatus(StrEnum):
     RUNNING = "running"
     SUCCESS = "success"
     ERROR = "error"
@@ -138,7 +138,8 @@ class AsyncTaskManager:
         """Execute the graph and update task status on completion."""
         try:
             result = await graph.ainvoke(input_data, config=config)
-            last_msg = result.get("messages", [None])[-1]
+            msgs = result.get("messages") or []
+            last_msg = msgs[-1] if msgs else None
             content = (
                 last_msg.content
                 if last_msg and hasattr(last_msg, "content")

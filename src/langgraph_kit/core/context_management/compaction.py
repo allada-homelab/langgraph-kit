@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel
 
@@ -53,7 +53,7 @@ Focus on:
 Produce the same <analysis> then <summary> structure as a full compaction."""
 
 
-class CompactionMode(str, Enum):
+class CompactionMode(StrEnum):
     """Whether to summarize the full conversation or only the recent tail."""
 
     FULL = "full"
