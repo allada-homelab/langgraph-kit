@@ -50,7 +50,22 @@ Focus on:
 - Current state of work
 - Immediate next steps
 
-Produce the same <analysis> then <summary> structure as a full compaction."""
+First, produce a private <analysis> block to organize your thoughts.
+Then, produce a <summary> block with the following JSON structure:
+
+<summary>
+{{
+  "user_intent": "what the user most recently asked for",
+  "key_decisions": ["decisions made in the recent portion"],
+  "important_files": ["files read, modified, or referenced recently"],
+  "errors_and_fixes": ["errors encountered and how they were resolved"],
+  "current_state": "what state the work is in right now",
+  "pending_work": ["things still to be done"],
+  "next_step": "the immediate next action that should be taken"
+}}
+</summary>
+
+Preserve exact file paths, error messages, and decisions — do not generalize."""
 
 
 class CompactionMode(StrEnum):

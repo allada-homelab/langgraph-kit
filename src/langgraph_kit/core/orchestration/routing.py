@@ -97,10 +97,20 @@ class LLMRoutingStrategy:
             )
 
 
+_STOPWORDS = frozenset({
+    "this", "that", "with", "from", "have", "will", "been", "they", "them",
+    "does", "also", "into", "each", "over", "some", "when", "your", "used",
+    "what", "which", "about", "their", "would", "there", "should", "other",
+    "more", "than", "could", "like", "make", "just", "only", "very", "most",
+})
+
+
 class KeywordRoutingStrategy:
-    """Route requests using keyword matching against agent tags/descriptions.
+    """Route requests using keyword matching against agent names, tags, and descriptions.
 
     No LLM call required — useful for testing and low-latency scenarios.
+    Uses word-set matching (not substring) and weighted scoring:
+    name words (+3), tags (+2), description words (+1, with stopword filtering).
     """
 
     async def route(
@@ -109,20 +119,24 @@ class KeywordRoutingStrategy:
         capabilities: list[AgentCapability],
         history: list[Any] | None = None,  # noqa: ARG002
     ) -> RoutingDecision:
-        """Match message keywords against agent tags and descriptions."""
-        message_lower = message.lower()
+        """Match message keywords against agent names, tags, and descriptions."""
+        message_words = set(message.lower().split())
         best_score = 0
         best_agent: AgentCapability | None = None
 
         for cap in capabilities:
             score = 0
-            # Score based on tag matches
+            # Score based on agent name words (highest weight)
+            for word in cap.agent_id.lower().replace("-", " ").replace("_", " ").split():
+                if len(word) > 2 and word in message_words:
+                    score += 3
+            # Score based on tag matches (word-set, not substring)
             for tag in cap.tags:
-                if tag.lower() in message_lower:
+                if tag.lower() in message_words:
                     score += 2
-            # Score based on description word matches
+            # Score based on description word matches (with stopword filter)
             for word in cap.description.lower().split():
-                if len(word) > 3 and word in message_lower:
+                if len(word) > 2 and word not in _STOPWORDS and word in message_words:
                     score += 1
             if score > best_score:
                 best_score = score

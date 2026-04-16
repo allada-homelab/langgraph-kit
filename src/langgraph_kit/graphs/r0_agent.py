@@ -68,10 +68,11 @@ _CORE_SECTIONS = [
         id="continuation_guidance",
         content=(
             "# Continuation\n"
-            "Continue only if the next step will materially advance the task. "
-            "Use the remaining budget to finish meaningful work, not to produce "
-            "another low-value loop. Stop once the task is effectively complete "
-            "or when recent progress is flattening."
+            "After each step, ask: did this step produce new, useful output? "
+            "If two consecutive steps produced no meaningful progress (no new "
+            "information, no code changes, no resolved errors), stop and report "
+            "current state. Do not loop on the same error more than twice without "
+            "changing approach."
         ),
         stability=SectionStability.STABLE,
         priority=60,
@@ -88,7 +89,9 @@ _CORE_SECTIONS = [
             "- **add_citation**: Use when referencing specific files, docs, or "
             "URLs to create collapsible source cards\n"
             "- **approve_action**: Use before destructive or irreversible "
-            "operations to pause for user approval"
+            "operations to pause for user approval\n\n"
+            "Skip emit_progress for tasks that complete in a single tool call. "
+            "Skip suggest_actions when the user's intent is already clear."
         ),
         stability=SectionStability.STABLE,
         priority=40,

@@ -15,11 +15,13 @@ _CONSOLIDATION_PROMPT = """You are a memory maintenance worker. Review the follo
 
 ## Rules
 - MERGE near-duplicates into a single, better record
-- DELETE records that are stale, no longer relevant, or derivable from the current environment
+- DELETE records that are stale or derivable from the current environment
 - UPDATE records that need correction or clarification
 - KEEP records that are accurate and useful as-is
 - Be CONSERVATIVE — when in doubt, keep the record
 - Never invent new facts — only reorganize existing ones
+- A record is "stale" only if it describes a state explicitly superseded by another record — age alone is NOT grounds for deletion
+- When merging, UNION all facts from source records — do not drop details that appear in only one source
 
 ## Current Memories
 {memories}

@@ -135,4 +135,18 @@ def _check_suspicious_completion(
             f"at least {min_tool_calls}. Did you forget to use tools?"
         )
 
+    # Signal 3: Suspiciously brief completion for a non-trivial conversation
+    if len(messages) > 10:
+        last_ai = None
+        for msg in reversed(window):
+            if isinstance(msg, AIMessage):
+                raw_content: Any = msg.content  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
+                last_ai = raw_content if isinstance(raw_content, str) else ""
+                break
+        if last_ai is not None and len(last_ai) < 80:
+            return (
+                "Your completion response is very brief for a task of this "
+                "complexity. Please verify the work is actually complete."
+            )
+
     return None
