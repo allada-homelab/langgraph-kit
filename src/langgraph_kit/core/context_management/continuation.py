@@ -41,6 +41,7 @@ class ContinuationTracker:
         self._stop_threshold = stop_threshold_pct
         self._dr_ratio = diminishing_returns_ratio
         self._min_turns_for_dr = max(min_turns_for_dr, 3)  # needs ≥3 turns for split
+        self._ema_alpha = 0.5  # smoothing weight (0 = stable avg, 1 = latest-only)
 
         self._continuation_count: int = 0
         self._total_tokens: int = 0
@@ -106,23 +107,39 @@ class ContinuationTracker:
     def _detect_diminishing_returns(self) -> bool:
         """Check if recent token deltas are shrinking significantly.
 
-        Compares the average of the last two turns against the average of
-        earlier turns. If the recent average is below `diminishing_returns_ratio`
-        of the earlier average, returns True.
+        Uses a sliding window comparison with EMA smoothing: compares the
+        EMA of the most recent ``window_size`` turns against the EMA of the
+        window immediately preceding it. This is more robust than comparing
+        the tail against all earlier turns, since a single large early turn
+        can otherwise mask a gradual decline.
         """
-        if len(self._turn_deltas) < self._min_turns_for_dr:
+        n = len(self._turn_deltas)
+        if n < self._min_turns_for_dr:
             return False
 
-        recent = self._turn_deltas[-2:]
-        earlier = self._turn_deltas[:-2]
+        # Two adjacent tail windows of equal size.
+        window_size = min(n // 2, max(2, self._min_turns_for_dr // 2))
+        if window_size < 1:
+            return False
 
+        recent = self._turn_deltas[-window_size:]
+        earlier = self._turn_deltas[-2 * window_size : -window_size]
         if not earlier:
             return False
 
-        recent_avg = sum(recent) / len(recent)
-        earlier_avg = sum(earlier) / len(earlier)
-
-        if earlier_avg <= 0:
+        recent_ema = _ema(recent, self._ema_alpha)
+        earlier_ema = _ema(earlier, self._ema_alpha)
+        if earlier_ema <= 0:
             return False
 
-        return (recent_avg / earlier_avg) < self._dr_ratio
+        return (recent_ema / earlier_ema) < self._dr_ratio
+
+
+def _ema(values: list[int], alpha: float) -> float:
+    """Exponential moving average. ``alpha`` weights the most recent sample."""
+    if not values:
+        return 0.0
+    result = float(values[0])
+    for v in values[1:]:
+        result = alpha * float(v) + (1.0 - alpha) * result
+    return result
