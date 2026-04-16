@@ -28,7 +28,6 @@ from langgraph_kit.replay.models import (
     ToolInteraction,
 )
 
-
 # ---------------------------------------------------------------------------
 # HITL _format_response
 # ---------------------------------------------------------------------------
@@ -52,9 +51,9 @@ class TestFormatResponse:
         assert "rejected" in result.lower()
 
     def test_edit(self) -> None:
-        result = _format_response({"type": "edit", "args": {"path": "/tmp/x"}})
+        result = _format_response({"type": "edit", "args": {"path": "/etc/config.yaml"}})
         assert "edit" in result.lower()
-        assert "/tmp/x" in result
+        assert "/etc/config.yaml" in result
 
     def test_list_wrapping(self) -> None:
         assert (

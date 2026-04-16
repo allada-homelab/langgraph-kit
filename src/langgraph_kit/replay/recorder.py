@@ -147,9 +147,9 @@ class ConversationRecorder(AsyncCallbackHandler):
         # Detect error status from ToolErrorMiddleware's structured format
         # or from ToolMessage objects with status="error"
         status: str = "success"
-        if hasattr(output, "status") and output.status == "error":
-            status = "error"
-        elif output_str.startswith("Tool '") and "' failed." in output_str:
+        if (hasattr(output, "status") and output.status == "error") or (
+            output_str.startswith("Tool '") and "' failed." in output_str
+        ):
             status = "error"
 
         self._sequence += 1
