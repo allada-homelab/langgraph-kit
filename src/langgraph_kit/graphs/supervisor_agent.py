@@ -33,6 +33,28 @@ from langgraph_kit.registry import get, get_metadata, list_agents
 
 logger = logging.getLogger(__name__)
 
+# Shared so the self-exclusion check in ``_build_capabilities`` and the
+# compiled graph name in ``build_supervisor_agent`` cannot drift apart.
+SUPERVISOR_AGENT_ID = "supervisor-agent"
+
+
+def _build_capabilities(agents: list[dict[str, Any]]) -> list[AgentCapability]:
+    """Convert registered-agent dicts into capabilities, excluding the supervisor itself."""
+    capabilities: list[AgentCapability] = []
+    for agent in agents:
+        if agent["id"] == SUPERVISOR_AGENT_ID:
+            continue
+        meta = get_metadata(agent["id"])
+        capabilities.append(
+            AgentCapability(
+                agent_id=agent["id"],
+                name=agent["name"],
+                description=meta.description,
+                tags=meta.tags,
+            )
+        )
+    return capabilities
+
 
 class SupervisorState(TypedDict, total=False):
     """State for the supervisor graph."""
@@ -71,21 +93,7 @@ def build_supervisor_agent(
         routing_strategy = LLMRoutingStrategy(llm)
 
     def _get_capabilities() -> list[AgentCapability]:
-        """Build capability list from registered agents, excluding the supervisor itself."""
-        capabilities = []
-        for agent in list_agents():
-            if agent["id"] == "supervisor":
-                continue
-            meta = get_metadata(agent["id"])
-            capabilities.append(
-                AgentCapability(
-                    agent_id=agent["id"],
-                    name=agent["name"],
-                    description=meta.description,
-                    tags=meta.tags,
-                )
-            )
-        return capabilities
+        return _build_capabilities(list_agents())
 
     async def route_node(state: dict[str, Any]) -> dict[str, Any]:
         """Decide which agent should handle the request."""
@@ -186,4 +194,4 @@ def build_supervisor_agent(
     graph.add_edge("delegate", "synthesize")
     graph.add_edge("synthesize", END)
 
-    return graph.compile(checkpointer=checkpointer, name="supervisor-agent")
+    return graph.compile(checkpointer=checkpointer, name=SUPERVISOR_AGENT_ID)

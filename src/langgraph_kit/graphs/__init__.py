@@ -101,11 +101,14 @@ def register_all(
         logger.info("coding-agent not available — skipping", exc_info=True)
 
     try:
-        from langgraph_kit.graphs.supervisor_agent import build_supervisor_agent
+        from langgraph_kit.graphs.supervisor_agent import (
+            SUPERVISOR_AGENT_ID,
+            build_supervisor_agent,
+        )
 
         graph = build_supervisor_agent(checkpointer, store)
         register(
-            "supervisor-agent",
+            SUPERVISOR_AGENT_ID,
             graph,
             metadata=AgentMetadata(
                 description="Routes requests to the best available specialist agent",
@@ -113,6 +116,6 @@ def register_all(
                 capabilities=["streaming", "delegation"],
             ),
         )
-        logger.info("Registered agent: supervisor-agent")
+        logger.info("Registered agent: %s", SUPERVISOR_AGENT_ID)
     except Exception:
         logger.info("supervisor-agent not available — skipping", exc_info=True)

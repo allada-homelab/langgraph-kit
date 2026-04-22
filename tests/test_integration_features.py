@@ -868,6 +868,32 @@ class TestSupervisorRouter:
         assert decision.target_agent_id == "fallback"
         assert "fallback" in decision.reasoning.lower()
 
+    def test_supervisor_excludes_self_from_capabilities(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression: the ID in the self-exclusion check must match the registered ID.
+
+        Before 0.6.0 the agent was registered as ``"supervisor"``; after the
+        rename it is ``"supervisor-agent"`` but the filter wasn't updated,
+        which made the supervisor include itself in the delegation pool.
+        """
+        from langgraph_kit.graphs import supervisor_agent
+        from langgraph_kit.registry import AgentMetadata
+
+        fake_meta = AgentMetadata(description="test", tags=[], capabilities=[])
+        monkeypatch.setattr(supervisor_agent, "get_metadata", lambda _id: fake_meta)
+
+        caps = supervisor_agent._build_capabilities(
+            [
+                {"id": supervisor_agent.SUPERVISOR_AGENT_ID, "name": "Supervisor"},
+                {"id": "echo-agent", "name": "Echo"},
+            ]
+        )
+
+        ids = [c.agent_id for c in caps]
+        assert supervisor_agent.SUPERVISOR_AGENT_ID not in ids
+        assert "echo-agent" in ids
+
 
 # ===========================================================================
 # Feature 6: Thread Management API
