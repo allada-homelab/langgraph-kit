@@ -5,6 +5,21 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-04-22
+
+### Fixed
+
+- `langgraph_kit.contrib.fastapi.create_agent_router` no longer breaks
+  `FastAPI.openapi()` when routes reference the caller-supplied
+  `CurrentUser` alias. The module previously used
+  `from __future__ import annotations`, which stringified every route
+  annotation and left `typing.get_type_hints()` unable to resolve the
+  factory-local `CurrentUser` ForwardRef — producing
+  `PydanticUserError: TypeAdapter[...] is not fully defined`. Dropped the
+  future import on that module so annotations are evaluated at definition
+  time and captured as live `Annotated` objects via the factory's closure.
+  Regression test added in `tests/test_contrib_fastapi.py`.
+
 ### Added
 
 - Release engineering overhaul ported from `arr-py-client`: full PR CI workflow

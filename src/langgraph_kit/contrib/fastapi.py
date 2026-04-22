@@ -15,17 +15,13 @@ Usage::
     app.include_router(create_agent_router(get_current_user=CurrentUser), prefix="/api/v1")
 """
 
-from __future__ import annotations
-
 import contextvars
 import json
 import logging
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Annotated, Any, cast
+from typing import Annotated, Any, cast
 from uuid import uuid4
-
-if TYPE_CHECKING:
-    from collections.abc import AsyncGenerator, Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
