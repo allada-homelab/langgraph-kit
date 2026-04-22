@@ -8,20 +8,20 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from langgraph_kit.core.orchestration.workers import R0_WORKERS
+from langgraph_kit.core.orchestration.workers import GENERAL_WORKERS
 from langgraph_kit.core.resilience.runtime_state import RuntimeStateMiddleware
 from langgraph_kit.core.resilience.stop_hooks import StopHooksMiddleware
 from langgraph_kit.graphs.reference_deep_agent import build_reference_deep_agent
 
 # ---------------------------------------------------------------------------
-# R0_WORKERS tests
+# GENERAL_WORKERS tests
 # ---------------------------------------------------------------------------
 
 
 def test_worker_definitions_valid() -> None:
-    """R0_WORKERS has 3 entries with name, description, system_prompt."""
-    assert len(R0_WORKERS) == 3
-    for defn in R0_WORKERS:
+    """GENERAL_WORKERS has 3 entries with name, description, system_prompt."""
+    assert len(GENERAL_WORKERS) == 3
+    for defn in GENERAL_WORKERS:
         assert "name" in defn
         assert "description" in defn
         assert "system_prompt" in defn

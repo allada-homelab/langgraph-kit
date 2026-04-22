@@ -4,7 +4,7 @@
 
 Declarative worker (sub-agent) definitions compatible with deepagents' `subagents` parameter. Agent graph builders compose their worker list from these shared definitions.
 
-## General-Purpose Workers (R0)
+## General-Purpose Workers
 
 ### RESEARCHER_DEFINITION
 
@@ -42,7 +42,7 @@ Role: Execute well-understood changes precisely and completely. Follows existing
 
 Role: Check correctness, edge cases, and adherence to requirements. **Does not fix issues** — reports them for the supervisor.
 
-## Coding-Profile Workers (R2)
+## Coding-Profile Workers
 
 ### CODING_VERIFIER_DEFINITION
 
@@ -65,10 +65,10 @@ Key differences from the standard verifier:
 ## Pre-Composed Worker Lists
 
 ```python
-from langgraph_kit.core.orchestration import R0_WORKERS, CODING_WORKERS
+from langgraph_kit.core.orchestration import GENERAL_WORKERS, CODING_WORKERS
 ```
 
-### R0_WORKERS
+### GENERAL_WORKERS
 
 ```python
 [RESEARCHER_DEFINITION, IMPLEMENTER_DEFINITION, VERIFIER_DEFINITION]
@@ -93,10 +93,10 @@ from langgraph_kit.core.orchestration.verification import CODING_VERIFIER_DEFINI
 ## Usage in Agent Builders
 
 ```python
-from langgraph_kit.core.orchestration import R0_WORKERS, CODING_WORKERS
+from langgraph_kit.core.orchestration import GENERAL_WORKERS, CODING_WORKERS
 
 # In the reference deep agent builder
-graph = create_deep_agent(llm, subagents=R0_WORKERS, ...)
+graph = create_deep_agent(llm, subagents=GENERAL_WORKERS, ...)
 
 # In coding agent builder
 graph = create_deep_agent(llm, subagents=CODING_WORKERS, ...)

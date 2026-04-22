@@ -86,7 +86,7 @@ from langgraph_kit.core.tools.worktree import build_worktree_tools
 from langgraph_kit.core.commands.dispatch import CommandDispatcher
 from langgraph_kit.core.prompt_assembly.composer import PromptComposer
 from langgraph_kit.core.context_management.pressure import PressureMonitor
-from langgraph_kit.core.orchestration import R0_WORKERS, CODING_WORKERS
+from langgraph_kit.core.orchestration import GENERAL_WORKERS, CODING_WORKERS
 
 # Graph builder factories (preferred over graphs._builder)
 from langgraph_kit.core.graph_builder import (

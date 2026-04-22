@@ -48,7 +48,7 @@ Three specialized workers for task delegation, defined in `core/orchestration/wo
 | `implementer` | `IMPLEMENTER_DEFINITION` | Writes code, makes changes, builds features |
 | `verifier` | `VERIFIER_DEFINITION` | Reviews changes, runs tests, validates output |
 
-Pre-composed as `R0_WORKERS` — see [Workers](../orchestration/workers.md).
+Pre-composed as `GENERAL_WORKERS` — see [Workers](../orchestration/workers.md).
 
 ## Features Included
 

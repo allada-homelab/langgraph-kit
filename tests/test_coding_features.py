@@ -1,6 +1,6 @@
 # pyright: reportPrivateUsage=false
 # Strict-mode prep: this test probes ``_CORE_SECTIONS`` by design.
-"""Tests for R2 coding-profile overlay features."""
+"""Tests for coding-profile overlay features."""
 
 from __future__ import annotations
 
@@ -437,17 +437,17 @@ def test_coding_worker_definitions_has_three() -> None:
     assert "verifier" in names
 
 
-def test_coding_verifier_differs_from_r0() -> None:
-    from langgraph_kit.core.orchestration.workers import CODING_WORKERS, R0_WORKERS
+def test_coding_verifier_differs_from_general() -> None:
+    from langgraph_kit.core.orchestration.workers import CODING_WORKERS, GENERAL_WORKERS
 
-    r0_verifier = next(d for d in R0_WORKERS if d["name"] == "verifier")
+    general_verifier = next(d for d in GENERAL_WORKERS if d["name"] == "verifier")
     coding_verifier = next(d for d in CODING_WORKERS if d["name"] == "verifier")
 
     # Both use PASS/WARN/FAIL format, but the coding verifier has an enhanced prompt
     assert "PASS" in coding_verifier["system_prompt"]
-    assert "PASS" in r0_verifier["system_prompt"]
+    assert "PASS" in general_verifier["system_prompt"]
     # The coding verifier should have additional coding-specific content
-    assert coding_verifier["system_prompt"] != r0_verifier["system_prompt"]
+    assert coding_verifier["system_prompt"] != general_verifier["system_prompt"]
 
 
 # ---------------------------------------------------------------------------

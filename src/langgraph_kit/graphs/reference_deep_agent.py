@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from langgraph_kit.core.orchestration.workers import R0_WORKERS
+from langgraph_kit.core.orchestration.workers import GENERAL_WORKERS
 from langgraph_kit.core.prompt_assembly.sections import (
     PromptSection,
     SectionStability,
@@ -20,7 +20,7 @@ from langgraph_kit.core.prompt_assembly.sections import (
 from langgraph_kit.graphs._builder import build_deep_agent
 
 # ---------------------------------------------------------------------------
-# R0-003/004: Prompt sections — stable core + volatile context
+# Prompt sections — stable core + volatile context
 # ---------------------------------------------------------------------------
 
 _CORE_SECTIONS = [
@@ -114,7 +114,7 @@ def build_reference_deep_agent(
     return build_deep_agent(
         agent_name="reference-deep-agent",
         core_sections=_CORE_SECTIONS,
-        subagents=R0_WORKERS,
+        subagents=GENERAL_WORKERS,
         checkpointer=checkpointer,
         store=store,
         mcp_tools=mcp_tools,

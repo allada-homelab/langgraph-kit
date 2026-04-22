@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 # ---------------------------------------------------------------------------
-# General-purpose workers (R0)
+# General-purpose workers
 # ---------------------------------------------------------------------------
 
 RESEARCHER_DEFINITION: dict[str, Any] = {
@@ -76,7 +76,7 @@ VERIFIER_DEFINITION: dict[str, Any] = {
 }
 
 # ---------------------------------------------------------------------------
-# Coding-profile workers (R2)
+# Coding-profile workers
 # ---------------------------------------------------------------------------
 
 CODING_VERIFIER_DEFINITION: dict[str, Any] = {
@@ -116,7 +116,7 @@ CODING_VERIFIER_DEFINITION: dict[str, Any] = {
 # Pre-composed worker lists
 # ---------------------------------------------------------------------------
 
-R0_WORKERS: list[dict[str, Any]] = [
+GENERAL_WORKERS: list[dict[str, Any]] = [
     RESEARCHER_DEFINITION,
     IMPLEMENTER_DEFINITION,
     VERIFIER_DEFINITION,

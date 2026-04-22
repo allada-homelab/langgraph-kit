@@ -1,8 +1,8 @@
 """Shared agent builder — extracts the common skeleton for deep agent construction.
 
-Both r0_agent and coding_agent follow the same build sequence (LLM → tools →
-prompt assembly → middleware → create_deep_agent). This module captures that
-skeleton so each agent only specifies its unique overlays.
+Both reference_deep_agent and coding_agent follow the same build sequence
+(LLM → tools → prompt assembly → middleware → create_deep_agent). This module
+captures that skeleton so each agent only specifies its unique overlays.
 """
 
 from __future__ import annotations
@@ -44,7 +44,7 @@ def build_deep_agent(
     configure_tools: Any | None = None,
     conditions: set[str] | None = None,
 ) -> tuple[Any, Any]:
-    """Build a deep agent with the standard R0 skeleton.
+    """Build a deep agent with the standard skeleton.
 
     Parameters
     ----------

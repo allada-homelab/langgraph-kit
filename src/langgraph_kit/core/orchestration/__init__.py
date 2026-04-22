@@ -21,12 +21,12 @@ from .routing import (
 )
 from .workers import (
     CODING_WORKERS,
-    R0_WORKERS,
+    GENERAL_WORKERS,
 )
 
 __all__ = [
     "CODING_WORKERS",
-    "R0_WORKERS",
+    "GENERAL_WORKERS",
     "AgentCapability",
     "AsyncTask",
     "AsyncTaskManager",

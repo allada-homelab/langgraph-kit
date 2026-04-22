@@ -44,7 +44,7 @@ def _register_worktree_tools(registry: ToolRegistry) -> None:
 def build_coding_agent(
     checkpointer: Any, store: Any, *, mcp_tools: list[Any] | None = None
 ) -> Any:
-    """Build the coding agent with R0 infrastructure + R2 coding overlays."""
+    """Build the coding agent by layering coding-profile overlays onto the reference skeleton."""
     return build_deep_agent(
         agent_name="coding-agent",
         core_sections=_CORE_SECTIONS,
