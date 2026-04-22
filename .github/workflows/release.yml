@@ -1,0 +1,187 @@
+name: release
+
+# Trigger options:
+#
+# - ``release: published`` — the primary path. Draft a new release in
+#   GitHub's UI, pick a tag (``vX.Y.Z``), click "Publish release". This
+#   workflow extracts the version from the tag, overwrites
+#   ``__version__.py`` to match (so the wheel, sdist, and PyPI metadata
+#   all agree regardless of what main's ``__version__.py`` currently says),
+#   builds, publishes to PyPI, and finally commits the version bump back
+#   to main so future development starts from the right number.
+#
+# - ``push: tags: v*`` — the fallback for ad-hoc ``git tag + git push``
+#   releases. Same version-sync logic runs, but the post-publish commit
+#   to main is skipped (no GitHub Release to associate with, less
+#   likely to be the intended workflow).
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v*"
+
+# ``gh release create`` fires both triggers — a tag push AND a release
+# publish — so without this guard we'd have two workflow runs racing to
+# upload the same wheel to PyPI, and whichever one lost would fail the
+# whole run on "400 File already exists". Keyed on the tag name so
+# different tags don't collide with each other, and ``cancel-in-progress``
+# drops the runner-up rather than letting it queue up and then fail.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Derive version from tag
+        id: v
+        run: |
+          # ``github.event.release.tag_name`` exists on release events;
+          # ``GITHUB_REF`` carries ``refs/tags/vX.Y.Z`` on tag pushes.
+          # Fall back through both so either trigger works.
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then
+            TAG="${GITHUB_REF#refs/tags/}"
+          fi
+          VERSION="${TAG#v}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+'; then
+            echo "::error::tag '$TAG' does not parse as vX.Y.Z"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Derived VERSION=$VERSION from tag $TAG"
+      - name: Sync __version__.py to tag version
+        # Idempotent: if ``__version__.py`` already matches, the write is
+        # a no-op. If it doesn't, we overwrite so the wheel metadata
+        # always matches the release label — prevents the "tag says 0.7.0,
+        # wheel says 0.6.1, PyPI 400s on duplicate" failure mode.
+        run: |
+          VERSION="${{ steps.v.outputs.version }}"
+          echo "__version__ = \"$VERSION\"" > src/langgraph_kit/__version__.py
+          cat src/langgraph_kit/__version__.py
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+      - run: uv build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      id-token: write
+    environment:
+      name: pypi
+      url: https://pypi.org/p/langgraph-kit
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          name: dist
+          path: dist/
+      - name: Extract release notes from CHANGELOG.md
+        id: changelog
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          # Pull just the section for this version — lines between
+          # ``## [X.Y.Z]`` and the next ``## [`` header, heading excluded.
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\["v"\\]" { flag=1; next }
+            /^## \[/ { flag=0 }
+            flag { print }
+          ' CHANGELOG.md \
+            | awk 'NF || seen; NF { seen=1 } END { print "" }' \
+            | sed -e ':a' -e '/^\n*$/{$d;N;ba' -e '}' \
+            > /tmp/notes.md
+          if [ ! -s /tmp/notes.md ]; then
+            echo "No CHANGELOG entry for $VERSION — falling back to auto-generated notes." >&2
+            echo "use_auto=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "use_auto=false" >> "$GITHUB_OUTPUT"
+            echo "Extracted $(wc -l < /tmp/notes.md) lines of notes for v$VERSION."
+          fi
+      # ``softprops/action-gh-release`` handles both paths cleanly:
+      #
+      # - On ``release: published``, GitHub already has a release for this
+      #   tag; the action attaches ``files`` to it. We don't overwrite the
+      #   body (the human who drafted the release likely customized it).
+      # - On ``push: tags``, there's no existing release; the action creates
+      #   one with the CHANGELOG body (or auto-generated notes fallback).
+      - name: Attach artifacts to release (release-event path)
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          # ``tag_name`` pins the action to the existing release rather than
+          # inferring from the (present) push context.
+          tag_name: ${{ github.event.release.tag_name }}
+          files: dist/*
+      - name: Create GitHub Release with CHANGELOG notes (tag-push path)
+        if: github.event_name == 'push' && steps.changelog.outputs.use_auto != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: /tmp/notes.md
+          files: dist/*
+      - name: Create GitHub Release with auto notes (tag-push fallback)
+        if: github.event_name == 'push' && steps.changelog.outputs.use_auto == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: dist/*
+
+  bump-main:
+    # After a successful GitHub-Release-triggered publish, push the
+    # version bump back to main so future development starts from the
+    # post-release version. Skipped on ``push: tags`` runs because those
+    # are ad-hoc and the dev loop already bumped ``__version__.py``
+    # before tagging.
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    needs: [publish, build]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Apply version bump to main
+        run: |
+          VERSION="${{ needs.build.outputs.version }}"
+          CURRENT=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' src/langgraph_kit/__version__.py | tr -d '"')
+          if [ "$CURRENT" = "$VERSION" ]; then
+            echo "main already at $VERSION — nothing to commit."
+            exit 0
+          fi
+          echo "__version__ = \"$VERSION\"" > src/langgraph_kit/__version__.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/langgraph_kit/__version__.py
+          git commit -m "chore: bump __version__ to $VERSION [skip ci]"
+          git push origin main

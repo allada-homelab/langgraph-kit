@@ -21,7 +21,7 @@ class TestAgentConfigRepr:
     def test_repr_masks_langfuse_keys(self) -> None:
         config = AgentConfig(
             langfuse_public_key="pk-pub123",
-            langfuse_secret_key="sk-sec456",  # noqa: S106
+            langfuse_secret_key="sk-sec456",
         )
         r = repr(config)
         assert "pk-p***" in r

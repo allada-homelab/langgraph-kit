@@ -1,0 +1,27 @@
+# Dependabot config.
+#
+# Scoped narrowly to GitHub Actions: the CI/release/docs workflows pin actions
+# by major version (@v4, @v6, ...), and Dependabot keeps those pins moving
+# without flooding the repo with PRs for every Python transitive.
+#
+# Python deps are intentionally *not* managed here — ``uv.lock`` already pins
+# the tree, and langgraph/langchain move fast enough that automated PRs tend
+# to break CI rather than unblock a fix. Upgrade by bumping the minimums in
+# ``pyproject.toml`` and running ``uv lock``.
+#
+# To broaden scope later: add a ``package-ecosystem: "pip"`` entry with a
+# curated ``allow:`` list (e.g. security-only, or specific packages).
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
+    labels:
+      - "upgrade"
+      - "internal"

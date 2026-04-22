@@ -1,21 +1,33 @@
 [project]
 name = "langgraph-kit"
-version = "0.5.0"
 description = "Reusable LangGraph agent toolkit with memory, tools, and orchestration"
+readme = "README.md"
 license = "AGPL-3.0-or-later"
+authors = [{ name = "David Allada", email = "davidanilallada@gmail.com" }]
+requires-python = ">=3.11,<3.15"
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Typing :: Typed",
 ]
-requires-python = "==3.13.*"
 dependencies = [
     "pydantic>=2.0",
     "langgraph>=0.3",
     "langgraph-checkpoint-sqlite>=2.0",
     "langchain-core>=0.3",
 ]
+dynamic = ["version"]
 
 [project.urls]
-Repository = "https://github.com/allada-homelab/langgraph-kit"
+Homepage = "https://github.com/allada-homelab/langgraph-kit"
+Source = "https://github.com/allada-homelab/langgraph-kit"
+Issues = "https://github.com/allada-homelab/langgraph-kit/issues"
 
 [project.optional-dependencies]
 postgres = ["langgraph-checkpoint-postgres>=2.0"]
@@ -32,23 +44,58 @@ a2a = ["a2a-sdk>=0.2"]
 all = [
     "langgraph-kit[postgres,openai,anthropic,google,deepagents,langfuse,mcp,mcp-server,fastapi,agui,a2a]",
 ]
-dev = [
-    "langgraph-kit[all]",
-    "pytest>=8.0",
-    "pytest-asyncio>=0.24",
-    "coverage>=7.0",
-    "ruff>=0.8",
-]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[tool.hatch.version]
+path = "src/langgraph_kit/__version__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/langgraph_kit"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/langgraph_kit",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md",
+    "pyproject.toml",
+]
+exclude = [
+    "tests",
+    "testapp",
+]
+
+[dependency-groups]
+dev = [
+    { include-group = "test" },
+    { include-group = "lint" },
+    { include-group = "type" },
+    "langgraph-kit[all]",
+    "pre-commit>=4",
+]
+test = [
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6",
+    "coverage[toml]>=7",
+]
+lint = [
+    "ruff>=0.11",
+    "codespell>=2.3",
+]
+type = [
+    "basedpyright>=1.20",
+]
+docs = [
+    "mkdocs-material>=9",
+    "mkdocstrings[python]>=1.0.4",
+]
+
 [tool.ruff]
-target-version = "py313"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = [
@@ -63,6 +110,7 @@ select = [
     "RUF",    # Ruff-specific rules
     "S",      # flake8-bandit (security)
     "A",      # flake8-builtins
+    "PT",     # flake8-pytest-style
     "RET",    # flake8-return
     "PTH",    # flake8-use-pathlib
     "FA",     # flake8-future-annotations
@@ -78,7 +126,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "src/langgraph_kit/**/*.py" = ["TC001"]
-"tests/**/*.py" = ["S101", "ARG", "E501"]
+"tests/**/*.py" = ["S101", "S106", "S311", "ARG", "B011", "E501"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["langgraph_kit"]
@@ -88,4 +136,31 @@ keep-runtime-typing = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--import-mode=importlib --strict-markers --strict-config -ra"
+filterwarnings = [
+    "error",
+]
+xfail_strict = true
 asyncio_mode = "auto"
+markers = [
+    "asyncio: mark test as async",
+    "integration: mark test as integration (requires external services)",
+]
+
+[tool.coverage.run]
+source = ["src/langgraph_kit"]
+omit = [
+    "*/__version__.py",
+    "*/__main__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+sort = "-Cover"
+# Starting floor — current actual is ~60%. Leave 2-3 points of headroom so
+# routine changes that temporarily dip coverage (e.g. adding a new stub)
+# don't block CI. Raise this as the suite grows.
+fail_under = 55
+
+[tool.coverage.html]
+show_contexts = true

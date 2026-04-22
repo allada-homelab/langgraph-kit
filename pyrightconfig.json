@@ -1,7 +1,19 @@
 {
-  "include": ["src/langgraph_kit"],
-  "pythonVersion": "3.13",
   "typeCheckingMode": "standard",
-  "venvPath": "../..",
-  "venv": ".venv"
+  "pythonVersion": "3.11",
+  "venvPath": ".",
+  "venv": ".venv",
+  "include": ["src/langgraph_kit", "tests"],
+  "exclude": [
+    "**/__pycache__",
+    "**/.venv",
+    "**/node_modules",
+    "testapp"
+  ],
+  "extraPaths": ["src"],
+  "reportUnusedCallResult": "none",
+  "reportMissingSuperCall": "warning",
+  "reportImplicitStringConcatenation": "warning",
+  "reportIncompatibleVariableOverride": "none",
+  "reportIncompatibleMethodOverride": "none"
 }

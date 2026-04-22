@@ -1,0 +1,119 @@
+site_name: langgraph-kit
+site_url: https://allada-homelab.github.io/langgraph-kit/
+repo_url: https://github.com/allada-homelab/langgraph-kit
+repo_name: allada-homelab/langgraph-kit
+docs_dir: docs
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_root_heading: true
+            show_signature_annotations: true
+            separate_signature: true
+            merge_init_into_class: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+    - Installation: getting-started/installation.md
+    - Configuration: getting-started/configuration.md
+    - Quickstart: getting-started/quickstart.md
+  - Architecture:
+    - Overview: architecture/overview.md
+    - Design principles: architecture/design-principles.md
+  - Core:
+    - Config: core/config.md
+    - LLM: core/llm.md
+    - Observability: core/observability.md
+    - Persistence: core/persistence.md
+    - Registry: core/registry.md
+    - Streaming: core/streaming.md
+  - Memory:
+    - Overview: memory/overview.md
+    - Models: memory/models.md
+    - Persistent manager: memory/persistent-manager.md
+    - Session notebook: memory/session-notebook.md
+    - Extraction: memory/extraction.md
+    - Consolidation: memory/consolidation.md
+    - Agent memory: memory/agent-memory.md
+    - Shared memory: memory/shared-memory.md
+  - Tools:
+    - Overview: tools/overview.md
+    - Capability: tools/capability.md
+    - Registry: tools/registry.md
+    - Memory tools: tools/memory-tools.md
+    - Deferred tools: tools/deferred-tools.md
+    - Worktree tools: tools/worktree-tools.md
+  - Commands:
+    - Overview: commands/overview.md
+    - Dispatcher: commands/dispatcher.md
+    - Middleware: commands/middleware.md
+    - Built-ins: commands/builtins.md
+  - Context management:
+    - Overview: context-management/overview.md
+    - Pressure: context-management/pressure.md
+    - Compaction: context-management/compaction.md
+    - Continuation: context-management/continuation.md
+  - Prompt assembly:
+    - Overview: prompt-assembly/overview.md
+    - Sections: prompt-assembly/sections.md
+    - Composer: prompt-assembly/composer.md
+    - Context providers: prompt-assembly/context-providers.md
+  - Orchestration:
+    - Overview: orchestration/overview.md
+    - Workers: orchestration/workers.md
+    - Async tasks: orchestration/async-tasks.md
+    - Queue: orchestration/queue.md
+    - Coordinator: orchestration/coordinator.md
+  - Resilience:
+    - Overview: resilience/overview.md
+    - Completion guard: resilience/completion-guard.md
+    - Empty turn: resilience/empty-turn.md
+    - Tool error: resilience/tool-error.md
+    - Post-run: resilience/post-run.md
+  - HITL:
+    - Overview: hitl/overview.md
+    - Models: hitl/models.md
+    - Tools: hitl/tools.md
+  - UI events:
+    - Overview: ui-events/overview.md
+    - Artifacts: ui-events/artifacts.md
+    - Progress & suggestions: ui-events/progress-suggestions.md
+  - Plugins:
+    - Overview: plugins/overview.md
+    - Plugin loader: plugins/plugin-loader.md
+    - MCP adapter: plugins/mcp-adapter.md
+  - Agents:
+    - Overview: agents/overview.md
+    - Echo agent: agents/echo-agent.md
+    - R0 agent: agents/r0-agent.md
+    - Deep agent: agents/deep-agent.md
+    - Coding agent: agents/coding-agent.md
+    - Graph builder: agents/graph-builder.md
+    - Builder utilities: agents/builder-utilities.md
+  - Skills:
+    - Overview: skills/overview.md
+    - Defining skills: skills/defining-skills.md
+    - Registry: skills/registry.md
+  - Integrations:
+    - FastAPI: integrations/fastapi.md
+  - Evals: evals/overview.md
+  - CLI: cli/reference.md
+  - API reference:
+    - Public API: api-reference/public-api.md
+    - SSE events: api-reference/sse-events.md
+    - Store namespaces: api-reference/store-namespaces.md

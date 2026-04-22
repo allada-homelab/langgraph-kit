@@ -1,0 +1,54 @@
+name: pre-commit
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+env:
+  HAS_SECRETS: ${{ secrets.PRE_COMMIT != '' }}
+
+jobs:
+  pre-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        if: env.HAS_SECRETS == 'true'
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.PRE_COMMIT }}
+      - uses: actions/checkout@v6
+        if: env.HAS_SECRETS == 'false'
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - run: uv sync --all-extras --all-groups
+      - id: precommit
+        run: uv run pre-commit run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
+        continue-on-error: true
+      - name: Commit and push changes
+        if: env.HAS_SECRETS == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Auto format and update with pre-commit"
+            git push
+          fi
+      - uses: pre-commit-ci/lite-action@v1.1.0
+        if: env.HAS_SECRETS == 'false'
+        with:
+          msg: Auto format and update with pre-commit
+      - if: steps.precommit.outcome == 'failure'
+        run: exit 1
