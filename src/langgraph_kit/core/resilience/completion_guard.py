@@ -17,6 +17,8 @@ from typing import Any
 from langchain.agents.middleware.types import AgentMiddleware as _AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from langgraph_kit.core.resilience._message_text import aimessage_text
+
 logger = logging.getLogger(__name__)
 
 # Phrases that signal the model thinks it's done
@@ -66,8 +68,7 @@ class CompletionGuardMiddleware(_AgentMiddleware):  # type: ignore[misc]
             return None
 
         # Only guard when the model claims completion
-        raw_content: Any = last.content  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
-        content: str = raw_content if isinstance(raw_content, str) else ""
+        content = aimessage_text(last)
         if not _COMPLETION_PHRASES.search(content):
             return None
 

@@ -34,7 +34,9 @@ class BudgetManager:
             if items:
                 return BudgetState.model_validate(items[0].value)
         except Exception:
-            logger.debug("Failed to load budget state for %s", thread_id, exc_info=True)
+            logger.warning(
+                "Failed to load budget state for %s", thread_id, exc_info=True
+            )
         return BudgetState(
             thread_id=thread_id, created_at=datetime.now(UTC).isoformat()
         )
@@ -60,7 +62,9 @@ class BudgetManager:
                 ("budget", thread_id), "state", state.model_dump(mode="json")
             )
         except Exception:
-            logger.debug("Failed to save budget state for %s", thread_id, exc_info=True)
+            logger.warning(
+                "Failed to save budget state for %s", thread_id, exc_info=True
+            )
 
         return state
 

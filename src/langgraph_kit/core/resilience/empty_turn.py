@@ -12,6 +12,8 @@ from typing import Any
 from langchain.agents.middleware.types import AgentMiddleware as _AgentMiddleware
 from langchain_core.messages import AIMessage, HumanMessage
 
+from langgraph_kit.core.resilience._message_text import aimessage_text
+
 logger = logging.getLogger(__name__)
 
 # Minimum content length to count as "meaningful" (strips whitespace)
@@ -43,8 +45,7 @@ class EmptyTurnMiddleware(_AgentMiddleware):  # type: ignore[misc]
         if not isinstance(last, AIMessage):
             return None
 
-        raw_content: Any = last.content  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
-        content_str: str = raw_content if isinstance(raw_content, str) else ""
+        content_str = aimessage_text(last)
         has_content = bool(
             content_str.strip() and len(content_str.strip()) >= _MIN_CONTENT_LENGTH
         )

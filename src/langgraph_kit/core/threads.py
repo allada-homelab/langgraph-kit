@@ -78,13 +78,13 @@ class ThreadManager:
         return meta
 
     async def get(self, thread_id: str) -> ThreadMetadata | None:
-        """Get thread metadata by ID."""
+        """Get thread metadata by ID, or ``None`` if the store fails or the thread is missing."""
         try:
             items = await self._store.asearch(("threads", thread_id), limit=1)
             if items:
                 return ThreadMetadata.model_validate(items[0].value)
         except Exception:
-            logger.debug("Failed to get thread %s", thread_id, exc_info=True)
+            logger.warning("Failed to get thread %s", thread_id, exc_info=True)
         return None
 
     async def list_for_user(
@@ -131,7 +131,7 @@ class ThreadManager:
 
             return threads, total
         except Exception:
-            logger.debug("Failed to list threads for user %s", user_id, exc_info=True)
+            logger.warning("Failed to list threads for user %s", user_id, exc_info=True)
             return [], 0
 
     async def update(
@@ -154,23 +154,25 @@ class ThreadManager:
         return await self._update_stored(existing, **updates)
 
     async def delete(self, thread_id: str) -> bool:
-        """Delete thread metadata and index entries."""
+        """Delete thread metadata and index entries.
+
+        Returns ``True`` when the thread existed and was removed, ``False`` when
+        no thread with that ID was found. Store-level failures propagate — a
+        returned ``False`` unambiguously means "not found" rather than hiding
+        a backend error.
+        """
         existing = await self.get(thread_id)
         if existing is None:
             return False
 
-        try:
-            await self._store.adelete(("threads", thread_id), "metadata")
-            await self._store.adelete(
-                ("thread_index", "by_user", existing.user_id), thread_id
-            )
-            await self._store.adelete(
-                ("thread_index", "by_agent", existing.agent_id), thread_id
-            )
-            return True
-        except Exception:
-            logger.debug("Failed to delete thread %s", thread_id, exc_info=True)
-            return False
+        await self._store.adelete(("threads", thread_id), "metadata")
+        await self._store.adelete(
+            ("thread_index", "by_user", existing.user_id), thread_id
+        )
+        await self._store.adelete(
+            ("thread_index", "by_agent", existing.agent_id), thread_id
+        )
+        return True
 
     async def search(
         self,

@@ -93,7 +93,7 @@ def flush_langfuse() -> None:
     try:
         _langfuse_client.flush()
     except Exception:
-        logger.debug("Langfuse flush failed", exc_info=True)
+        logger.warning("Langfuse flush failed", exc_info=True)
 
 
 def shutdown_langfuse() -> None:
@@ -106,7 +106,7 @@ def shutdown_langfuse() -> None:
     try:
         _langfuse_client.shutdown()
     except Exception:
-        logger.debug("Langfuse shutdown failed", exc_info=True)
+        logger.warning("Langfuse shutdown failed", exc_info=True)
     finally:
         _langfuse_client = None
 

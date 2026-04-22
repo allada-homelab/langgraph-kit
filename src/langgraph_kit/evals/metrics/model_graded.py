@@ -77,9 +77,17 @@ class LLMJudgeMetric(EvalMetric):
             )
 
             parsed = _extract_json(content)
-            raw_score = parsed.get("score", 0.5)
+            if "score" not in parsed:
+                logger.warning(
+                    "LLM judge for '%s' returned no 'score' field; parsed=%r",
+                    self.name,
+                    parsed,
+                )
+                return EvalResult(
+                    value=0.0, comment="Judge returned no score field"
+                )
             try:
-                score_val = float(raw_score)
+                score_val = float(parsed["score"])
             except (TypeError, ValueError):
                 score_val = 0.5
             score_val = max(0.0, min(1.0, score_val))

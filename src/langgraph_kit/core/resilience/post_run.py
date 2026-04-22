@@ -16,6 +16,8 @@ from langchain.agents.middleware.types import AgentMiddleware as _AgentMiddlewar
 from langchain_core.messages import AIMessage, ToolMessage
 from langgraph.config import get_config
 
+from langgraph_kit.core.resilience._message_text import aimessage_text
+
 logger = logging.getLogger(__name__)
 
 RUN_METADATA_NAMESPACE = ("run_metadata",)
@@ -87,8 +89,7 @@ def _build_run_summary(messages: list[Any], duration: float) -> dict[str, Any]:
             ai_messages += 1
             if msg.tool_calls:
                 tool_calls += len(msg.tool_calls)
-            raw_content: Any = msg.content  # pyright: ignore[reportUnknownMemberType,reportUnknownVariableType]
-            msg_content: str = raw_content if isinstance(raw_content, str) else ""
+            msg_content = aimessage_text(msg)
             if msg_content.strip():
                 last_content = msg_content.strip()[:200]
         elif isinstance(msg, ToolMessage):
