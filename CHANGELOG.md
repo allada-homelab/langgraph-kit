@@ -8,7 +8,7 @@ All notable changes to this project are documented here. This project adheres to
 ### Added
 
 - Release engineering overhaul ported from `arr-py-client`: full PR CI workflow
-  (ruff + basedpyright + pytest matrix across Python 3.11–3.14 + coverage gate),
+  (ruff + basedpyright + pytest matrix across Python 3.11–3.13 + coverage gate),
   tag-driven release workflow with CHANGELOG notes extraction + artifact upload
   + post-release version bump on `main`, mkdocs build + GitHub Pages deploy,
   pre-commit auto-format workflow, merge-conflict label workflow, and PR
@@ -27,9 +27,11 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Changed
 
-- **Python support widened from `==3.13.*` to `>=3.11,<3.15`.** CI now tests
-  3.11, 3.12, 3.13, and 3.14. Ruff `target-version` set to `py311` so
-  `keep-runtime-typing` works correctly across the supported range.
+- **Python support widened from `==3.13.*` to `>=3.11,<3.14`.** CI now tests
+  3.11, 3.12, and 3.13. Ruff `target-version` set to `py311` so
+  `keep-runtime-typing` works correctly across the supported range. 3.14 is
+  held back pending upstream `langchain_core` dropping its `pydantic.v1`
+  imports, which are incompatible with Python 3.14.
 
 ## [0.5.0] — 2026-04-10
 
