@@ -1,9 +1,11 @@
-# R0 Agent
+# Reference Deep Agent
 
-**Source:** `src/langgraph_kit/graphs/r0_agent.py`
-**Agent ID:** `r0-agent`
+**Source:** `src/langgraph_kit/graphs/reference_deep_agent.py`
+**Agent ID:** `reference-deep-agent`
 
-The full-featured general-purpose agent demonstrating all R0-level capabilities.
+The full-stack general-purpose reference agent that wires every kit feature
+together. Clone this agent as the starting point for any new domain-specific
+agent (see `coding-agent` for the canonical extension pattern).
 
 ## Architecture
 
@@ -26,7 +28,7 @@ deepagents create_deep_agent()
 
 ## Prompt Sections
 
-The R0 agent registers 5 core prompt sections:
+The reference agent registers 5 core prompt sections:
 
 | Section ID | Stability | Content |
 |-----------|-----------|---------|
@@ -68,8 +70,8 @@ Pre-composed as `R0_WORKERS` — see [Workers](../orchestration/workers.md).
 ## Build Function
 
 ```python
-def build_r0_agent(checkpointer, store, mcp_tools=None):
-    """Build the R0 agent with all features.
+def build_reference_deep_agent(checkpointer, store, mcp_tools=None):
+    """Build the reference deep agent with all kit features.
 
     Returns: (compiled_graph, command_dispatcher)
     """
@@ -79,7 +81,7 @@ Returns a tuple of the compiled graph and command dispatcher, both registered to
 
 ## Middleware Stack
 
-The R0 agent uses the full standard middleware stack (11 middleware), built by `core.graph_builder.build_middleware_stack()`:
+The reference agent uses the full standard middleware stack (11 middleware), built by `core.graph_builder.build_middleware_stack()`:
 
 1. CommandMiddleware
 2. RuntimeStateMiddleware

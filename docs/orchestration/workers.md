@@ -95,7 +95,7 @@ from langgraph_kit.core.orchestration.verification import CODING_VERIFIER_DEFINI
 ```python
 from langgraph_kit.core.orchestration import R0_WORKERS, CODING_WORKERS
 
-# In R0 agent builder
+# In the reference deep agent builder
 graph = create_deep_agent(llm, subagents=R0_WORKERS, ...)
 
 # In coding agent builder

@@ -10,16 +10,21 @@ Demonstrates the standard agent contract:
 
 from typing import Any
 
+from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
+    SystemMessage,
+)
 from langchain_core.runnables import (
     RunnableConfig,  # pyright: ignore[reportMissingModuleSource]
 )
 
+from langgraph_kit.graphs._basic_prompt import BASIC_SYSTEM_PROMPT
 from langgraph_kit.llm import build_llm
 
 
 async def llm_node(state: dict[str, Any], config: RunnableConfig) -> dict[str, Any]:
-    """Call the LLM and return the response message."""
-    return {"messages": [await build_llm().ainvoke(state["messages"], config=config)]}
+    """Call the LLM with the shared minimal system prompt prepended."""
+    messages = [SystemMessage(content=BASIC_SYSTEM_PROMPT), *state["messages"]]
+    return {"messages": [await build_llm().ainvoke(messages, config=config)]}
 
 
 def build_graph(checkpointer: Any, store: Any) -> Any:
@@ -46,4 +51,4 @@ def build_graph(checkpointer: Any, store: Any) -> Any:
     builder.add_node("llm", llm_node)  # pyright: ignore[reportArgumentType]
     builder.add_edge(START, "llm")
     builder.add_edge("llm", END)
-    return builder.compile(checkpointer=checkpointer, store=store)
+    return builder.compile(checkpointer=checkpointer, store=store, name="echo-agent")

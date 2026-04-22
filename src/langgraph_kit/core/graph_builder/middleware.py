@@ -51,7 +51,7 @@ def build_middleware_stack(
             RuntimeStateMiddleware(),
             QueuedInputMiddleware(),
             ToolErrorMiddleware(max_retries=1),
-            PressureMiddleware(pressure_monitor),
+            PressureMiddleware(pressure_monitor, llm=llm),
             ResultPersistenceMiddleware(),
             ExtractionMiddleware(
                 AutoMemoryExtractor(memory_mgr, llm), scope=MemoryScope.USER

@@ -928,7 +928,9 @@ class TestThreadManagement:
         mgr = ThreadManager(mock_store)
         await mgr.ensure_thread("t1", "user-1", "echo-agent", "User 1 thread")
         await mgr.ensure_thread("t2", "user-2", "echo-agent", "User 2 thread")
-        await mgr.ensure_thread("t3", "user-1", "r0-agent", "User 1 another")
+        await mgr.ensure_thread(
+            "t3", "user-1", "reference-deep-agent", "User 1 another"
+        )
 
         threads, total = await mgr.list_for_user("user-1")
         assert total == 2
@@ -941,7 +943,7 @@ class TestThreadManagement:
 
         mgr = ThreadManager(mock_store)
         await mgr.ensure_thread("t1", "user-1", "echo-agent", "Echo")
-        await mgr.ensure_thread("t2", "user-1", "r0-agent", "R0")
+        await mgr.ensure_thread("t2", "user-1", "reference-deep-agent", "Reference")
 
         threads, total = await mgr.list_for_user("user-1", agent_id="echo-agent")
         assert total == 1
@@ -1016,7 +1018,11 @@ class TestMCPServerMode:
         _metadata.clear()
 
         register("echo-agent", MagicMock(), metadata=AgentMetadata(description="Echo"))
-        register("deep-agent", MagicMock(), metadata=AgentMetadata(description="Deep"))
+        register(
+            "basic-deep-agent",
+            MagicMock(),
+            metadata=AgentMetadata(description="Basic deep"),
+        )
 
         # Mock FastMCP to capture tool registrations
         registered_tools: list[dict[str, Any]] = []
@@ -1054,7 +1060,7 @@ class TestMCPServerMode:
         assert len(registered_tools) == 2
         tool_names = {t["name"] for t in registered_tools}
         assert "invoke_echo_agent" in tool_names
-        assert "invoke_deep_agent" in tool_names
+        assert "invoke_basic_deep_agent" in tool_names
 
 
 # ===========================================================================

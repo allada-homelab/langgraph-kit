@@ -34,40 +34,51 @@ def register_all(
     logger.info("Registered agent: echo-agent")
 
     try:
-        from langgraph_kit.graphs.deep_agent import build_deep_graph
+        from langgraph_kit.graphs.basic_deep_agent import build_basic_deep_agent
 
         register(
-            "deep-agent",
-            build_deep_graph(checkpointer, store),
+            "basic-deep-agent",
+            build_basic_deep_agent(checkpointer, store),
             metadata=AgentMetadata(
-                description="Deep reasoning agent using the deepagents framework",
-                tags=["reasoning", "deep"],
+                description=(
+                    "Minimal deepagents example — framework defaults with a "
+                    "generic system prompt. See reference-deep-agent for the "
+                    "full-featured version."
+                ),
+                tags=["reasoning", "deep", "example"],
                 capabilities=["streaming", "multi-agent"],
             ),
         )
-        logger.info("Registered agent: deep-agent")
+        logger.info("Registered agent: basic-deep-agent")
     except Exception:
-        logger.info("deep-agent not available — skipping", exc_info=True)
+        logger.info("basic-deep-agent not available — skipping", exc_info=True)
 
     try:
-        from langgraph_kit.graphs.r0_agent import build_r0_agent
+        from langgraph_kit.graphs.reference_deep_agent import (
+            build_reference_deep_agent,
+        )
 
-        graph, dispatcher = build_r0_agent(
+        graph, dispatcher = build_reference_deep_agent(
             checkpointer, store, mcp_tools=mcp_tools or []
         )
         register(
-            "r0-agent",
+            "reference-deep-agent",
             graph,
             command_dispatcher=dispatcher,
             metadata=AgentMetadata(
-                description="Advanced AI assistant with persistent memory, tool use, and multi-agent orchestration",
-                tags=["general", "memory", "tools", "orchestration"],
+                description=(
+                    "Reference full-stack deep agent wiring every kit feature "
+                    "(prompt assembly, persistent memory, tool registry, "
+                    "middleware, workers, slash commands). Clone this when "
+                    "starting a new domain agent."
+                ),
+                tags=["general", "memory", "tools", "orchestration", "reference"],
                 capabilities=["streaming", "hitl", "memory", "mcp", "commands"],
             ),
         )
-        logger.info("Registered agent: r0-agent")
+        logger.info("Registered agent: reference-deep-agent")
     except Exception:
-        logger.info("r0-agent not available — skipping", exc_info=True)
+        logger.info("reference-deep-agent not available — skipping", exc_info=True)
 
     try:
         from langgraph_kit.graphs.coding_agent import build_coding_agent
@@ -94,7 +105,7 @@ def register_all(
 
         graph = build_supervisor_agent(checkpointer, store)
         register(
-            "supervisor",
+            "supervisor-agent",
             graph,
             metadata=AgentMetadata(
                 description="Routes requests to the best available specialist agent",
@@ -102,6 +113,6 @@ def register_all(
                 capabilities=["streaming", "delegation"],
             ),
         )
-        logger.info("Registered agent: supervisor")
+        logger.info("Registered agent: supervisor-agent")
     except Exception:
-        logger.info("supervisor not available — skipping", exc_info=True)
+        logger.info("supervisor-agent not available — skipping", exc_info=True)

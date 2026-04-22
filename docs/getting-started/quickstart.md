@@ -141,4 +141,4 @@ register("my-custom-agent", graph)
 - [Architecture Overview](../architecture/overview.md) — understand how the pieces fit together
 - [Memory System](../memory/overview.md) — add persistent memory to your agent
 - [Tools & Capabilities](../tools/overview.md) — register tools with risk levels and filtering
-- [R0 Agent](../agents/r0-agent.md) — explore the full-featured agent implementation
+- [Reference Deep Agent](../agents/reference-deep-agent.md) — explore the full-featured agent implementation

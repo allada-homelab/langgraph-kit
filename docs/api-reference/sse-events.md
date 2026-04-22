@@ -165,7 +165,7 @@ data: [DONE]\n\n
 ## Frontend Consumption
 
 ```javascript
-const eventSource = new EventSource('/api/v1/agents/r0-agent/stream');
+const eventSource = new EventSource('/api/v1/agents/reference-deep-agent/stream');
 
 eventSource.onmessage = (event) => {
     if (event.data === '[DONE]') {

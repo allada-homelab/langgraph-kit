@@ -3,11 +3,11 @@
 **Source:** `src/langgraph_kit/graphs/coding_agent.py`
 **Agent ID:** `coding-agent`
 
-The most capable built-in agent — R0 with coding-specific overlays.
+The most capable built-in agent — the reference deep agent with coding-specific overlays.
 
 ## Architecture
 
-Extends the R0 agent with:
+Extends the reference deep agent with:
 - Git context injection
 - Coding-specific prompt sections
 - Worktree tools
@@ -15,7 +15,7 @@ Extends the R0 agent with:
 
 ## Additional Prompt Sections
 
-Beyond R0's core sections:
+Beyond the reference agent's core sections:
 
 | Section | Content |
 |---------|---------|
@@ -43,7 +43,7 @@ Sourced from `core/tools/worktree.py`, provides: `create_worktree`, `list_worktr
 
 ### Enhanced Verifier (R2-005)
 
-Replaces the standard R0 verifier with a coding-specific verification worker (`CODING_VERIFIER_DEFINITION` from `core/orchestration/workers.py`) that:
+Replaces the standard verifier with a coding-specific verification worker (`CODING_VERIFIER_DEFINITION` from `core/orchestration/workers.py`) that:
 - Assumes nothing works until evidence proves it does
 - Reads actual changed files (not summaries)
 - Runs tests if available and reports results
@@ -53,10 +53,10 @@ Replaces the standard R0 verifier with a coding-specific verification worker (`C
 
 Pre-composed as `CODING_WORKERS` from `core/orchestration/workers.py`:
 
-| Worker | Definition | Changes from R0 |
+| Worker | Definition | Changes from reference agent |
 |--------|-----------|-----------------|
-| `researcher` | `RESEARCHER_DEFINITION` | Same as R0 |
-| `implementer` | `IMPLEMENTER_DEFINITION` | Same as R0 |
+| `researcher` | `RESEARCHER_DEFINITION` | Same as reference |
+| `implementer` | `IMPLEMENTER_DEFINITION` | Same as reference |
 | `verifier` | `CODING_VERIFIER_DEFINITION` | Enhanced skeptical verifier |
 
 See [Workers](../orchestration/workers.md) for full definitions.
@@ -65,7 +65,7 @@ See [Workers](../orchestration/workers.md) for full definitions.
 
 ```python
 def build_coding_agent(checkpointer, store, mcp_tools=None):
-    """Build the coding agent with R0 + coding overlays.
+    """Build the coding agent with reference-agent infrastructure + coding overlays.
 
     Returns: (compiled_graph, command_dispatcher)
     """

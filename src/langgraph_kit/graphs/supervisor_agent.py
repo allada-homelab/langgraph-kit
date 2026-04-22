@@ -186,4 +186,4 @@ def build_supervisor_agent(
     graph.add_edge("delegate", "synthesize")
     graph.add_edge("synthesize", END)
 
-    return graph.compile(checkpointer=checkpointer)
+    return graph.compile(checkpointer=checkpointer, name="supervisor-agent")

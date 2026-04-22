@@ -1,8 +1,11 @@
-"""R0 deep agent demonstrating all R0 features.
+"""Reference full-stack deep agent.
 
-Integrates: prompt assembly, persistent memory, session notebook,
-tool registry, auto memory extraction, context pressure management,
-continuation policy, stop hooks, and multi-agent orchestration.
+Wires every kit feature together: prompt assembly, persistent memory,
+session notebook, tool registry, auto memory extraction, context pressure
+management (including full compaction), continuation policy, stop hooks,
+and multi-agent orchestration. Clone this module when starting a new
+domain-specific agent and layer on domain-specific sections, providers,
+and tools (see ``coding_agent`` for the canonical extension pattern).
 """
 
 from __future__ import annotations
@@ -104,12 +107,12 @@ _CORE_SECTIONS = [
 # ---------------------------------------------------------------------------
 
 
-def build_r0_agent(
+def build_reference_deep_agent(
     checkpointer: Any, store: Any, *, mcp_tools: list[Any] | None = None
 ) -> Any:
-    """Build the R0 demo agent with all features wired together."""
+    """Build the reference deep agent with all kit features wired together."""
     return build_deep_agent(
-        agent_name="r0-agent",
+        agent_name="reference-deep-agent",
         core_sections=_CORE_SECTIONS,
         subagents=R0_WORKERS,
         checkpointer=checkpointer,

@@ -45,10 +45,11 @@ src/langgraph_kit/
 ├── graphs/                  # Agent implementations
 │   ├── __init__.py          # register_all() entry point
 │   ├── _builder.py          # Re-exports from core.graph_builder
-│   ├── echo_agent.py        # Minimal example
-│   ├── deep_agent.py        # deepagents baseline
-│   ├── r0_agent.py          # Full-featured agent
-│   └── coding_agent.py      # Coding-specific agent
+│   ├── echo_agent.py              # Minimal example
+│   ├── basic_deep_agent.py        # deepagents baseline
+│   ├── reference_deep_agent.py    # Full-featured agent
+│   ├── coding_agent.py            # Coding-specific agent
+│   └── supervisor_agent.py        # Routes to other agents
 │
 ├── contrib/                 # Optional integrations
 │   └── fastapi.py           # FastAPI router factory

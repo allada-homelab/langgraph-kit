@@ -100,8 +100,8 @@ nav:
   - Agents:
     - Overview: agents/overview.md
     - Echo agent: agents/echo-agent.md
-    - R0 agent: agents/r0-agent.md
-    - Deep agent: agents/deep-agent.md
+    - Basic deep agent: agents/basic-deep-agent.md
+    - Reference deep agent: agents/reference-deep-agent.md
     - Coding agent: agents/coding-agent.md
     - Graph builder: agents/graph-builder.md
     - Builder utilities: agents/builder-utilities.md

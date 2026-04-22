@@ -99,7 +99,7 @@ from langgraph_kit.core.graph_builder import (
 # Agent graphs
 from langgraph_kit.graphs import register_all
 from langgraph_kit.graphs.echo_agent import build_graph
-from langgraph_kit.graphs.r0_agent import build_r0_agent
+from langgraph_kit.graphs.reference_deep_agent import build_reference_deep_agent
 
 # FastAPI integration
 from langgraph_kit.contrib.fastapi import create_agent_router

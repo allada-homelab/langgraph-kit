@@ -69,7 +69,7 @@ def test_coding_sections_included_in_registry() -> None:
 
 def test_coding_sections_do_not_conflict_with_core() -> None:
     """Coding sections should not overwrite core sections."""
-    from langgraph_kit.graphs.r0_agent import _CORE_SECTIONS
+    from langgraph_kit.graphs.reference_deep_agent import _CORE_SECTIONS
 
     registry = SectionRegistry()
     registry.register_many(_CORE_SECTIONS)
@@ -86,7 +86,7 @@ def test_coding_sections_do_not_conflict_with_core() -> None:
 
 def test_coding_sections_priority_below_core() -> None:
     """Coding overlay sections should have lower priority than core sections."""
-    from langgraph_kit.graphs.r0_agent import _CORE_SECTIONS
+    from langgraph_kit.graphs.reference_deep_agent import _CORE_SECTIONS
 
     max_coding_priority = max(
         s.priority for s in CODING_WORKFLOW_SECTIONS + CODING_SEARCH_SECTIONS

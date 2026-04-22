@@ -1,4 +1,4 @@
-"""Tests for r0_agent build function, RuntimeStateMiddleware, and StopHooksMiddleware."""
+"""Tests for reference_deep_agent build function, RuntimeStateMiddleware, and StopHooksMiddleware."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ import pytest
 from langgraph_kit.core.orchestration.workers import R0_WORKERS
 from langgraph_kit.core.resilience.runtime_state import RuntimeStateMiddleware
 from langgraph_kit.core.resilience.stop_hooks import StopHooksMiddleware
-from langgraph_kit.graphs.r0_agent import build_r0_agent
+from langgraph_kit.graphs.reference_deep_agent import build_reference_deep_agent
 
 # ---------------------------------------------------------------------------
 # R0_WORKERS tests
@@ -117,12 +117,12 @@ async def test_stop_hooks_middleware_non_blocking_failure() -> None:
 
 
 # ---------------------------------------------------------------------------
-# build_r0_agent smoke test
+# build_reference_deep_agent smoke test
 # ---------------------------------------------------------------------------
 
 
-def test_build_r0_agent_returns_graph(mock_store: Any) -> None:
-    """Call build_r0_agent with mock store + mock checkpointer."""
+def test_build_reference_deep_agent_returns_graph(mock_store: Any) -> None:
+    """Call build_reference_deep_agent with mock store + mock checkpointer."""
     checkpointer = MagicMock()
 
     fake_graph = MagicMock(name="compiled_graph")
@@ -144,7 +144,9 @@ def test_build_r0_agent_returns_graph(mock_store: Any) -> None:
         patch.dict(sys.modules, module_patches),
         patch("langgraph_kit.graphs._builder.build_llm", return_value=fake_llm),
     ):
-        graph, _dispatcher = build_r0_agent(checkpointer=checkpointer, store=mock_store)
+        graph, _dispatcher = build_reference_deep_agent(
+            checkpointer=checkpointer, store=mock_store
+        )
 
     assert graph is fake_graph
     deepagents_mod.create_deep_agent.assert_called_once()

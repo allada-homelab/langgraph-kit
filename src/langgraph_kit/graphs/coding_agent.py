@@ -1,8 +1,10 @@
-"""Coding agent — R0 harness with R2 coding-profile overlays.
+"""Coding agent — extends ``reference_deep_agent`` with coding-profile overlays.
 
-Composes the general-purpose R0 infrastructure (middleware, memory, tools)
-with coding-specific prompt sections, a git context provider, worktree
-tools, an enhanced verification worker, and slash-command dispatch.
+Reuses the reference deep agent's core sections and the shared
+``build_deep_agent`` skeleton, and layers on coding-specific prompt
+sections, a git context provider, worktree tools, an enhanced verification
+worker, and slash-command dispatch. Use this module as the template for
+any new domain specialization.
 """
 
 from __future__ import annotations
@@ -23,7 +25,7 @@ from langgraph_kit.core.tools.worktree import (
     build_worktree_tools,
 )
 from langgraph_kit.graphs._builder import build_deep_agent
-from langgraph_kit.graphs.r0_agent import _CORE_SECTIONS
+from langgraph_kit.graphs.reference_deep_agent import _CORE_SECTIONS
 
 
 def _register_worktree_tools(registry: ToolRegistry) -> None:

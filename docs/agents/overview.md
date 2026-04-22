@@ -1,6 +1,6 @@
 # Agent Graphs Overview
 
-langgraph-kit ships with four built-in agent implementations, ranging from a minimal example to a full-featured coding assistant. All follow the same contract and are registered during application startup.
+langgraph-kit ships with five built-in agent implementations, ranging from a minimal example to a full-featured coding assistant. All follow the same contract and are registered during application startup.
 
 ## Agent Contract
 
@@ -17,10 +17,11 @@ The graph receives a checkpointer (conversation persistence) and a store (key-va
 
 | Agent | ID | Features | Complexity |
 |-------|----|----------|------------|
-| [Echo](echo-agent.md) | `echo-agent` | Single LLM node | Minimal |
-| [Deep](deep-agent.md) | `deep-agent` | deepagents framework | Low |
-| [R0](r0-agent.md) | `r0-agent` | Full feature set | High |
-| [Coding](coding-agent.md) | `coding-agent` | R0 + coding overlays | Highest |
+| [Echo](echo-agent.md) | `echo-agent` | Single LLM node + minimal system prompt | Minimal |
+| [Basic Deep](basic-deep-agent.md) | `basic-deep-agent` | deepagents framework defaults + minimal system prompt | Low |
+| [Reference Deep](reference-deep-agent.md) | `reference-deep-agent` | Full kit feature set | High |
+| [Coding](coding-agent.md) | `coding-agent` | Reference + coding overlays | Highest |
+| Supervisor | `supervisor-agent` | Routes requests to other agents | Meta |
 
 ## Registration
 
@@ -37,7 +38,7 @@ This calls each agent's build function and registers the resulting graph with it
 
 ## Graph Builder
 
-The [Graph Builder](graph-builder.md) package (`core/graph_builder/`) provides shared factories used by R0 and Coding agents:
+The [Graph Builder](graph-builder.md) package (`core/graph_builder/`) provides shared factories used by the reference and coding agents:
 - Tool registration helpers (`tools.py`)
 - Middleware stack construction (`middleware.py`)
 - Command dispatcher setup (`commands.py`)

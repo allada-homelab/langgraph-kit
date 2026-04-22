@@ -113,9 +113,9 @@ Licensed under AGPL-3.0-or-later. Requires Python 3.13.
 
 - [Overview](agents/overview.md) — Agent graph contract and registration
 - [Echo Agent](agents/echo-agent.md) — Minimal reference implementation
-- [Deep Agent](agents/deep-agent.md) — deepagents framework baseline
-- [R0 Agent](agents/r0-agent.md) — Full-featured general-purpose agent
-- [Coding Agent](agents/coding-agent.md) — R0 + coding-profile overlays
+- [Basic Deep Agent](agents/basic-deep-agent.md) — deepagents framework baseline
+- [Reference Deep Agent](agents/reference-deep-agent.md) — Full-featured general-purpose agent
+- [Coding Agent](agents/coding-agent.md) — Reference + coding-profile overlays
 - [Graph Builder](agents/graph-builder.md) — Shared builder factories (`core.graph_builder`)
 
 ### Integrations

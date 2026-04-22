@@ -38,7 +38,7 @@ Cross-cutting concerns (command interception, error recovery, memory extraction,
 
 ## Progressive Disclosure
 
-Not every agent needs every feature. The echo agent uses none of the core subsystems. The R0 agent uses everything. Subsystems are opt-in — you import and wire up only what you need.
+Not every agent needs every feature. The echo agent uses none of the core subsystems. The reference deep agent uses everything. Subsystems are opt-in — you import and wire up only what you need.
 
 ## Provider Agnosticism
 
