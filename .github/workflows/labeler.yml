@@ -33,8 +33,12 @@ jobs:
         # Required here because this job pulls agilepathway/pull-request-label-checker
         # from Docker Hub via the ``docker://`` action syntax.
         # Skipped when secrets are unavailable (e.g. Dependabot PRs) — falls
-        # back to anonymous pulls.
-        if: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+        # back to anonymous pulls. Note: ``secrets`` context is not available in
+        # ``if:`` expressions, so we promote to env first and gate on that.
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
         uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}

@@ -83,9 +83,7 @@ class LLMJudgeMetric(EvalMetric):
                     self.name,
                     parsed,
                 )
-                return EvalResult(
-                    value=0.0, comment="Judge returned no score field"
-                )
+                return EvalResult(value=0.0, comment="Judge returned no score field")
             try:
                 score_val = float(parsed["score"])
             except (TypeError, ValueError):
