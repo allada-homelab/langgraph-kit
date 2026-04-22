@@ -13,7 +13,7 @@ uv sync --all-extras --all-groups
 just test
 ```
 
-Python 3.11–3.14 are supported; CI runs on all four.
+Python 3.11–3.13 are supported; CI runs on all three.
 
 ## Common tasks
 
