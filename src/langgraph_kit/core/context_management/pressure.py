@@ -45,6 +45,7 @@ class PressureMonitor:
         max_compaction_failures: int = 3,
         large_output_threshold: int = 4000,
     ) -> None:
+        super().__init__()
         self._window_limit = window_limit
         self._warn_pct = warn_pct
         self._critical_pct = critical_pct

@@ -34,6 +34,7 @@ class AGUIEncoder:
     """
 
     def __init__(self, *, thread_id: str = "", run_id: str = "") -> None:
+        super().__init__()
         self.thread_id = thread_id
         self.run_id = run_id or str(uuid4())
         self._text_started = False

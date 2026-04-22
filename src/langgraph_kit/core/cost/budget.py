@@ -23,6 +23,7 @@ class BudgetManager:
     """
 
     def __init__(self, store: Any, config: BudgetConfig) -> None:
+        super().__init__()
         self._store = store
         self._config = config
 

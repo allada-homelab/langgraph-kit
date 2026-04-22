@@ -30,6 +30,7 @@ class EvalRunner:
         llm: Any | None = None,
         pass_threshold: float = DEFAULT_PASS_THRESHOLD,
     ) -> None:
+        super().__init__()
         self._langfuse = langfuse
         self._metrics = metrics
         self._llm = llm

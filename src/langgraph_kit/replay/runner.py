@@ -37,6 +37,7 @@ class ReplayRunner:
         checkpointer: Any = None,
         store: Any = None,
     ) -> None:
+        super().__init__()
         self.recording_path = recording_path
         self.graph_builder = graph_builder
         self.tool_overrides = tool_overrides or {}

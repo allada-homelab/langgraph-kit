@@ -40,6 +40,7 @@ class SectionRegistry:
     """Registry for prompt sections, supporting conditional filtering."""
 
     def __init__(self) -> None:
+        super().__init__()
         self._sections: dict[str, PromptSection] = {}
 
     def register(self, section: PromptSection) -> None:

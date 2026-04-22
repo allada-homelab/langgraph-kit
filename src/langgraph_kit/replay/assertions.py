@@ -27,6 +27,7 @@ class ReplayAssertions:
         original: ConversationRecording,
         replayed: ConversationRecording,
     ) -> None:
+        super().__init__()
         self.original = original
         self.replayed = replayed
 

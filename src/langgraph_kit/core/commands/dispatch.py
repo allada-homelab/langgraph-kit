@@ -43,6 +43,7 @@ class CommandDispatcher:
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self._commands: dict[str, tuple[CommandHandler, CommandInfo]] = {}
 
     def register(

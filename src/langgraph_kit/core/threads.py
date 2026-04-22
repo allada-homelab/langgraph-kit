@@ -35,6 +35,7 @@ class ThreadManager:
     """
 
     def __init__(self, store: Any) -> None:
+        super().__init__()
         self._store = store
 
     async def ensure_thread(

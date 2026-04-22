@@ -154,6 +154,7 @@ class ThreadBusyTracker:
     """
 
     def __init__(self, store: Any) -> None:
+        super().__init__()
         self._store = store
 
     async def mark_busy(self, thread_id: str) -> None:

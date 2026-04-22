@@ -72,6 +72,7 @@ class CoordinatorMode:
     """
 
     def __init__(self, tool_registry: ToolRegistry) -> None:
+        super().__init__()
         self._registry = tool_registry
 
     def get_coordinator_tools(self) -> list[Any]:

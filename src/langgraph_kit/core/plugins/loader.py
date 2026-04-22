@@ -30,6 +30,7 @@ class PluginLoader:
     """Discovers and loads plugins from a directory into a PluginRegistry."""
 
     def __init__(self, registry: PluginRegistry | None = None) -> None:
+        super().__init__()
         self._registry = registry or PluginRegistry()
 
     @property

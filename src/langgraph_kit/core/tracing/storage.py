@@ -17,6 +17,7 @@ class TraceStore:
     """
 
     def __init__(self, store: Any, *, max_per_thread: int = 20) -> None:
+        super().__init__()
         self._store = store
         self._max_per_thread = max_per_thread
 

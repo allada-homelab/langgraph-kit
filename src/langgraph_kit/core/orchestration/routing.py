@@ -35,6 +35,7 @@ class LLMRoutingStrategy:
     """
 
     def __init__(self, llm: Any) -> None:
+        super().__init__()
         self._llm = llm
 
     async def route(
