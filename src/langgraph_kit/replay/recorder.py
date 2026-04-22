@@ -134,12 +134,18 @@ class ConversationRecorder(AsyncCallbackHandler):
 
     async def on_tool_end(
         self,
-        output: str,
+        output: Any,
         *,
         run_id: Any,
         **kwargs: Any,  # noqa: ARG002
     ) -> None:
-        """Capture tool output and pair with input."""
+        """Capture tool output and pair with input.
+
+        ``output`` is annotated ``Any`` rather than ``str``: langchain's
+        BaseCallbackHandler declares ``str`` but in practice passes
+        ToolMessage objects (which carry ``status``) as well as plain
+        strings, and our error-detection path needs both.
+        """
         key = str(run_id)
         pending = self._pending_tool.pop(key, None)
         if pending is None:
@@ -151,7 +157,7 @@ class ConversationRecorder(AsyncCallbackHandler):
         # Detect error status from ToolErrorMiddleware's structured format
         # or from ToolMessage objects with status="error"
         status: str = "success"
-        if (hasattr(output, "status") and output.status == "error") or (
+        if getattr(output, "status", None) == "error" or (
             output_str.startswith("Tool '") and "' failed." in output_str
         ):
             status = "error"

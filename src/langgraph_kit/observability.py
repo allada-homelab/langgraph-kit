@@ -79,11 +79,10 @@ def create_langfuse_handler() -> Any | None:
 
     config = get_config()
     logger.info("Creating Langfuse callback handler for agent run")
-    return CallbackHandler(
-        public_key=config.langfuse_public_key,
-        secret_key=config.langfuse_secret_key,
-        host=config.langfuse_host,
-    )
+    # langfuse>=4: CallbackHandler only accepts public_key + trace_context.
+    # secret_key/host are read from the globally-configured Langfuse client
+    # that init_langfuse() created.
+    return CallbackHandler(public_key=config.langfuse_public_key)
 
 
 def flush_langfuse() -> None:
