@@ -1,3 +1,5 @@
+# pyright: reportPrivateUsage=false
+# Strict-mode prep: this test probes ``_CORE_SECTIONS`` by design.
 """Tests for R2 coding-profile overlay features."""
 
 from __future__ import annotations

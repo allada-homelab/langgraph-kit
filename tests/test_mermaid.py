@@ -1,3 +1,8 @@
+# pyright: reportPrivateUsage=false
+# Strict-mode prep: this test probes private module internals
+# (``_safe_name``) by design.  Disabling reportPrivateUsage here keeps
+# the file clean under a future ``typeCheckingMode = "strict"`` flip
+# without weakening type safety elsewhere.
 """Tests for tracing mermaid diagram generation."""
 
 from __future__ import annotations

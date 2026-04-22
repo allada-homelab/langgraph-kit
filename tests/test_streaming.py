@@ -1,3 +1,5 @@
+# pyright: reportPrivateUsage=false
+# Strict-mode prep: this test probes ``_parse_sentinel`` by design.
 """Tests for streaming module — sentinel parsing."""
 
 from __future__ import annotations

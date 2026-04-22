@@ -1,3 +1,9 @@
+# pyright: reportPrivateUsage=false
+# Strict-mode prep: these tests reach into private helpers (``_metadata``,
+# ``_registry``, ``_map_sse_to_agui``, ``_extract_usage``,
+# ``_build_multipart_content``, ``_extract_text_content``) by design so
+# the private-side contract is covered too.  Keeps the file clean under
+# a future strict flip without weakening type safety elsewhere.
 """Integration tests for all v0.5.0 platform features.
 
 Each test class covers one feature with full setup → run → analyze.

@@ -1,3 +1,5 @@
+# pyright: reportPrivateUsage=false
+# Strict-mode prep: this test probes ``_items_to_messages`` by design.
 """Tests for busy-thread queueing middleware and Store-backed queue."""
 
 from __future__ import annotations

@@ -1,3 +1,8 @@
+# pyright: reportPrivateUsage=false
+# Strict-mode prep: these tests reach into the registry's private
+# ``_metadata`` / ``_registry`` / ``_dispatchers`` dicts to set up and
+# clean state between cases.  Keeps the file clean under a future
+# strict flip without weakening type safety elsewhere.
 """Tests for the agent registry module."""
 
 from __future__ import annotations
