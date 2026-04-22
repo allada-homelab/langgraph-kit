@@ -40,7 +40,10 @@ def build_graph(checkpointer: Any, store: Any) -> Any:
         messages: Annotated[list[Any], add_messages]
 
     builder = StateGraph(AgentState)
-    builder.add_node("llm", llm_node)
+    # LangGraph's StateNode[NodeInputT, None] stub doesn't accept
+    # ``async def`` nodes cleanly — async handlers are valid at runtime but
+    # pyright narrows to sync. Suppress narrowly rather than coerce callers.
+    builder.add_node("llm", llm_node)  # pyright: ignore[reportArgumentType]
     builder.add_edge(START, "llm")
     builder.add_edge("llm", END)
     return builder.compile(checkpointer=checkpointer, store=store)

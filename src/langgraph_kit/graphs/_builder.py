@@ -136,12 +136,15 @@ def build_deep_agent(
     system_prompt = composer.compose_sections_only(conditions=active_conditions)
 
     # --- Build the deep agent ---
+    # ``subagents`` is a list of dict-shaped specs (deepagents accepts both
+    # the typed ``SubAgent`` dataclass and the dict form at runtime, but
+    # the stub only types the dataclass path).
     graph = _create(
         model=llm,
         tools=tool_registry.compile_tools(),
         system_prompt=system_prompt,
         middleware=middleware,
-        subagents=subagents,
+        subagents=subagents,  # pyright: ignore[reportArgumentType]
         checkpointer=checkpointer,
         store=store,
         backend=build_backend_factory(agent_name),

@@ -21,7 +21,7 @@ import contextvars
 import json
 import logging
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING, Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any, cast
 from uuid import uuid4
 
 if TYPE_CHECKING:
@@ -183,7 +183,14 @@ def _to_lc_messages(messages: list[ChatMessage]) -> list[Any]:
     for m in messages:
         if m.role == "user":
             if m.attachments:
-                content = _build_multipart_content(m)
+                # langchain's HumanMessage.content accepts
+                # ``str | list[str | dict[str, Any]]``.  Our multipart
+                # builder returns the narrower ``list[dict[str, Any]]``
+                # which is covariantly compatible but list invariance
+                # blocks the direct assignment — hence the widening cast.
+                content = cast(
+                    "list[str | dict[str, Any]]", _build_multipart_content(m)
+                )
                 result.append(HumanMessage(content=content))
             else:
                 result.append(HumanMessage(content=m.content))
@@ -334,7 +341,7 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         cmd_output = await _try_command(agent_id, request.messages)
         if cmd_output is not None:
 
-            async def _cmd_stream() -> Any:
+            async def _cmd_stream() -> AsyncGenerator[str, None]:
                 yield cmd_output
 
             return StreamingResponse(

@@ -45,6 +45,7 @@ class LLMRoutingStrategy:
     ) -> RoutingDecision:
         """Decide which agent should handle the request."""
         from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
+            BaseMessage,
             HumanMessage,
             SystemMessage,
         )
@@ -64,7 +65,7 @@ class LLMRoutingStrategy:
             "If none of the agents are suitable, set target_agent_id to 'none'."
         )
 
-        messages = [SystemMessage(content=system_prompt)]
+        messages: list[BaseMessage] = [SystemMessage(content=system_prompt)]
         if history:
             messages.extend(history[-4:])  # Include recent context
         messages.append(HumanMessage(content=message))

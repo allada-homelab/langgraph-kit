@@ -174,9 +174,12 @@ def build_supervisor_agent(
 
     # Build the graph
     graph = StateGraph(SupervisorState)
-    graph.add_node("route", route_node)
-    graph.add_node("delegate", delegate_node)
-    graph.add_node("synthesize", synthesize_node)
+    # LangGraph's StateNode stub is sync-only; async handlers are valid at
+    # runtime but pyright narrows to sync. Suppress narrowly — see
+    # echo_agent.py for the same pattern.
+    graph.add_node("route", route_node)  # pyright: ignore[reportArgumentType]
+    graph.add_node("delegate", delegate_node)  # pyright: ignore[reportArgumentType]
+    graph.add_node("synthesize", synthesize_node)  # pyright: ignore[reportArgumentType]
 
     graph.set_entry_point("route")
     graph.add_edge("route", "delegate")
