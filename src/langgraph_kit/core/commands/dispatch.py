@@ -1,4 +1,4 @@
-"""Transport-independent command dispatcher (R2-006).
+"""Transport-independent command dispatcher.
 
 Maps slash-command strings to handler functions. Works with any agent,
 not just the coding agent.

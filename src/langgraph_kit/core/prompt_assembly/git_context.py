@@ -1,4 +1,4 @@
-"""Git-aware context provider for coding profiles (R2-002).
+"""Git-aware context provider for coding profiles.
 
 Injects current branch, changed-file summary, and repository cleanliness
 into the prompt at composition time. Only added to coding-profile agents.

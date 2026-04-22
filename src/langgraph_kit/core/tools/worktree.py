@@ -1,4 +1,4 @@
-"""Worktree isolation tools for coding profiles (R2-004).
+"""Worktree isolation tools for coding profiles.
 
 Provides tool functions and a prompt section for managing git worktrees.
 Worktrees create isolated copies of the repository for risky or parallel work.

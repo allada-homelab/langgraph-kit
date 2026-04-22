@@ -1,4 +1,4 @@
-"""Coding-profile prompt overlay sections (R2-001, R2-003).
+"""Coding-profile prompt overlay sections.
 
 These sections add repository-aware work habits, verification expectations,
 and search-first discipline to the coding agent. They are additive overlays —
@@ -13,7 +13,7 @@ from langgraph_kit.core.prompt_assembly.sections import (
 )
 
 # ---------------------------------------------------------------------------
-# R2-001: Coding Workflow Prompt Rules
+# Coding Workflow Prompt Rules
 # ---------------------------------------------------------------------------
 
 CODING_WORKFLOW_SECTIONS = [
@@ -41,7 +41,7 @@ CODING_WORKFLOW_SECTIONS = [
 ]
 
 # ---------------------------------------------------------------------------
-# R2-003: File Editing and Search-First Workflow
+# File Editing and Search-First Workflow
 # ---------------------------------------------------------------------------
 
 CODING_SEARCH_SECTIONS = [
