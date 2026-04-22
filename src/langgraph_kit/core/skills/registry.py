@@ -100,4 +100,3 @@ class SkillRegistry:
         if meta is None:
             return None
         return _get_body(Path(meta.path))
-

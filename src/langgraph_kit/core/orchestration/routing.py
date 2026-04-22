@@ -71,7 +71,9 @@ class LLMRoutingStrategy:
 
         try:
             response = await self._llm.ainvoke(messages)
-            content = response.content if hasattr(response, "content") else str(response)
+            content = (
+                response.content if hasattr(response, "content") else str(response)
+            )
 
             import json
 
@@ -83,7 +85,9 @@ class LLMRoutingStrategy:
                 delegated_prompt=data.get("delegated_prompt", message),
             )
         except Exception:
-            logger.debug("LLM routing failed, using first available agent", exc_info=True)
+            logger.debug(
+                "LLM routing failed, using first available agent", exc_info=True
+            )
             if capabilities:
                 return RoutingDecision(
                     target_agent_id=capabilities[0].agent_id,
@@ -97,12 +101,45 @@ class LLMRoutingStrategy:
             )
 
 
-_STOPWORDS = frozenset({
-    "this", "that", "with", "from", "have", "will", "been", "they", "them",
-    "does", "also", "into", "each", "over", "some", "when", "your", "used",
-    "what", "which", "about", "their", "would", "there", "should", "other",
-    "more", "than", "could", "like", "make", "just", "only", "very", "most",
-})
+_STOPWORDS = frozenset(
+    {
+        "this",
+        "that",
+        "with",
+        "from",
+        "have",
+        "will",
+        "been",
+        "they",
+        "them",
+        "does",
+        "also",
+        "into",
+        "each",
+        "over",
+        "some",
+        "when",
+        "your",
+        "used",
+        "what",
+        "which",
+        "about",
+        "their",
+        "would",
+        "there",
+        "should",
+        "other",
+        "more",
+        "than",
+        "could",
+        "like",
+        "make",
+        "just",
+        "only",
+        "very",
+        "most",
+    }
+)
 
 
 class KeywordRoutingStrategy:
@@ -127,7 +164,9 @@ class KeywordRoutingStrategy:
         for cap in capabilities:
             score = 0
             # Score based on agent name words (highest weight)
-            for word in cap.agent_id.lower().replace("-", " ").replace("_", " ").split():
+            for word in (
+                cap.agent_id.lower().replace("-", " ").replace("_", " ").split()
+            ):
                 if len(word) > 2 and word in message_words:
                     score += 3
             # Score based on tag matches (word-set, not substring)

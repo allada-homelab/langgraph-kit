@@ -34,7 +34,11 @@ def _format_response(response: Any) -> str:
         return "User ignored the action. Do not proceed."
     if rtype == "response":
         msg = args if isinstance(args, str) else str(args or "")
-        return f"User rejected the action with message: {msg}" if msg else "User rejected the action."
+        return (
+            f"User rejected the action with message: {msg}"
+            if msg
+            else "User rejected the action."
+        )
     if rtype == "edit":
         if isinstance(args, dict):
             return f"User edited the action. Updated args: {args}"

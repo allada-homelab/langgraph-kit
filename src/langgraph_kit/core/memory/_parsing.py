@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 _RE_JSON_ARRAY = re.compile(r"\[.*\]", re.DOTALL)
 
 
-def parse_json_array(raw: str, *, context: str = "LLM response") -> list[dict[str, Any]]:
+def parse_json_array(
+    raw: str, *, context: str = "LLM response"
+) -> list[dict[str, Any]]:
     """Parse a JSON array from a raw string, with fallback regex extraction.
 
     Tries direct JSON parse first, then attempts to extract a JSON array

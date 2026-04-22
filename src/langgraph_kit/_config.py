@@ -48,7 +48,10 @@ class AgentConfig:
         fields = []
         for f in dataclasses.fields(self):
             val = getattr(self, f.name)
-            if f.name in ("llm_api_key", "langfuse_secret_key", "langfuse_public_key") and val:
+            if (
+                f.name in ("llm_api_key", "langfuse_secret_key", "langfuse_public_key")
+                and val
+            ):
                 val = val[:4] + "***"
             fields.append(f"{f.name}={val!r}")
         return f"AgentConfig({', '.join(fields)})"

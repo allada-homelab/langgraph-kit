@@ -74,7 +74,6 @@ def _register_agent_tool(
             return f"Error invoking {agent_id}: {exc}"
 
 
-
 def mount_mcp_server(app: Any, mcp: Any, path: str = "/mcp") -> None:
     """Mount an MCP server as a sub-application on a FastAPI app.
 

@@ -38,9 +38,7 @@ class TestTraceToMermaid:
         assert "participant Agent" in result
 
     def test_sequence_with_llm_span(self) -> None:
-        span = TraceSpan(
-            span_id="s1", kind="llm", name="gpt-4o", duration_ms=500.0
-        )
+        span = TraceSpan(span_id="s1", kind="llm", name="gpt-4o", duration_ms=500.0)
         trace = _make_trace(span)
         result = trace_to_mermaid(trace)
         assert "Agent->>LLM: gpt-4o" in result
@@ -60,9 +58,7 @@ class TestTraceToMermaid:
         assert result.startswith("flowchart TD")
 
     def test_flowchart_with_span(self) -> None:
-        span = TraceSpan(
-            span_id="s1", kind="tool", name="grep", duration_ms=50.0
-        )
+        span = TraceSpan(span_id="s1", kind="tool", name="grep", duration_ms=50.0)
         trace = _make_trace(span)
         result = trace_to_mermaid(trace, style="flowchart")
         assert "grep" in result

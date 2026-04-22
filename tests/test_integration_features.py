@@ -22,7 +22,9 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-def _make_llm_mock(content: str = "Hello!", tool_calls: list[dict[str, Any]] | None = None) -> AsyncMock:
+def _make_llm_mock(
+    content: str = "Hello!", tool_calls: list[dict[str, Any]] | None = None
+) -> AsyncMock:
     """Create an AsyncMock LLM whose ainvoke returns an AIMessage."""
     mock = AsyncMock()
     msg = AIMessage(content=content, tool_calls=tool_calls or [])
@@ -31,7 +33,9 @@ def _make_llm_mock(content: str = "Hello!", tool_calls: list[dict[str, Any]] | N
     return mock
 
 
-def _make_llm_with_usage(content: str = "Done", input_tokens: int = 100, output_tokens: int = 50) -> AsyncMock:
+def _make_llm_with_usage(
+    content: str = "Done", input_tokens: int = 100, output_tokens: int = 50
+) -> AsyncMock:
     """Create an LLM mock that returns token usage data."""
     mock = AsyncMock()
     msg = AIMessage(content=content)
@@ -47,7 +51,10 @@ def _make_llm_with_usage(content: str = "Done", input_tokens: int = 100, output_
     mock._generation_result = MagicMock()
     mock._generation_result.generations = [[generation]]
     mock._generation_result.llm_output = {
-        "token_usage": {"prompt_tokens": input_tokens, "completion_tokens": output_tokens},
+        "token_usage": {
+            "prompt_tokens": input_tokens,
+            "completion_tokens": output_tokens,
+        },
         "model_name": "gpt-4o-mini",
     }
     return mock
@@ -124,7 +131,11 @@ class TestEnrichedRegistry:
         _registry.clear()
         _metadata.clear()
 
-        register("rich-agent", MagicMock(), metadata=AgentMetadata(description="Rich", tags=["ai"]))
+        register(
+            "rich-agent",
+            MagicMock(),
+            metadata=AgentMetadata(description="Rich", tags=["ai"]),
+        )
         agents = list_agents()
         assert len(agents) == 1
         assert agents[0]["description"] == "Rich"
@@ -212,7 +223,9 @@ class TestAGUIProtocol:
         from langgraph_kit.contrib.agui import AGUIEncoder
 
         encoder = AGUIEncoder(thread_id="t1")
-        event = encoder.encode_custom("artifact", {"type": "code", "content": "print(1)"})
+        event = encoder.encode_custom(
+            "artifact", {"type": "code", "content": "print(1)"}
+        )
         assert "CUSTOM" in event
         assert "artifact" in event
 
@@ -227,7 +240,9 @@ class TestAGUIProtocol:
         assert len(events) == 2  # START + CONTENT on first token
 
         # Tool call start
-        events = _map_sse_to_agui({"tool_call_start": {"id": "t1", "name": "search"}}, encoder)
+        events = _map_sse_to_agui(
+            {"tool_call_start": {"id": "t1", "name": "search"}}, encoder
+        )
         assert len(events) == 2  # STEP_STARTED + TOOL_CALL_START
 
         # Artifact
@@ -250,7 +265,9 @@ class TestTokenBudgetManager:
     """Test per-thread token budget tracking and enforcement."""
 
     @pytest.mark.asyncio
-    async def test_budget_check_allows_within_limit(self, mock_store: MockStore) -> None:
+    async def test_budget_check_allows_within_limit(
+        self, mock_store: MockStore
+    ) -> None:
         """Setup: budget of 10000 tokens. Run: check with no usage. Analyze: allow."""
         from langgraph_kit.core.cost import BudgetConfig, BudgetManager
 
@@ -270,8 +287,12 @@ class TestTokenBudgetManager:
         config = BudgetConfig(max_tokens_per_thread=10000)
         mgr = BudgetManager(mock_store, config)
 
-        await mgr.record_usage("t1", TokenUsage(input_tokens=100, output_tokens=50, total_tokens=150))
-        await mgr.record_usage("t1", TokenUsage(input_tokens=200, output_tokens=100, total_tokens=300))
+        await mgr.record_usage(
+            "t1", TokenUsage(input_tokens=100, output_tokens=50, total_tokens=150)
+        )
+        await mgr.record_usage(
+            "t1", TokenUsage(input_tokens=200, output_tokens=100, total_tokens=300)
+        )
 
         state = await mgr.load_state("t1")
         assert state.total_input_tokens == 300
@@ -286,7 +307,9 @@ class TestTokenBudgetManager:
         config = BudgetConfig(max_tokens_per_thread=1000, warning_threshold_pct=0.80)
         mgr = BudgetManager(mock_store, config)
 
-        await mgr.record_usage("t1", TokenUsage(input_tokens=500, output_tokens=350, total_tokens=850))
+        await mgr.record_usage(
+            "t1", TokenUsage(input_tokens=500, output_tokens=350, total_tokens=850)
+        )
         result = await mgr.check_budget("t1")
         assert result.action == "warn"
         assert result.budget_consumed_pct >= 0.80
@@ -299,13 +322,17 @@ class TestTokenBudgetManager:
         config = BudgetConfig(max_tokens_per_thread=1000)
         mgr = BudgetManager(mock_store, config)
 
-        await mgr.record_usage("t1", TokenUsage(input_tokens=700, output_tokens=500, total_tokens=1200))
+        await mgr.record_usage(
+            "t1", TokenUsage(input_tokens=700, output_tokens=500, total_tokens=1200)
+        )
         result = await mgr.check_budget("t1")
         assert result.action == "deny"
         assert result.remaining_tokens == 0
 
     @pytest.mark.asyncio
-    async def test_budget_downgrade_when_configured(self, mock_store: MockStore) -> None:
+    async def test_budget_downgrade_when_configured(
+        self, mock_store: MockStore
+    ) -> None:
         """Setup: budget with downgrade model. Run: exceed warning. Analyze: downgrade action."""
         from langgraph_kit.core.cost import BudgetConfig, BudgetManager, TokenUsage
 
@@ -316,7 +343,9 @@ class TestTokenBudgetManager:
         )
         mgr = BudgetManager(mock_store, config)
 
-        await mgr.record_usage("t1", TokenUsage(input_tokens=500, output_tokens=350, total_tokens=850))
+        await mgr.record_usage(
+            "t1", TokenUsage(input_tokens=500, output_tokens=350, total_tokens=850)
+        )
         result = await mgr.check_budget("t1")
         assert result.action == "downgrade"
         assert "gpt-4o-mini" in result.reason
@@ -499,7 +528,10 @@ class TestConversationReplay:
 
         recording = ConversationRecording(
             interactions=[
-                LLMInteraction(sequence_num=1, output_message={"role": "assistant", "content": "only one"}),
+                LLMInteraction(
+                    sequence_num=1,
+                    output_message={"role": "assistant", "content": "only one"},
+                ),
             ],
         )
 
@@ -580,7 +612,10 @@ class TestConversationReplay:
 
         recording = ConversationRecording(
             interactions=[
-                LLMInteraction(sequence_num=1, output_message={"role": "assistant", "content": "The answer is 42"}),
+                LLMInteraction(
+                    sequence_num=1,
+                    output_message={"role": "assistant", "content": "The answer is 42"},
+                ),
             ],
         )
 
@@ -671,7 +706,9 @@ class TestA2AProtocol:
         _metadata.clear()
 
         mock_graph = AsyncMock()
-        mock_graph.ainvoke.return_value = {"messages": [AIMessage(content="I can help!")]}
+        mock_graph.ainvoke.return_value = {
+            "messages": [AIMessage(content="I can help!")]
+        }
         register("mock-agent", mock_graph)
 
         result = await invoke_agent_a2a("mock-agent", "Hello")
@@ -714,15 +751,28 @@ class TestSupervisorRouter:
         )
 
         caps = [
-            AgentCapability(agent_id="general", name="General", description="General assistant", tags=["general", "chat"]),
-            AgentCapability(agent_id="coding", name="Coding", description="Code writing and review", tags=["coding", "git", "review"]),
+            AgentCapability(
+                agent_id="general",
+                name="General",
+                description="General assistant",
+                tags=["general", "chat"],
+            ),
+            AgentCapability(
+                agent_id="coding",
+                name="Coding",
+                description="Code writing and review",
+                tags=["coding", "git", "review"],
+            ),
         ]
 
         router = KeywordRoutingStrategy()
         decision = await router.route("Can you review my code?", caps)
 
         assert decision.target_agent_id == "coding"
-        assert "review" in decision.delegated_prompt.lower() or "code" in decision.delegated_prompt.lower()
+        assert (
+            "review" in decision.delegated_prompt.lower()
+            or "code" in decision.delegated_prompt.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_keyword_routing_fallback(self) -> None:
@@ -733,8 +783,15 @@ class TestSupervisorRouter:
         )
 
         caps = [
-            AgentCapability(agent_id="agent-a", name="A", description="Handles alphas", tags=["alpha"]),
-            AgentCapability(agent_id="agent-b", name="B", description="Handles betas", tags=["beta"]),
+            AgentCapability(
+                agent_id="agent-a",
+                name="A",
+                description="Handles alphas",
+                tags=["alpha"],
+            ),
+            AgentCapability(
+                agent_id="agent-b", name="B", description="Handles betas", tags=["beta"]
+            ),
         ]
 
         router = KeywordRoutingStrategy()
@@ -742,7 +799,10 @@ class TestSupervisorRouter:
 
         # Should fall back to first agent (no keyword matches)
         assert decision.target_agent_id == "agent-a"
-        assert "default" in decision.reasoning.lower() or "match" in decision.reasoning.lower()
+        assert (
+            "default" in decision.reasoning.lower()
+            or "match" in decision.reasoning.lower()
+        )
 
     @pytest.mark.asyncio
     async def test_keyword_routing_no_agents(self) -> None:
@@ -766,7 +826,12 @@ class TestSupervisorRouter:
         )
 
         caps = [
-            AgentCapability(agent_id="coding-agent", name="Coding", description="Code", tags=["code"]),
+            AgentCapability(
+                agent_id="coding-agent",
+                name="Coding",
+                description="Code",
+                tags=["code"],
+            ),
         ]
 
         router = LLMRoutingStrategy(mock_llm)
@@ -787,7 +852,9 @@ class TestSupervisorRouter:
         mock_llm = AsyncMock()
         mock_llm.ainvoke.side_effect = RuntimeError("API error")
 
-        caps = [AgentCapability(agent_id="fallback", name="Fallback", description="Default")]
+        caps = [
+            AgentCapability(agent_id="fallback", name="Fallback", description="Default")
+        ]
 
         router = LLMRoutingStrategy(mock_llm)
         decision = await router.route("Hello", caps)
@@ -810,7 +877,9 @@ class TestThreadManagement:
         from langgraph_kit.core.threads import ThreadManager
 
         mgr = ThreadManager(mock_store)
-        meta = await mgr.ensure_thread("t1", "user-1", "echo-agent", "Hello world, this is my first message")
+        meta = await mgr.ensure_thread(
+            "t1", "user-1", "echo-agent", "Hello world, this is my first message"
+        )
 
         assert meta.thread_id == "t1"
         assert meta.user_id == "user-1"
@@ -952,16 +1021,27 @@ class TestMCPServerMode:
 
             def tool(self, name: str = "", description: str = ""):
                 def decorator(fn):
-                    registered_tools.append({"name": name, "description": description, "fn": fn})
+                    registered_tools.append(
+                        {"name": name, "description": description, "fn": fn}
+                    )
                     return fn
+
                 return decorator
 
         # FastMCP is imported inside create_mcp_server, so patch the source module
-        with patch.dict("sys.modules", {"mcp": MagicMock(), "mcp.server": MagicMock(), "mcp.server.fastmcp": MagicMock(FastMCP=FakeMCP)}):
+        with patch.dict(
+            "sys.modules",
+            {
+                "mcp": MagicMock(),
+                "mcp.server": MagicMock(),
+                "mcp.server.fastmcp": MagicMock(FastMCP=FakeMCP),
+            },
+        ):
             # Need to reload the module to pick up the mock
             import importlib
 
             import langgraph_kit.contrib.mcp_server as mcp_mod
+
             importlib.reload(mcp_mod)
             mcp_mod.create_mcp_server("test-server")
 
@@ -988,9 +1068,16 @@ class TestTraceExport:
 
         # Simulate: chain start → llm start → llm end → tool start → tool end → chain end
         await handler.on_chain_start({"name": "agent"}, {}, run_id="chain-1")
-        await handler.on_chat_model_start({"kwargs": {"model_name": "gpt-4o"}}, [[]], run_id="llm-1", parent_run_id="chain-1")
+        await handler.on_chat_model_start(
+            {"kwargs": {"model_name": "gpt-4o"}},
+            [[]],
+            run_id="llm-1",
+            parent_run_id="chain-1",
+        )
         await handler.on_llm_end(MagicMock(), run_id="llm-1")
-        await handler.on_tool_start({"name": "search"}, "{}", run_id="tool-1", parent_run_id="chain-1")
+        await handler.on_tool_start(
+            {"name": "search"}, "{}", run_id="tool-1", parent_run_id="chain-1"
+        )
         await handler.on_tool_end("results", run_id="tool-1")
         await handler.on_chain_end({}, run_id="chain-1")
 
@@ -1021,12 +1108,18 @@ class TestTraceExport:
 
         trace = TraceRecord(
             spans=[
-                TraceSpan(name="root", children=[
-                    TraceSpan(name="child1"),
-                    TraceSpan(name="child2", children=[
-                        TraceSpan(name="grandchild"),
-                    ]),
-                ]),
+                TraceSpan(
+                    name="root",
+                    children=[
+                        TraceSpan(name="child1"),
+                        TraceSpan(
+                            name="child2",
+                            children=[
+                                TraceSpan(name="grandchild"),
+                            ],
+                        ),
+                    ],
+                ),
             ],
         )
         assert trace.span_count == 4  # root + child1 + child2 + grandchild
@@ -1037,10 +1130,15 @@ class TestTraceExport:
 
         trace = TraceRecord(
             spans=[
-                TraceSpan(name="agent", kind="chain", duration_ms=500.0, children=[
-                    TraceSpan(name="gpt-4o", kind="llm", duration_ms=200.0),
-                    TraceSpan(name="search", kind="tool", duration_ms=100.0),
-                ]),
+                TraceSpan(
+                    name="agent",
+                    kind="chain",
+                    duration_ms=500.0,
+                    children=[
+                        TraceSpan(name="gpt-4o", kind="llm", duration_ms=200.0),
+                        TraceSpan(name="search", kind="tool", duration_ms=100.0),
+                    ],
+                ),
             ],
         )
 
@@ -1071,7 +1169,12 @@ class TestTraceExport:
         from langgraph_kit.core.tracing import TraceRecord, TraceStore
 
         store = TraceStore(mock_store)
-        trace = TraceRecord(trace_id="tr-1", thread_id="t1", duration_ms=150.0, started_at="2024-01-01T00:00:00Z")
+        trace = TraceRecord(
+            trace_id="tr-1",
+            thread_id="t1",
+            duration_ms=150.0,
+            started_at="2024-01-01T00:00:00Z",
+        )
 
         await store.save_trace("t1", trace)
         summaries = await store.list_traces("t1")
@@ -1136,7 +1239,12 @@ class TestFileUpload:
             role="user",
             content="What's in this image?",
             attachments=[
-                FileAttachment(name="img.png", type="image/png", size=1000, data_url="data:image/png;base64,abc"),
+                FileAttachment(
+                    name="img.png",
+                    type="image/png",
+                    size=1000,
+                    data_url="data:image/png;base64,abc",
+                ),
             ],
         )
         data = msg.model_dump()
@@ -1163,7 +1271,12 @@ class TestFileUpload:
             role="user",
             content="Describe this",
             attachments=[
-                FileAttachment(name="photo.png", type="image/png", size=1000, data_url="data:image/png;base64,abc123"),
+                FileAttachment(
+                    name="photo.png",
+                    type="image/png",
+                    size=1000,
+                    data_url="data:image/png;base64,abc123",
+                ),
             ],
         )
 
@@ -1185,7 +1298,12 @@ class TestFileUpload:
             role="user",
             content="Read this file",
             attachments=[
-                FileAttachment(name="readme.txt", type="text/plain", size=11, data_url=f"data:text/plain;base64,{content}"),
+                FileAttachment(
+                    name="readme.txt",
+                    type="text/plain",
+                    size=11,
+                    data_url=f"data:text/plain;base64,{content}",
+                ),
             ],
         )
 
@@ -1204,7 +1322,12 @@ class TestFileUpload:
             role="user",
             content="",
             attachments=[
-                FileAttachment(name="doc.pdf", type="application/pdf", size=5000, data_url="data:application/pdf;base64,abc"),
+                FileAttachment(
+                    name="doc.pdf",
+                    type="application/pdf",
+                    size=5000,
+                    data_url="data:application/pdf;base64,abc",
+                ),
             ],
         )
 

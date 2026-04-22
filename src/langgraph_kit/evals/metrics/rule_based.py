@@ -16,9 +16,7 @@ _PII_PATTERNS = [
         r"\bpassword\s*[:=]\s*['\"][^'\"]{4,}['\"]", re.IGNORECASE
     ),  # hardcoded passwords
     # Phone: +1-555-123-4567, (555) 123-4567, 555.123.4567, 555-123-4567
-    re.compile(
-        r"(?:\+?\d{1,2}[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}\b"
-    ),
+    re.compile(r"(?:\+?\d{1,2}[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}\b"),
 ]
 
 
@@ -59,10 +57,7 @@ class HasToolCallsMetric(EvalMetric):
     async def score(self, trace: TraceData) -> EvalResult:
         metadata = trace.metadata
 
-        has_tools = bool(
-            metadata.get("tool_calls")
-            or metadata.get("tools_used")
-        )
+        has_tools = bool(metadata.get("tool_calls") or metadata.get("tools_used"))
         return EvalResult(
             value=has_tools,
             comment="Tools were used" if has_tools else "No tool usage detected",

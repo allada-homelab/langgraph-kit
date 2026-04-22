@@ -120,7 +120,9 @@ def build_supervisor_agent(
 
         if target_id == "none" or not prompt:
             return {
-                "pending_result": decision_data.get("reasoning", "No suitable agent found."),
+                "pending_result": decision_data.get(
+                    "reasoning", "No suitable agent found."
+                ),
             }
 
         try:
@@ -162,7 +164,9 @@ def build_supervisor_agent(
 
         pending = state.get("pending_result", "")
         if not pending:
-            return {"messages": [AIMessage(content="I couldn't find a suitable response.")]}
+            return {
+                "messages": [AIMessage(content="I couldn't find a suitable response.")]
+            }
 
         # For now, pass through the delegation result directly.
         # A more sophisticated version would use the LLM to synthesize.

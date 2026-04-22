@@ -41,7 +41,9 @@ class TraceStore:
                 if item.key == trace_id:
                     return TraceRecord.model_validate(item.value)
         except Exception:
-            logger.debug("Failed to get trace %s/%s", thread_id, trace_id, exc_info=True)
+            logger.debug(
+                "Failed to get trace %s/%s", thread_id, trace_id, exc_info=True
+            )
         return None
 
     async def list_traces(self, thread_id: str) -> list[TraceSummary]:
@@ -64,7 +66,9 @@ class TraceStore:
             summaries.sort(key=lambda s: s.started_at, reverse=True)
             return summaries
         except Exception:
-            logger.debug("Failed to list traces for thread %s", thread_id, exc_info=True)
+            logger.debug(
+                "Failed to list traces for thread %s", thread_id, exc_info=True
+            )
             return []
 
     async def _prune(self, thread_id: str) -> None:
@@ -80,4 +84,6 @@ class TraceStore:
             for item in to_remove:
                 await self._store.adelete(("traces", thread_id), item.key)
         except Exception:
-            logger.debug("Failed to prune traces for thread %s", thread_id, exc_info=True)
+            logger.debug(
+                "Failed to prune traces for thread %s", thread_id, exc_info=True
+            )

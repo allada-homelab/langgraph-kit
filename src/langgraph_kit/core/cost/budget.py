@@ -34,7 +34,9 @@ class BudgetManager:
                 return BudgetState.model_validate(items[0].value)
         except Exception:
             logger.debug("Failed to load budget state for %s", thread_id, exc_info=True)
-        return BudgetState(thread_id=thread_id, created_at=datetime.now(UTC).isoformat())
+        return BudgetState(
+            thread_id=thread_id, created_at=datetime.now(UTC).isoformat()
+        )
 
     async def record_usage(
         self,
@@ -80,7 +82,10 @@ class BudgetManager:
                 remaining_tokens=0,
             )
 
-        if consumed_pct >= self._config.warning_threshold_pct and self._config.downgrade_model:
+        if (
+            consumed_pct >= self._config.warning_threshold_pct
+            and self._config.downgrade_model
+        ):
             return BudgetCheckResult(
                 action="downgrade",
                 reason=f"Budget at {consumed_pct:.0%}, switching to {self._config.downgrade_model}",

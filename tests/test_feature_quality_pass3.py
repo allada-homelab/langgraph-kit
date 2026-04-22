@@ -51,14 +51,14 @@ class TestFormatResponse:
         assert "rejected" in result.lower()
 
     def test_edit(self) -> None:
-        result = _format_response({"type": "edit", "args": {"path": "/etc/config.yaml"}})
+        result = _format_response(
+            {"type": "edit", "args": {"path": "/etc/config.yaml"}}
+        )
         assert "edit" in result.lower()
         assert "/etc/config.yaml" in result
 
     def test_list_wrapping(self) -> None:
-        assert (
-            _format_response([{"type": "accept"}]) == "User accepted the action."
-        )
+        assert _format_response([{"type": "accept"}]) == "User accepted the action."
 
     def test_empty_list(self) -> None:
         # Empty list falls through to "User response:" with the empty dict repr.
@@ -142,7 +142,7 @@ class TestSuggestionsValidation:
         tool = build_suggestions_tool()
         out = await tool(["x" * 200])
         assert out.startswith(SUGGESTIONS_SENTINEL)
-        payload = json.loads(out[len(SUGGESTIONS_SENTINEL):])
+        payload = json.loads(out[len(SUGGESTIONS_SENTINEL) :])
         assert payload["actions"][0].endswith("…")
         assert len(payload["actions"][0]) < 200
 
@@ -172,7 +172,9 @@ class TestCitationValidation:
 # ---------------------------------------------------------------------------
 
 
-def _rec_with(llm_content: str = "", tool_status: str = "success") -> ConversationRecording:
+def _rec_with(
+    llm_content: str = "", tool_status: str = "success"
+) -> ConversationRecording:
     return ConversationRecording(
         interactions=[
             ToolInteraction(

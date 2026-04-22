@@ -95,4 +95,3 @@ class ToolRegistry:
         if not fragments:
             return ""
         return "## Tool Guidance\n\n" + "\n\n".join(fragments)
-

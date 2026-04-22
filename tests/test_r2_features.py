@@ -439,9 +439,7 @@ def test_coding_verifier_differs_from_r0() -> None:
     from langgraph_kit.core.orchestration.workers import CODING_WORKERS, R0_WORKERS
 
     r0_verifier = next(d for d in R0_WORKERS if d["name"] == "verifier")
-    coding_verifier = next(
-        d for d in CODING_WORKERS if d["name"] == "verifier"
-    )
+    coding_verifier = next(d for d in CODING_WORKERS if d["name"] == "verifier")
 
     # Both use PASS/WARN/FAIL format, but the coding verifier has an enhanced prompt
     assert "PASS" in coding_verifier["system_prompt"]
@@ -478,7 +476,9 @@ def test_build_coding_agent_returns_graph(mock_store: Any) -> None:
         patch.dict(sys.modules, module_patches),
         patch("langgraph_kit.graphs._builder.build_llm", return_value=fake_llm),
     ):
-        graph, _dispatcher = build_coding_agent(checkpointer=checkpointer, store=mock_store)
+        graph, _dispatcher = build_coding_agent(
+            checkpointer=checkpointer, store=mock_store
+        )
 
     assert graph is fake_graph
     deepagents_mod.create_deep_agent.assert_called_once()

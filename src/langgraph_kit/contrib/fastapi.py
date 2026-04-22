@@ -208,7 +208,9 @@ def _build_multipart_content(m: ChatMessage) -> list[dict[str, Any]]:
         else:
             # Text-based files: decode base64 and include as text
             text_content = _decode_data_url_text(att.data_url)
-            parts.append({"type": "text", "text": f"[File: {att.name}]\n{text_content}"})
+            parts.append(
+                {"type": "text", "text": f"[File: {att.name}]\n{text_content}"}
+            )
     return parts
 
 
@@ -396,7 +398,9 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
             result = await graph.ainvoke(input_data, config=config)
             msgs = result.get("messages") or []
             last = msgs[-1] if msgs else None
-            content: str = last.content if last and hasattr(last, "content") else str(last or "")
+            content: str = (
+                last.content if last and hasattr(last, "content") else str(last or "")
+            )
             return InvokeResponse(content=content, thread_id=tid)
         finally:
             flush_langfuse()

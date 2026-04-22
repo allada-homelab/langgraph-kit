@@ -19,7 +19,6 @@ from langgraph_kit.registry import get, get_metadata, list_agents
 logger = logging.getLogger(__name__)
 
 
-
 def build_agent_card(agent_id: str, base_url: str) -> dict[str, Any]:
     """Build an A2A Agent Card JSON from registry metadata.
 
@@ -61,12 +60,14 @@ def build_aggregated_card(base_url: str) -> dict[str, Any]:
     for agent in agents:
         agent_id = agent["id"]
         meta = get_metadata(agent_id)
-        skills.append({
-            "id": agent_id,
-            "name": agent["name"],
-            "description": meta.description or f"Agent: {agent_id}",
-            "tags": meta.tags,
-        })
+        skills.append(
+            {
+                "id": agent_id,
+                "name": agent["name"],
+                "description": meta.description or f"Agent: {agent_id}",
+                "tags": meta.tags,
+            }
+        )
 
     return {
         "name": "LangGraph Kit Agent Hub",

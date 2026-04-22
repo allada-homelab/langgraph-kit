@@ -93,16 +93,16 @@ class ReplayAssertions:
         """Assert the final LLM output matches the given regex pattern."""
         final = self._get_final_output()
         if not re.search(pattern, final):
-            msg = f"Final output does not match pattern {pattern!r}. Got: {final[:200]!r}"
+            msg = (
+                f"Final output does not match pattern {pattern!r}. Got: {final[:200]!r}"
+            )
             raise AssertionError(msg)
 
     def assert_no_errors(self) -> None:
         """Assert no tool interactions have error status."""
         errors = [t for t in self.replayed.tool_interactions if t.status == "error"]
         if errors:
-            details = "; ".join(
-                f"{t.tool_name}: {t.tool_output[:100]}" for t in errors
-            )
+            details = "; ".join(f"{t.tool_name}: {t.tool_output[:100]}" for t in errors)
             msg = f"{len(errors)} tool error(s): {details}"
             raise AssertionError(msg)
 
@@ -145,8 +145,7 @@ class ReplayAssertions:
         if isinstance(content, list):
             # Multi-part content — join text parts
             return " ".join(
-                p.get("text", "") if isinstance(p, dict) else str(p)
-                for p in content
+                p.get("text", "") if isinstance(p, dict) else str(p) for p in content
             )
         return content
 

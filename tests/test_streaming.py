@@ -9,7 +9,9 @@ class TestParseSentinel:
     def test_artifact_sentinel(self) -> None:
         from langgraph_kit.core.artifacts import ARTIFACT_SENTINEL
 
-        result = _parse_sentinel(f'{ARTIFACT_SENTINEL}{{"type": "code", "title": "test"}}')
+        result = _parse_sentinel(
+            f'{ARTIFACT_SENTINEL}{{"type": "code", "title": "test"}}'
+        )
         assert result is not None
         assert "artifact" in result
         assert result["artifact"]["type"] == "code"

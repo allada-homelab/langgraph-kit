@@ -88,9 +88,13 @@ class ConversationRecorder(AsyncCallbackHandler):
 
             # Extract token usage
             if hasattr(response, "llm_output") and response.llm_output:
-                usage = response.llm_output.get("token_usage") or response.llm_output.get("usage")
+                usage = response.llm_output.get(
+                    "token_usage"
+                ) or response.llm_output.get("usage")
                 if usage:
-                    token_usage = dict(usage) if hasattr(usage, "__iter__") else {"total": usage}
+                    token_usage = (
+                        dict(usage) if hasattr(usage, "__iter__") else {"total": usage}
+                    )
 
         self._sequence += 1
         self._interactions.append(
@@ -218,7 +222,12 @@ def _serialize_message(msg: Any) -> dict[str, Any]:
     result: dict[str, Any] = {}
 
     if hasattr(msg, "type"):
-        type_to_role = {"human": "user", "ai": "assistant", "system": "system", "tool": "tool"}
+        type_to_role = {
+            "human": "user",
+            "ai": "assistant",
+            "system": "system",
+            "tool": "tool",
+        }
         result["role"] = type_to_role.get(msg.type, msg.type)
     elif hasattr(msg, "role"):
         result["role"] = msg.role
@@ -228,7 +237,11 @@ def _serialize_message(msg: Any) -> dict[str, Any]:
 
     if hasattr(msg, "tool_calls") and msg.tool_calls:
         result["tool_calls"] = [
-            {"name": tc.get("name", ""), "args": tc.get("args", {}), "id": tc.get("id", "")}
+            {
+                "name": tc.get("name", ""),
+                "args": tc.get("args", {}),
+                "id": tc.get("id", ""),
+            }
             for tc in msg.tool_calls
         ]
 

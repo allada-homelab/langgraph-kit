@@ -92,7 +92,9 @@ def estimate_cost(usage: TokenUsage) -> float:
         return 0.0
 
     input_rate, output_rate = rates
-    return (usage.input_tokens * input_rate + usage.output_tokens * output_rate) / 1_000_000
+    return (
+        usage.input_tokens * input_rate + usage.output_tokens * output_rate
+    ) / 1_000_000
 
 
 class BudgetSummary(BaseModel):

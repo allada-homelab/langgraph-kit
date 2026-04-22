@@ -127,7 +127,11 @@ def build_deep_agent(
 
     # --- Compose system prompt ---
     active_conditions = conditions or {
-        "memory", "orchestration", "deferred_tools", "skills", "async_tasks",
+        "memory",
+        "orchestration",
+        "deferred_tools",
+        "skills",
+        "async_tasks",
     }
     system_prompt = composer.compose_sections_only(conditions=active_conditions)
 

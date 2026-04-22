@@ -108,7 +108,9 @@ def _extract_content(msg: BaseMessage) -> str:
     if isinstance(msg.content, str):
         return msg.content
     if isinstance(msg.content, list):
-        parts = [p.get("text", "") if isinstance(p, dict) else str(p) for p in msg.content]
+        parts = [
+            p.get("text", "") if isinstance(p, dict) else str(p) for p in msg.content
+        ]
         return " ".join(parts)
     return str(msg.content)
 

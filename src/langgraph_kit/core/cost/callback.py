@@ -74,7 +74,9 @@ def _extract_usage(response: Any) -> TokenUsage | None:
         usage = llm_output.get("token_usage") or llm_output.get("usage") or {}
         if isinstance(usage, dict):
             input_tokens = usage.get("prompt_tokens", 0) or usage.get("input_tokens", 0)
-            output_tokens = usage.get("completion_tokens", 0) or usage.get("output_tokens", 0)
+            output_tokens = usage.get("completion_tokens", 0) or usage.get(
+                "output_tokens", 0
+            )
         model = llm_output.get("model_name", "") or llm_output.get("model", "")
 
     # Fallback: try generation_info on the first generation (Anthropic style)
@@ -86,8 +88,12 @@ def _extract_usage(response: Any) -> TokenUsage | None:
         if isinstance(gen_info, dict):
             usage_info = gen_info.get("usage", gen_info)
             if isinstance(usage_info, dict):
-                input_tokens = usage_info.get("input_tokens", 0) or usage_info.get("prompt_tokens", 0)
-                output_tokens = usage_info.get("output_tokens", 0) or usage_info.get("completion_tokens", 0)
+                input_tokens = usage_info.get("input_tokens", 0) or usage_info.get(
+                    "prompt_tokens", 0
+                )
+                output_tokens = usage_info.get("output_tokens", 0) or usage_info.get(
+                    "completion_tokens", 0
+                )
             if not model:
                 model = gen_info.get("model", "")
 

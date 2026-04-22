@@ -134,7 +134,11 @@ def _extract_user_turns(recording: ConversationRecording) -> list[str]:
         for msg in interaction.input_messages:
             if msg.get("role") == "user":
                 content = msg.get("content", "")
-                if isinstance(content, str) and content and content not in seen_contents:
+                if (
+                    isinstance(content, str)
+                    and content
+                    and content not in seen_contents
+                ):
                     seen_contents.add(content)
                     user_messages.append(content)
 

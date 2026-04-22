@@ -68,11 +68,13 @@ def list_agents() -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for agent_id in _registry:
         meta = _metadata.get(agent_id, AgentMetadata())
-        result.append({
-            "id": agent_id,
-            "name": agent_id.replace("-", " ").title(),
-            "description": meta.description,
-            "tags": meta.tags,
-            "version": meta.version,
-        })
+        result.append(
+            {
+                "id": agent_id,
+                "name": agent_id.replace("-", " ").title(),
+                "description": meta.description,
+                "tags": meta.tags,
+                "version": meta.version,
+            }
+        )
     return result

@@ -52,17 +52,23 @@ class AGUIEncoder:
 
     def encode_run_started(self) -> str:
         """Emit RUN_STARTED event."""
-        return self._encode_event("RUN_STARTED", {
-            "thread_id": self.thread_id,
-            "run_id": self.run_id,
-        })
+        return self._encode_event(
+            "RUN_STARTED",
+            {
+                "thread_id": self.thread_id,
+                "run_id": self.run_id,
+            },
+        )
 
     def encode_run_finished(self) -> str:
         """Emit RUN_FINISHED event."""
-        return self._encode_event("RUN_FINISHED", {
-            "thread_id": self.thread_id,
-            "run_id": self.run_id,
-        })
+        return self._encode_event(
+            "RUN_FINISHED",
+            {
+                "thread_id": self.thread_id,
+                "run_id": self.run_id,
+            },
+        )
 
     def encode_run_error(self, message: str) -> str:
         """Emit RUN_ERROR event."""
@@ -73,52 +79,80 @@ class AGUIEncoder:
         events: list[str] = []
         if not self._text_started:
             self._text_started = True
-            events.append(self._encode_event("TEXT_MESSAGE_START", {
-                "message_id": self._message_id,
-                "role": "assistant",
-            }))
-        events.append(self._encode_event("TEXT_MESSAGE_CONTENT", {
-            "message_id": self._message_id,
-            "delta": token,
-        }))
+            events.append(
+                self._encode_event(
+                    "TEXT_MESSAGE_START",
+                    {
+                        "message_id": self._message_id,
+                        "role": "assistant",
+                    },
+                )
+            )
+        events.append(
+            self._encode_event(
+                "TEXT_MESSAGE_CONTENT",
+                {
+                    "message_id": self._message_id,
+                    "delta": token,
+                },
+            )
+        )
         return events
 
     def encode_text_end(self) -> str | None:
         """Emit TEXT_MESSAGE_END if text was started."""
         if self._text_started:
             self._text_started = False
-            return self._encode_event("TEXT_MESSAGE_END", {
-                "message_id": self._message_id,
-            })
+            return self._encode_event(
+                "TEXT_MESSAGE_END",
+                {
+                    "message_id": self._message_id,
+                },
+            )
         return None
 
     def encode_tool_call_start(self, tool_id: str, name: str) -> list[str]:
         """Emit STEP_STARTED + TOOL_CALL_START."""
         self._step_counter += 1
         return [
-            self._encode_event("STEP_STARTED", {
-                "step_name": f"step_{self._step_counter}",
-            }),
-            self._encode_event("TOOL_CALL_START", {
-                "tool_call_id": tool_id,
-                "tool_call_name": name,
-            }),
+            self._encode_event(
+                "STEP_STARTED",
+                {
+                    "step_name": f"step_{self._step_counter}",
+                },
+            ),
+            self._encode_event(
+                "TOOL_CALL_START",
+                {
+                    "tool_call_id": tool_id,
+                    "tool_call_name": name,
+                },
+            ),
         ]
 
     def encode_tool_call_end(self, tool_id: str, output: str) -> list[str]:
         """Emit TOOL_CALL_END + TOOL_CALL_RESULT + STEP_FINISHED."""
         return [
-            self._encode_event("TOOL_CALL_END", {
-                "tool_call_id": tool_id,
-            }),
-            self._encode_event("TOOL_CALL_RESULT", {
-                "message_id": str(uuid4()),
-                "tool_call_id": tool_id,
-                "content": output,
-            }),
-            self._encode_event("STEP_FINISHED", {
-                "step_name": f"step_{self._step_counter}",
-            }),
+            self._encode_event(
+                "TOOL_CALL_END",
+                {
+                    "tool_call_id": tool_id,
+                },
+            ),
+            self._encode_event(
+                "TOOL_CALL_RESULT",
+                {
+                    "message_id": str(uuid4()),
+                    "tool_call_id": tool_id,
+                    "content": output,
+                },
+            ),
+            self._encode_event(
+                "STEP_FINISHED",
+                {
+                    "step_name": f"step_{self._step_counter}",
+                },
+            ),
         ]
 
     def encode_custom(self, name: str, value: Any) -> str:
@@ -163,7 +197,9 @@ async def stream_agui_events(
     yield encoder.encode_run_started()
 
     try:
-        async for sse_line in stream_agent_events(graph, input_data, config, store=store):
+        async for sse_line in stream_agent_events(
+            graph, input_data, config, store=store
+        ):
             # Parse our SSE format: "data: {...}\n\n"
             if not sse_line.startswith("data: "):
                 continue
@@ -212,7 +248,9 @@ async def stream_agui_native(
     yield encoder.encode_run_started()
 
     try:
-        async for chunk in graph.astream(input_data, config=config, stream_mode=stream_mode):
+        async for chunk in graph.astream(
+            input_data, config=config, stream_mode=stream_mode
+        ):
             if isinstance(chunk, tuple) and len(chunk) == 2:
                 mode, data = chunk
             else:
@@ -240,11 +278,15 @@ def _map_sse_to_agui(parsed: dict[str, Any], encoder: AGUIEncoder) -> list[str]:
 
     elif "tool_call_start" in parsed:
         tc = parsed["tool_call_start"]
-        events.extend(encoder.encode_tool_call_start(tc.get("id", ""), tc.get("name", "")))
+        events.extend(
+            encoder.encode_tool_call_start(tc.get("id", ""), tc.get("name", ""))
+        )
 
     elif "tool_call_end" in parsed:
         tc = parsed["tool_call_end"]
-        events.extend(encoder.encode_tool_call_end(tc.get("id", ""), tc.get("output", "")))
+        events.extend(
+            encoder.encode_tool_call_end(tc.get("id", ""), tc.get("output", ""))
+        )
 
     elif "command_result" in parsed:
         cr = parsed["command_result"]
@@ -298,12 +340,22 @@ def _map_native_to_agui(mode: str, data: Any, encoder: AGUIEncoder) -> list[str]
         if isinstance(data, dict):
             for node_name in data:
                 encoder._step_counter += 1
-                events.append(encoder._encode_event("STEP_STARTED", {
-                    "step_name": node_name,
-                }))
-                events.append(encoder._encode_event("STEP_FINISHED", {
-                    "step_name": node_name,
-                }))
+                events.append(
+                    encoder._encode_event(
+                        "STEP_STARTED",
+                        {
+                            "step_name": node_name,
+                        },
+                    )
+                )
+                events.append(
+                    encoder._encode_event(
+                        "STEP_FINISHED",
+                        {
+                            "step_name": node_name,
+                        },
+                    )
+                )
 
     elif mode == "custom":
         events.append(encoder.encode_custom("custom", data))
