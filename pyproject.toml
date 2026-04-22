@@ -3,6 +3,7 @@ name = "langgraph-kit"
 description = "Reusable LangGraph agent toolkit with memory, tools, and orchestration"
 readme = "README.md"
 license = "AGPL-3.0-or-later"
+license-files = ["LICENSE"]
 authors = [{ name = "David Allada", email = "davidanilallada@gmail.com" }]
 requires-python = ">=3.11,<3.15"
 classifiers = [
