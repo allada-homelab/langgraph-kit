@@ -195,7 +195,9 @@ class TestAssertNoErrorsStructured:
     def test_no_errors_ignores_output_text(self) -> None:
         # The tool output mentions "error" but status is success. Must pass.
         rec = _rec_with(llm_content="done", tool_status="success")
-        rec.interactions[0].tool_output = "No errors found in codebase"
+        first = rec.interactions[0]
+        assert isinstance(first, ToolInteraction)
+        first.tool_output = "No errors found in codebase"
         assertions = ReplayAssertions(rec, rec)
         assertions.assert_no_errors()
 

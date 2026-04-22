@@ -2,10 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from collections.abc import Generator
+from typing import Any
 
 import pytest
 
@@ -67,6 +64,6 @@ def mock_store() -> MockStore:
 
 
 @pytest.fixture(scope="session", autouse=True)
-def db() -> Generator[None]:
+def db() -> None:
     """No-op override of the root conftest db fixture."""
-    return None
+    return
