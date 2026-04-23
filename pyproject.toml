@@ -144,6 +144,7 @@ asyncio_mode = "auto"
 markers = [
     "asyncio: mark test as async",
     "integration: mark test as integration (requires external services)",
+    "e2e: end-to-end test — runs a real compiled graph with a scripted LLM",
 ]
 
 [tool.coverage.run]

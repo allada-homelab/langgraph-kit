@@ -1,6 +1,6 @@
 # Testing Roadmap
 
-**Status as of 2026-04-23:** Phase 1 (spike) complete — `RecordedChatModel` drives a real `build_reference_deep_agent` graph through a multi-turn tool-calling conversation. Surfaced two carryovers for Phase 2: (1) needed `bind_tools` on `RecordedChatModel` (fixed), (2) deepagents v0.6 `DeprecationWarning`s fire on real graph invocation and need a conftest-level filter. Next action: Phase 2 — scaffold `tests/e2e/conftest.py` and `tests/e2e/helpers.py`.
+**Status as of 2026-04-23:** Phase 2 (infrastructure) complete — pytest `e2e` marker registered; `tests/e2e/conftest.py` provides `checkpointer`, `e2e_store`, `patched_build_llm`, and autouse deepagents-deprecation filter; `tests/e2e/helpers.py` provides `scripted_llm`, `tool_call_turn`, `multi_tool_call_turn`, `answer`, `assert_tool_invoked`, `last_ai_message`. Smoke test confirms everything composes. Next action: Phase 3 — write the four MVP scenario files.
 
 ## Goal
 
@@ -42,18 +42,21 @@ Prove a `RecordedChatModel` can drive a real kit-built graph through a multi-tur
 
 ### Phase 2 — infrastructure
 
-- [ ] Add `e2e` marker to `pyproject.toml` under `[tool.pytest.ini_options].markers`
-- [ ] Create `tests/e2e/__init__.py`
-- [ ] Create `tests/e2e/conftest.py` with fixtures:
-  - [ ] `checkpointer` → `InMemorySaver()` per test
-  - [ ] `e2e_store` → reuses `MockStore` from root `tests/conftest.py`
-  - [ ] `patch_build_llm` → context-manager-style fixture that takes a `RecordedChatModel` and patches `langgraph_kit.graphs._builder.build_llm`
-- [ ] Create `tests/e2e/helpers.py` with:
-  - [ ] `scripted_llm(turns)` — wraps `ConversationRecording` + `LLMInteraction` construction
-  - [ ] `tool_call(name, args, id=None)` — builder for `output_message` dicts
-  - [ ] `answer(content)` — builder for final-response `output_message` dicts
-  - [ ] `assert_tool_invoked(state, tool_name)` — inspects final state's messages
-  - [ ] `last_ai_message(state)` — assertion helper
+- [x] Add `e2e` marker to `pyproject.toml` under `[tool.pytest.ini_options].markers`
+- [x] Create `tests/e2e/__init__.py`
+- [x] Create `tests/e2e/conftest.py` with fixtures:
+  - [x] `checkpointer` → `InMemorySaver()` per test
+  - [x] `e2e_store` → reuses `MockStore` from root `tests/conftest.py`
+  - [x] `patched_build_llm` → context-manager factory that patches `langgraph_kit.graphs._builder.build_llm`
+  - [x] autouse fixture filtering deepagents v0.6 `DeprecationWarning`s so the kit-side migration stays out of scope
+- [x] Create `tests/e2e/helpers.py` with:
+  - [x] `scripted_llm(turns)` — wraps `ConversationRecording` + `LLMInteraction` construction
+  - [x] `tool_call_turn(name, args=None, call_id=None)` — builder for single-tool-call `output_message` dicts
+  - [x] `multi_tool_call_turn(calls)` — builder for multi-tool-call `output_message` dicts
+  - [x] `answer(content)` — builder for final-response `output_message` dicts
+  - [x] `assert_tool_invoked(state, tool_name)` — inspects final state's messages
+  - [x] `last_ai_message(state)` — assertion helper
+- [x] Smoke test (`tests/e2e/test_infrastructure_smoke.py`) confirms fixtures + helpers compose against a real reference agent graph
 
 ### Phase 3 — MVP flagship scenarios
 
