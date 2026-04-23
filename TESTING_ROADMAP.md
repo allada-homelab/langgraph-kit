@@ -1,6 +1,6 @@
 # Testing Roadmap
 
-**Status as of 2026-04-23:** Cluster A in progress — memory tools, skills, UI tools e2e-covered (10 new scenarios across 3 files). Remaining in A: `search_memories`, async task tools, HITL (`approve_action`), MCP adapters, `retrieve_result`. Full suite: 417 passing. Next action: continue Cluster A (retrieve_result + async tasks) then move to Cluster B (middleware happy-path + empty-input tests).
+**Status as of 2026-04-23:** Clusters A (partial), B (partial), C, H substantially covered plus cross-cluster invariant tests. 18 e2e files now with 35+ scenarios. Full suite: 435 passing. Remaining gaps to pick up in later sessions: Cluster A edges (retrieve_result, async tasks, HITL, MCP), Cluster B edges (RuntimeState, Queued, Pressure mid-run, Backstop explicit), Cluster D (plugin workers, id-collision), Cluster E (PersistentMemoryManager CRUD unit gaps), Cluster F (compaction under load), Cluster G (stop-hook blocking vs non-blocking error paths), Cluster I (record→replay round-trip, streaming), Cluster J (FastAPI contrib, supervisor, CLI scaffolder). Next action: continue Cluster B middleware gaps + Cluster D plugin edges.
 
 ## Goal
 
