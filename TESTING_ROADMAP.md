@@ -1,6 +1,6 @@
 # Testing Roadmap
 
-**Status as of 2026-04-23:** Phase 3 (MVP flagship scenarios) complete — 6 new e2e scenarios across 4 files, plus the `ToolLoopGuardMiddleware` fix that fell out of Phase 3.1 and 2 new unit tests guarding the concurrent-task shape. Full suite: 407 passing (397 baseline + 2 loop guard unit tests + 1 bind_tools unit test + 1 smoke test + 6 flagship scenarios). Next action: Phase 4 — seed `tests/e2e/FEATURE_INVENTORY.md` and start Cluster A (Tool system).
+**Status as of 2026-04-23:** Phase 4.1 (inventory seeded) complete — `tests/e2e/FEATURE_INVENTORY.md` lists ~55 features across 10 clusters with source, purpose, use cases, edge cases, existing/e2e coverage, gaps, and status. Cross-cluster meta-invariant checklist captures the generalizations of the bug classes this whole effort was built for. Next action: start Cluster A (Tool system) — fill coverage gaps for standard tools, deferred-tool edge cases, MCP adapter.
 
 ## Goal
 
@@ -79,7 +79,7 @@ Four files, six tests total. Depth over breadth — each test catches a distinct
 
 Long-running. One PR per cluster. `tests/e2e/FEATURE_INVENTORY.md` is the per-feature tracker for this phase; this roadmap only tracks cluster-level progress.
 
-- [ ] Seed `tests/e2e/FEATURE_INVENTORY.md` (walk `src/langgraph_kit/` directory by directory; inventory every feature with source, purpose, use cases, edge cases, existing coverage, gaps, status)
+- [x] Seed `tests/e2e/FEATURE_INVENTORY.md` — ~55 features catalogued across all 10 clusters with status=`inventoried` (or `covered` where Phase 3 already did the work). Cross-cluster meta-invariants section added for the "bug class" generalizations.
 - [ ] **Cluster A — Tool system.** `ToolRegistry`, `ToolCapability`, every standard tool (memory, retrieval, search, skill, async, UI, HITL), `DeferredToolRegistry`, `tool_search`, `call_deferred_tool`, MCP tool adapters
 - [ ] **Cluster B — Middleware stack.** All 12 middlewares individually + stack-ordering invariants; each gets happy path + empty-input edge case + failure-mode test
 - [ ] **Cluster C — Commands + prompt assembly.** Dispatcher, each `/command`, `PromptComposer`, `SectionRegistry`, activation sections, context providers, condition gating (invariant tests for every condition/capability pair — the `deferred_tools` regression generalized)
