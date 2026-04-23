@@ -392,3 +392,72 @@ async def test_post_run_handles_no_store() -> None:
 
     # Should not raise
     await mw.aafter_agent({"messages": []}, NoStoreRuntime())
+
+
+@pytest.mark.asyncio
+async def test_post_run_swallows_get_config_failure(
+    mock_store: Any, monkeypatch: Any
+) -> None:
+    """``get_config()`` raises outside LangGraph — the backstop must not crash.
+
+    Regression test: ``get_config()`` used to live outside the try/except,
+    so calling ``aafter_agent`` in any partially-wired context (unit tests
+    invoking the middleware directly, test harnesses, debugger sessions)
+    would raise and abort the agent's after-hook chain. This is a
+    *backstop* — its whole job is to never be the thing that crashes the
+    run.
+    """
+
+    def _explode() -> None:
+        raise RuntimeError("Called outside LangGraph context")
+
+    monkeypatch.setattr(
+        "langgraph_kit.core.resilience.post_run.get_config",
+        _explode,
+    )
+
+    mw = PostRunBackstopMiddleware()
+    await mw.abefore_agent({}, None)
+
+    class Runtime:
+        store = mock_store
+
+    # MUST NOT raise — the store.aput would never run anyway, but even the
+    # get_config call itself must be inside the protective try.
+    await mw.aafter_agent({"messages": []}, Runtime())
+
+    # And no entry was written (because we never reached aput).
+    assert mock_store._data.get(("run_metadata",)) in (None, {})
+
+
+@pytest.mark.asyncio
+async def test_stop_hooks_plumbed_through_middleware_stack() -> None:
+    """``build_middleware_stack(stop_hooks=[...])`` must attach the hooks.
+
+    Regression test for the dead-on-arrival bug: ``StopHooksMiddleware``
+    was instantiated with an empty list and the ``register_hook`` API had
+    no reachable call site from user code. Now ``build_middleware_stack``
+    accepts ``stop_hooks`` and forwards them so the ``on_turn_complete``
+    callback actually runs after a turn.
+    """
+    from unittest.mock import AsyncMock
+
+    from langgraph_kit.core.context_management.pressure import PressureMonitor
+    from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
+    from langgraph_kit.core.memory.persistent import PersistentMemoryManager
+    from langgraph_kit.core.resilience import StopHooksMiddleware
+
+    hook = AsyncMock()
+    hook.on_turn_complete = AsyncMock()
+    hook.blocking = False
+
+    middleware, _ = build_middleware_stack(
+        llm=MagicMock(),
+        memory_mgr=PersistentMemoryManager(MagicMock()),
+        pressure_monitor=PressureMonitor(),
+        stop_hooks=[hook],
+    )
+
+    stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
+    await stop_mw.aafter_agent({"messages": []}, MagicMock())
+    hook.on_turn_complete.assert_awaited_once()

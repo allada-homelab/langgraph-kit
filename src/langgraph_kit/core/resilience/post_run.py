@@ -61,14 +61,17 @@ class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
             summary["duration_seconds"],
         )
 
-        # Persist to Store if available
+        # Persist to Store if available. ``get_config()`` raises when
+        # called outside a LangGraph invocation context, so it lives
+        # inside the guard — this middleware is a backstop and must not
+        # crash the agent loop even if the runtime environment is
+        # partially wired (e.g. unit tests calling aafter_agent directly).
         store = getattr(runtime, "store", None)
         if store is not None:
-            config = get_config()
-            thread_id = config.get("configurable", {}).get("thread_id", "unknown")
-            key = f"{thread_id}_{summary['completed_at']}"
-
             try:
+                config = get_config()
+                thread_id = config.get("configurable", {}).get("thread_id", "unknown")
+                key = f"{thread_id}_{summary['completed_at']}"
                 await store.aput(RUN_METADATA_NAMESPACE, key, summary)
             except Exception:
                 logger.warning("Failed to persist run metadata", exc_info=True)

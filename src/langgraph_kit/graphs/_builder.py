@@ -78,6 +78,7 @@ def build_deep_agent(
     extra_providers: list[Any] | None = None,
     configure_tools: Any | None = None,
     configure_deferred_tools: Any | None = None,
+    stop_hooks: list[Any] | None = None,
     conditions: set[str] | None = None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> tuple[Any, Any]:
@@ -108,6 +109,12 @@ def build_deep_agent(
         invoke via ``call_deferred_tool``. Deferred tools don't take up
         room in the active tool-binding surface — use this for large or
         rarely-used catalogs.
+    stop_hooks:
+        Optional list of objects with an ``async on_turn_complete(state)``
+        method that run after every agent turn (via
+        :class:`StopHooksMiddleware`). Hooks with ``blocking=True``
+        propagate exceptions; others are logged and swallowed. Use for
+        observability, logging, or cross-turn bookkeeping.
     conditions:
         Prompt conditions to activate. Defaults to the standard set.
     recursion_limit:
@@ -175,16 +182,26 @@ def build_deep_agent(
         memory_mgr=memory_mgr,
         pressure_monitor=pressure_monitor,
         command_dispatcher=command_dispatcher,
+        stop_hooks=stop_hooks,
     )
 
     # --- Compose system prompt ---
-    active_conditions = conditions or {
+    # Auto-activate the "extensions" condition when the caller supplied
+    # anything plugin-shaped (MCP tools or extra prompt sections). The
+    # ``extension_awareness`` activation section tells the model that
+    # plugin-provided capabilities are first-class; gating it on any
+    # actual extension avoids bloating the prompt on vanilla builds.
+    # Callers passing an explicit ``conditions=`` set stay in control.
+    auto_conditions: set[str] = {
         "memory",
         "orchestration",
         "deferred_tools",
         "skills",
         "async_tasks",
     }
+    if mcp_tools or extra_sections:
+        auto_conditions.add("extensions")
+    active_conditions = conditions or auto_conditions
     system_prompt = composer.compose_sections_only(conditions=active_conditions)
 
     # --- Build the deep agent ---

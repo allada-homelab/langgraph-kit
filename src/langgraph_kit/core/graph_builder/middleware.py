@@ -34,11 +34,17 @@ def build_middleware_stack(
     memory_mgr: PersistentMemoryManager,
     pressure_monitor: PressureMonitor,
     command_dispatcher: CommandDispatcher | None = None,
+    stop_hooks: list[Any] | None = None,
 ) -> tuple[list[Any], PressureMonitor]:
     """Build the standard middleware stack shared by all deep agents.
 
     Returns (middleware_list, pressure_monitor) so callers can access
     the monitor for prompt composition.
+
+    ``stop_hooks`` is forwarded to :class:`StopHooksMiddleware`; hooks
+    with an ``on_turn_complete(state)`` coroutine run after every agent
+    turn. Without this plumbing the middleware was instantiated with an
+    empty list and callers had no reachable API to attach hooks.
     """
     middleware: list[Any] = []
 
@@ -58,7 +64,7 @@ def build_middleware_stack(
             ),
             EmptyTurnMiddleware(max_nudges=2),
             CompletionGuardMiddleware(min_tool_calls=1),
-            StopHooksMiddleware(),
+            StopHooksMiddleware(hooks=stop_hooks),
             PostRunBackstopMiddleware(),
         ]
     )
