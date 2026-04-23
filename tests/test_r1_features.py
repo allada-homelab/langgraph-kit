@@ -418,6 +418,81 @@ def test_register_search_tool_registers_both_search_and_dispatcher() -> None:
     assert isinstance(deferred, DeferredToolRegistry)
 
 
+def test_register_search_tool_accepts_existing_deferred_registry() -> None:
+    """Callers can pass an existing ``DeferredToolRegistry`` to bind both tools against.
+
+    The builder creates the registry early so plugin/configure callbacks
+    can populate it, then registers the search + dispatcher tools at the
+    end only when the catalog is non-empty. That "register against an
+    existing registry" path must be supported so tools discovered via
+    ``tool_search`` dispatch back to the same registry the caller populated.
+    """
+    from langgraph_kit.core.graph_builder.tools import register_search_tool
+    from langgraph_kit.core.tools.registry import ToolRegistry
+
+    pre_existing = DeferredToolRegistry()
+    pre_existing.register(
+        ToolCapability(
+            id="pre",
+            name="pre",
+            description="a tool registered before search tools were bound",
+            fn=lambda: "pre",
+            risk=ToolRisk.READ_ONLY,
+        )
+    )
+
+    registry = ToolRegistry()
+    returned = register_search_tool(registry, pre_existing)
+
+    assert returned is pre_existing, (
+        "register_search_tool must reuse the registry it was handed"
+    )
+    ids = {cap.id for cap in registry.list_all()}
+    assert "tool_search" in ids
+    assert "call_deferred_tool" in ids
+
+
+@pytest.mark.asyncio
+async def test_call_deferred_tool_accepts_json_string_through_langchain_tool() -> None:
+    """LangChain-wrapped ``call_deferred_tool`` must accept stringified JSON arguments.
+
+    Some LLMs (notably Qwen variants) emit the ``arguments`` field of a
+    tool call as a JSON string instead of a dict. The in-body coercion
+    only runs if Pydantic lets the value through — so the function's
+    type annotation must admit both dict and str, otherwise LangChain's
+    ``StructuredTool`` rejects the call before the coercion fires and
+    the agent spins retrying the same shape.
+    """
+    from langchain_core.tools import tool as _lc_tool
+
+    registry = DeferredToolRegistry()
+
+    async def echo(msg: str) -> str:
+        return f"echo: {msg}"
+
+    registry.register(
+        ToolCapability(
+            id="echo",
+            name="echo",
+            description="Echo a message",
+            fn=echo,
+            risk=ToolRisk.READ_ONLY,
+        )
+    )
+
+    wrapped = _lc_tool(build_call_deferred_tool(registry))
+
+    # Dict payload — baseline.
+    dict_result = await wrapped.ainvoke({"tool_id": "echo", "arguments": {"msg": "hi"}})
+    assert dict_result == "echo: hi"
+
+    # JSON-string payload — must round-trip without a ValidationError.
+    str_result = await wrapped.ainvoke(
+        {"tool_id": "echo", "arguments": '{"msg": "via string"}'}
+    )
+    assert str_result == "echo: via string"
+
+
 # ---------------------------------------------------------------------------
 # 3. AgentMemoryManager
 # ---------------------------------------------------------------------------

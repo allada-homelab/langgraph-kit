@@ -246,6 +246,19 @@ def build_deep_agent(
     if configure_deferred_tools is not None:
         configure_deferred_tools(deferred_registry)
 
+    # ``register_standard_tools`` eagerly binds ``tool_search`` +
+    # ``call_deferred_tool`` so direct callers (e.g. the CLI-scaffolded
+    # builder) get them without extra wiring. Inside this builder we
+    # know whether the deferred catalog actually ended up populated — if
+    # it didn't, strip both tools from the active surface. Leaving them
+    # bound against an empty registry invites suggestible models (Qwen
+    # is the reliable reproducer) to spin in a ``tool_search`` loop
+    # hunting for capabilities that don't exist, even though the
+    # deferred_tools prompt section is already gated off below.
+    if not deferred_registry:
+        tool_registry.remove("tool_search")
+        tool_registry.remove("call_deferred_tool")
+
     # --- Prompt assembly ---
     section_registry = SectionRegistry()
     section_registry.register_many(core_sections)

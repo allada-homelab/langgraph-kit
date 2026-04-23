@@ -94,7 +94,9 @@ def register_retrieval_tool(registry: ToolRegistry, store: Any) -> None:
     )
 
 
-def register_search_tool(registry: ToolRegistry) -> DeferredToolRegistry:
+def register_search_tool(
+    registry: ToolRegistry, deferred: DeferredToolRegistry | None = None
+) -> DeferredToolRegistry:
     """Register ``tool_search`` + ``call_deferred_tool`` and return the deferred registry.
 
     Both tools are required for the deferred-tool flow to work end to end:
@@ -102,8 +104,15 @@ def register_search_tool(registry: ToolRegistry) -> DeferredToolRegistry:
     ``call_deferred_tool`` is the dispatcher the LLM invokes to actually
     run a discovered tool. See ``langgraph_kit.core.tools.deferred`` for
     the design rationale.
+
+    Pass ``deferred`` to bind the tools against an existing registry —
+    :func:`build_deep_agent` uses this path so plugin / configure
+    callbacks can populate the catalog before the search tools are
+    registered, and so both tools dispatch back to the same registry
+    the caller populated. Omit to get a fresh registry.
     """
-    deferred = DeferredToolRegistry()
+    if deferred is None:
+        deferred = DeferredToolRegistry()
     register_tool(
         registry,
         build_tool_search(deferred),

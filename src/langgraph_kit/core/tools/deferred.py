@@ -182,7 +182,7 @@ def build_call_deferred_tool(deferred: DeferredToolRegistry) -> Any:
     """
 
     async def call_deferred_tool(
-        tool_id: str, arguments: dict[str, Any] | None = None
+        tool_id: str, arguments: dict[str, Any] | str | None = None
     ) -> str:
         """Invoke a deferred tool discovered via ``tool_search``.
 
@@ -190,9 +190,14 @@ def build_call_deferred_tool(deferred: DeferredToolRegistry) -> Any:
             tool_id: The exact ``id`` value returned by ``tool_search``
                 (not the display name — ids are stable, names may collide).
             arguments: A dict of keyword arguments matching the tool's
-                signature. Pass ``{}`` for tools with no parameters.
+                signature. Pass ``{}`` for tools with no parameters. A
+                JSON-string payload is also accepted and parsed — some
+                models (Qwen variants) stringify the arguments dict when
+                emitting tool calls; rejecting that shape at the schema
+                layer would trap the agent in a retry loop with the same
+                malformed payload.
         """
-        args = arguments or {}
+        args: Any = arguments or {}
         cap = deferred.get(tool_id)
         if cap is None:
             available = ", ".join(c.id for c in deferred.list_all()[:10]) or "(none)"
@@ -202,8 +207,10 @@ def build_call_deferred_tool(deferred: DeferredToolRegistry) -> Any:
                 f"First 10 available ids: {available}"
             )
 
-        if not isinstance(args, dict):  # pyright: ignore[reportUnnecessaryIsInstance]
-            # LLMs sometimes pass a JSON string instead of a dict.
+        if not isinstance(args, dict):
+            # LLMs sometimes pass a JSON string instead of a dict; the
+            # function signature admits both so LangChain's Pydantic
+            # schema lets the value through and this branch can run.
             if isinstance(args, str):
                 try:
                     args = json.loads(args)
@@ -215,6 +222,11 @@ def build_call_deferred_tool(deferred: DeferredToolRegistry) -> Any:
             else:
                 return (
                     f"Error: arguments for '{tool_id}' must be a dict, "
+                    f"got {type(args).__name__}"
+                )
+            if not isinstance(args, dict):
+                return (
+                    f"Error: arguments for '{tool_id}' must decode to a dict, "
                     f"got {type(args).__name__}"
                 )
 

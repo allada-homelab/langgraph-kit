@@ -649,6 +649,93 @@ def test_explicit_deferred_tools_condition_with_empty_registry_is_stripped(
     assert any("'deferred_tools' was requested" in msg for msg in warnings), warnings
 
 
+def test_empty_deferred_registry_does_not_bind_search_tools_to_llm(
+    mock_store: Any,
+) -> None:
+    """No ``configure_deferred_tools=`` → ``tool_search``/``call_deferred_tool`` must not appear on the LLM tool surface.
+
+    Suppressing the deferred_tools prompt section stops the kit from
+    instructing the model to search, but suggestible models (Qwen et al)
+    call any tool they can see. An always-empty ``tool_search`` wedges
+    recursion-bound runs in a discovery loop the prompt never mentions.
+    Gate the tool registration the same way the prompt section is gated.
+    """
+    from langgraph_kit.graphs._builder import build_deep_agent
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_deep_agent(
+            agent_name="empty-deferred-no-search-tools",
+            core_sections=[],
+            subagents=[],
+            checkpointer=MagicMock(),
+            store=mock_store,
+        )
+
+    compiled_tools = deepagents_mod.create_deep_agent.call_args.kwargs["tools"]
+    tool_names = {
+        getattr(fn, "__name__", getattr(fn, "name", None)) for fn in compiled_tools
+    }
+    assert "tool_search" not in tool_names, (
+        "tool_search must not reach the LLM when the deferred registry is empty"
+    )
+    assert "call_deferred_tool" not in tool_names, (
+        "call_deferred_tool must not reach the LLM when the deferred registry is empty"
+    )
+
+
+def test_populated_deferred_registry_binds_search_tools_to_llm(
+    mock_store: Any,
+) -> None:
+    """Populated deferred registry → ``tool_search`` + ``call_deferred_tool`` on the LLM surface."""
+    from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
+    from langgraph_kit.graphs._builder import build_deep_agent
+
+    async def _runtime_tool() -> str:
+        return "ok"
+
+    def _configure_deferred(registry: Any) -> None:
+        registry.register(
+            ToolCapability(
+                id="runtime_tool",
+                name="runtime_tool",
+                description="a tool the LLM must discover via tool_search",
+                fn=_runtime_tool,
+                risk=ToolRisk.READ_ONLY,
+            )
+        )
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_deep_agent(
+            agent_name="populated-deferred-search-tools-present",
+            core_sections=[],
+            subagents=[],
+            checkpointer=MagicMock(),
+            store=mock_store,
+            configure_deferred_tools=_configure_deferred,
+        )
+
+    compiled_tools = deepagents_mod.create_deep_agent.call_args.kwargs["tools"]
+    tool_names = {
+        getattr(fn, "__name__", getattr(fn, "name", None)) for fn in compiled_tools
+    }
+    assert "tool_search" in tool_names
+    assert "call_deferred_tool" in tool_names
+
+
 def test_explicit_deferred_tools_condition_with_populated_registry_is_kept(
     mock_store: Any,
 ) -> None:

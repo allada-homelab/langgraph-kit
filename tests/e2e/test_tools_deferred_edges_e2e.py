@@ -133,23 +133,20 @@ async def test_call_deferred_tool_wrong_arg_shape_returns_typeerror_as_string(
 
 
 @pytest.mark.asyncio
-async def test_call_deferred_tool_json_string_arguments_rejected_by_pydantic(
+async def test_call_deferred_tool_json_string_arguments_are_parsed_and_dispatched(
     checkpointer: Any,
     e2e_store: Any,
     patched_build_llm: Any,
 ) -> None:
-    """LLM-emitted JSON-string ``arguments`` → pydantic rejects with a recoverable error.
+    """LLM-emitted JSON-string ``arguments`` → parsed and forwarded to the tool body.
 
-    The dispatcher *body* has a defensive branch that accepts a JSON
-    string, but LangChain's ``StructuredTool`` validates the
-    ``arguments: dict[str, Any]`` parameter upstream via pydantic and
-    rejects a string before the body runs. So the observable behavior
-    the LLM sees is a "valid dictionary" error — not a dispatch.
-    Pinning this guards against a silent change to either:
-    (1) the tool signature (e.g. widening to ``dict | str``) that would
-        suddenly make the defensive branch reachable; or
-    (2) LangChain changing its validation contract to forward unparsed
-        strings to the body.
+    Some models (Qwen variants, notably) emit the ``arguments`` field of
+    a tool call as a JSON-encoded string instead of an object. The
+    dispatcher's signature admits ``dict | str | None`` so LangChain's
+    ``StructuredTool`` lets the string through pydantic; the in-body
+    ``json.loads`` fallback then unwraps it and dispatches normally.
+    Without this path the agent loops retrying the same malformed shape
+    because the rejection looks identical across retries.
     """
     scripted = scripted_llm(
         [
@@ -157,7 +154,7 @@ async def test_call_deferred_tool_json_string_arguments_rejected_by_pydantic(
                 "call_deferred_tool",
                 {"tool_id": "greet", "arguments": '{"name": "Alice"}'},
             ),
-            answer("noted"),
+            answer("greeted"),
         ]
     )
     with patched_build_llm(scripted):
@@ -176,8 +173,8 @@ async def test_call_deferred_tool_json_string_arguments_rejected_by_pydantic(
     )
 
     tool_msg = assert_tool_invoked(result, "call_deferred_tool")
-    content = str(tool_msg.content).lower()
-    assert "valid dictionary" in content or "error" in content, (
-        f"JSON-string arguments should be rejected with a recoverable"
-        f" validation error; got {tool_msg.content!r}"
+    content = str(tool_msg.content)
+    assert content == "HELLO ALICE", (
+        f"JSON-string arguments should be parsed and forwarded to the tool;"
+        f" got {content!r}"
     )
