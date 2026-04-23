@@ -1,6 +1,6 @@
 # Testing Roadmap
 
-**Status as of 2026-04-23:** Phase 3.1 (deferred_tools e2e) complete — 3 new e2e scenarios + a surfaced kit bug (ToolLoopGuardMiddleware's ContextVar-based counter silently failed under LangGraph's real task scheduling) fixed with thread_id-keyed module state and two new unit tests guarding the concurrent-task shape. Full suite: 404 passing. Next action: Phase 3.2 — `tests/e2e/test_middleware_ordering_e2e.py`.
+**Status as of 2026-04-23:** Phase 3.2 (middleware ordering e2e) complete — one scenario asserting save_memory → persistence → stop_hook ordering. Full suite: 405 passing. Next action: Phase 3.3 — `tests/e2e/test_commands_e2e.py` (`/compact` short-circuit).
 
 ## Goal
 
@@ -67,8 +67,8 @@ Four files, six tests total. Depth over breadth — each test catches a distinct
   - [x] `test_empty_deferred_registry_does_not_push_llm_toward_tool_search` — default build with empty registry; script one user turn via `capturing_scripted_llm`; assert the system prompt the LLM *received* does NOT contain the `deferred_tools_awareness` marker (direct regression guard — would have caught the original bug)
   - [x] `test_tool_loop_guard_advises_when_llm_spins_on_tool_search` — populated registry; LLM scripted to call `tool_search` 6× in a row; assert `ToolLoopGuardMiddleware`'s advisory message appears
   - [x] **Bug surfaced:** `ToolLoopGuardMiddleware` kept its streak counter in a `ContextVar[dict]` set via `.set(new_dict)`, which is copy-on-write per asyncio task. LangGraph schedules each tool call as its own task, so every call saw `count=1` and the guard never fired under real execution. Unit tests missed this because they ran every call in a single coroutine. Fixed by keying on `thread_id` via a module-level dict (extracted from `runtime.execution_info.thread_id` in `abefore_agent`/`aafter_agent` and `request.runtime.config["configurable"]["thread_id"]` in `awrap_tool_call`). Added two unit tests (`test_streak_persists_across_sibling_asyncio_tasks`, `test_streak_isolated_between_concurrent_runs`) to guard against regressions of this class.
-- [ ] `tests/e2e/test_middleware_ordering_e2e.py`
-  - [ ] `test_memory_extraction_runs_before_stop_hooks_see_state` — stop hook captures `state`; LLM scripted to `save_memory` then answer; assert memory is in `MockStore` AND hook saw the post-extraction state
+- [x] `tests/e2e/test_middleware_ordering_e2e.py`
+  - [x] `test_save_memory_tool_persists_before_stop_hook_runs` — asserts tool-call persistence + stop-hook ordering: save_memory tool actually reaches MockStore, AND the stop hook's captured state contains the save_memory ToolMessage (i.e. hook ran after tool execution) — stop hook captures `state`; LLM scripted to `save_memory` then answer; assert memory is in `MockStore` AND hook saw the post-extraction state
 - [ ] `tests/e2e/test_commands_e2e.py`
   - [ ] `test_slash_compact_short_circuits_llm` — `RecordedChatModel` with zero interactions (raises if called); user input `/compact`; assert no `ReplayMismatchError` (LLM never called), compact output returned, `jump_to: "end"` worked
 - [ ] `tests/e2e/test_plugins_e2e.py`
