@@ -5,6 +5,38 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+## [0.9.5] — 2026-04-22
+
+### Fixed
+
+- **Deferred tools are now actually callable end-to-end.** Previously
+  `tool_search` was registered but no population path existed
+  (`register_standard_tools` discarded the `DeferredToolRegistry` that
+  `register_search_tool` returned), and even when a tool reached the
+  registry there was no way for the LLM to invoke it — LangChain's
+  tool-calling surface is bound at `create_agent` construction time and
+  cannot pick up new tools mid-run. Fixes:
+  - Added `build_call_deferred_tool(deferred)` — a dispatcher registered
+    alongside `tool_search` on the active tool surface. The LLM calls
+    `call_deferred_tool(tool_id=..., arguments={...})` and the
+    dispatcher looks up the capability and invokes it. Handles sync and
+    async callables, stringified-JSON arguments, wrong-shape arguments,
+    and unknown ids — all returned as error strings so the model stays
+    in control. Tool remains in the registry after invocation so it can
+    be called repeatedly.
+  - Rewrote `tool_search` output so the guidance actually resolves:
+    surfaces each hit's `id` (rendered distinctly from the display name
+    to avoid conflation), a one-line parameter signature via
+    `inspect.signature`, and explicit instructions to use
+    `call_deferred_tool` for invocation.
+  - `register_standard_tools` now returns the `DeferredToolRegistry`
+    instead of throwing it away, and `build_deep_agent` exposes a
+    `configure_deferred_tools: (DeferredToolRegistry) -> None` callback
+    mirroring the existing `configure_tools` hook, giving callers a way
+    to populate the registry.
+
+## [0.9.4] — 2026-04-22
+
 ### Fixed
 
 - **Memory extractor no longer leaks JSON candidates into the user-facing

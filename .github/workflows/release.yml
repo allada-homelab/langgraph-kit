@@ -7,13 +7,19 @@ name: release
 #   workflow extracts the version from the tag, overwrites
 #   ``__version__.py`` to match (so the wheel, sdist, and PyPI metadata
 #   all agree regardless of what main's ``__version__.py`` currently says),
-#   builds, publishes to PyPI, and finally commits the version bump back
-#   to main so future development starts from the right number.
+#   builds, publishes to PyPI, attaches artifacts to the drafted release
+#   (without touching its body), and commits the version bump back to
+#   main so future development starts from the right number.
 #
 # - ``push: tags: v*`` — the fallback for ad-hoc ``git tag + git push``
-#   releases. Same version-sync logic runs, but the post-publish commit
-#   to main is skipped (no GitHub Release to associate with, less
-#   likely to be the intended workflow).
+#   releases. Same version-sync, build, publish, and main-bump logic
+#   runs, plus it creates a GitHub Release populated with the matching
+#   CHANGELOG section (or auto-generated notes if no section matches).
+#
+# When a release publish also produces a tag push (``gh release create``
+# or UI "Publish release"), both triggers fire. The ``gate`` job on the
+# push-event run detects that the release already exists and exits
+# early, letting the release-event run do the work.
 
 on:
   release:
@@ -22,18 +28,54 @@ on:
     tags:
       - "v*"
 
-# ``gh release create`` fires both triggers — a tag push AND a release
-# publish — so without this guard we'd have two workflow runs racing to
-# upload the same wheel to PyPI, and whichever one lost would fail the
-# whole run on "400 File already exists". Keyed on the tag name so
-# different tags don't collide with each other, and ``cancel-in-progress``
-# drops the runner-up rather than letting it queue up and then fail.
+# ``gh release create`` and GitHub's UI "Publish release" both fire a
+# tag push AND a release:published event. The ``gate`` job below
+# detects that case (release already exists for the tag) and exits
+# early on the push-event run, letting the release-event run do the
+# work. This keeps ``bump-main`` and "don't overwrite the drafted
+# release body" on the release-event path.
+#
+# Concurrency groups are scoped per event type so a push-event run
+# and a release-event run for the same tag don't cancel each other;
+# same-event duplicate triggers (rapid re-publishes, re-pushes) are
+# still deduplicated.
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ github.event_name }}-${{ github.ref_name }}
   cancel-in-progress: true
 
 jobs:
+  # Decide whether this run should proceed. On push-tag events, defer
+  # to the release-event run if a GitHub Release already exists for the
+  # tag (meaning the push was half of a ``gh release create`` / UI
+  # publish pair). On release events, always proceed. On tag-only
+  # pushes with no release, proceed and let the workflow create the
+  # release.
+  gate:
+    runs-on: ubuntu-latest
+    outputs:
+      skip: ${{ steps.check.outputs.skip }}
+    steps:
+      - name: Skip if release-event path will handle this tag
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" != "push" ]; then
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          TAG="${GITHUB_REF#refs/tags/}"
+          if gh release view "$TAG" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — deferring to release:published run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No release for $TAG — proceeding with tag-push path."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
+    needs: gate
+    if: needs.gate.outputs.skip != 'true'
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.v.outputs.version }}
@@ -90,7 +132,13 @@ jobs:
         with:
           name: dist
           path: dist/
+      # ``skip-existing`` lets a re-run of the same release (or a
+      # tag-push that raced with the release-event path) no-op rather
+      # than 400 on "File already exists". Idempotency > strictness
+      # here since PyPI versions are immutable anyway.
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
 
   github-release:
     runs-on: ubuntu-latest
@@ -155,12 +203,11 @@ jobs:
           files: dist/*
 
   bump-main:
-    # After a successful GitHub-Release-triggered publish, push the
-    # version bump back to main so future development starts from the
-    # post-release version. Skipped on ``push: tags`` runs because those
-    # are ad-hoc and the dev loop already bumped ``__version__.py``
-    # before tagging.
-    if: github.event_name == 'release'
+    # After a successful publish, push the version bump back to main so
+    # future development starts from the post-release version. Idempotent:
+    # if main's ``__version__.py`` already matches (the common case for
+    # ad-hoc ``git tag`` pushes where the dev loop bumped it before
+    # tagging), the job no-ops and exits cleanly.
     runs-on: ubuntu-latest
     needs: [publish, build]
     permissions:
