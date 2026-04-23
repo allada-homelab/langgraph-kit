@@ -79,6 +79,7 @@ def build_deep_agent(
     configure_tools: Any | None = None,
     configure_deferred_tools: Any | None = None,
     stop_hooks: list[Any] | None = None,
+    tool_search_loop_threshold: int = 5,
     conditions: set[str] | None = None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> tuple[Any, Any]:
@@ -115,6 +116,13 @@ def build_deep_agent(
         :class:`StopHooksMiddleware`). Hooks with ``blocking=True``
         propagate exceptions; others are logged and swallowed. Use for
         observability, logging, or cross-turn bookkeeping.
+    tool_search_loop_threshold:
+        Soft loop-detection threshold on consecutive ``tool_search``
+        calls. After this many in a row with no other tool call in
+        between, the kit appends a non-breaking advisory to the tool's
+        return content suggesting the agent try an alternate approach
+        (e.g. invoking a previously-discovered tool directly via
+        ``call_deferred_tool``). Defaults to 5. Set to ``0`` to disable.
     conditions:
         Prompt conditions to activate. Defaults to the standard set.
     recursion_limit:
@@ -183,6 +191,7 @@ def build_deep_agent(
         pressure_monitor=pressure_monitor,
         command_dispatcher=command_dispatcher,
         stop_hooks=stop_hooks,
+        tool_search_loop_threshold=tool_search_loop_threshold,
     )
 
     # --- Compose system prompt ---

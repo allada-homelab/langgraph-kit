@@ -19,12 +19,14 @@ from langgraph_kit.core.memory.models import MemoryScope
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 from langgraph_kit.core.orchestration.queue import QueuedInputMiddleware
 from langgraph_kit.core.resilience import (
+    DEFAULT_LOOP_THRESHOLD,
     CompletionGuardMiddleware,
     EmptyTurnMiddleware,
     PostRunBackstopMiddleware,
     RuntimeStateMiddleware,
     StopHooksMiddleware,
     ToolErrorMiddleware,
+    ToolLoopGuardMiddleware,
 )
 
 
@@ -35,6 +37,7 @@ def build_middleware_stack(
     pressure_monitor: PressureMonitor,
     command_dispatcher: CommandDispatcher | None = None,
     stop_hooks: list[Any] | None = None,
+    tool_search_loop_threshold: int = DEFAULT_LOOP_THRESHOLD,
 ) -> tuple[list[Any], PressureMonitor]:
     """Build the standard middleware stack shared by all deep agents.
 
@@ -43,8 +46,11 @@ def build_middleware_stack(
 
     ``stop_hooks`` is forwarded to :class:`StopHooksMiddleware`; hooks
     with an ``on_turn_complete(state)`` coroutine run after every agent
-    turn. Without this plumbing the middleware was instantiated with an
-    empty list and callers had no reachable API to attach hooks.
+    turn.
+
+    ``tool_search_loop_threshold`` controls the soft loop-detection
+    nudge emitted after ``N`` consecutive ``tool_search`` calls.
+    Defaults to :data:`DEFAULT_LOOP_THRESHOLD`. Set to ``0`` to disable.
     """
     middleware: list[Any] = []
 
@@ -57,6 +63,14 @@ def build_middleware_stack(
             RuntimeStateMiddleware(),
             QueuedInputMiddleware(),
             ToolErrorMiddleware(max_retries=1),
+            # Loop guard wraps tool calls BEFORE ResultPersistence so the
+            # advisory appears in the full-text content rather than in
+            # the persisted preview, and the model sees it on its next
+            # read of the tool result.
+            ToolLoopGuardMiddleware(
+                tool_name="tool_search",
+                threshold=tool_search_loop_threshold,
+            ),
             PressureMiddleware(pressure_monitor, llm=llm),
             ResultPersistenceMiddleware(),
             ExtractionMiddleware(
