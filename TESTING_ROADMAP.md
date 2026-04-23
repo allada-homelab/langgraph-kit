@@ -1,6 +1,6 @@
 # Testing Roadmap
 
-**Status as of 2026-04-23:** Phase 4.1 (inventory seeded) complete — `tests/e2e/FEATURE_INVENTORY.md` lists ~55 features across 10 clusters with source, purpose, use cases, edge cases, existing/e2e coverage, gaps, and status. Cross-cluster meta-invariant checklist captures the generalizations of the bug classes this whole effort was built for. Next action: start Cluster A (Tool system) — fill coverage gaps for standard tools, deferred-tool edge cases, MCP adapter.
+**Status as of 2026-04-23:** Cluster A in progress — memory tools, skills, UI tools e2e-covered (10 new scenarios across 3 files). Remaining in A: `search_memories`, async task tools, HITL (`approve_action`), MCP adapters, `retrieve_result`. Full suite: 417 passing. Next action: continue Cluster A (retrieve_result + async tasks) then move to Cluster B (middleware happy-path + empty-input tests).
 
 ## Goal
 
