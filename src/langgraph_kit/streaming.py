@@ -7,10 +7,7 @@ import logging
 import re
 from typing import TYPE_CHECKING, Any
 
-from langgraph_kit.core.artifacts import (
-    ARTIFACT_SENTINEL,
-    init_artifact_queue,
-)
+from langgraph_kit.core.artifacts import ARTIFACT_SENTINEL
 from langgraph_kit.core.internal_tags import INTERNAL_TAG
 from langgraph_kit.core.ui_events import (
     CITATION_SENTINEL,
@@ -89,7 +86,6 @@ async def stream_agent_events(
         await tracker.mark_busy(thread_id)
 
     started_text = False
-    init_artifact_queue()
 
     try:
         # Accumulate text so we can detect trailing artifacts from models

@@ -1,13 +1,14 @@
 """Artifact system — structured UI events emitted alongside text tokens.
 
 Agents call ``create_artifact`` to produce rich content (code blocks, markdown,
-tables, diagrams) that the frontend renders in a side panel.  Artifacts are
-queued via a ``contextvars`` variable and drained by the streaming layer.
+tables, diagrams) that the frontend renders in a side panel. The tool returns
+a :data:`ARTIFACT_SENTINEL`-prefixed JSON payload; the streaming layer
+(:mod:`langgraph_kit.streaming`) detects the prefix on ``on_tool_end`` events
+and emits a dedicated ``artifact`` SSE event — no queue required.
 """
 
 from __future__ import annotations
 
-import contextvars
 import json
 from enum import StrEnum
 from typing import Any
@@ -41,43 +42,9 @@ class ArtifactEvent(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
-# ---------------------------------------------------------------------------
-# Context-var based artifact queue
-# ---------------------------------------------------------------------------
-
-_artifact_queue: contextvars.ContextVar[list[ArtifactEvent] | None] = (
-    contextvars.ContextVar("artifact_queue", default=None)
-)
-
-# Prefix returned by the create_artifact tool so the streaming layer can
+# Prefix returned by the ``create_artifact`` tool so the streaming layer can
 # detect artifact outputs among normal tool results.
 ARTIFACT_SENTINEL = "__artifact__:"
-
-
-def init_artifact_queue() -> None:
-    """Reset the artifact queue for the current context (call at stream start)."""
-    _artifact_queue.set([])
-
-
-def drain_artifact_queue() -> list[ArtifactEvent]:
-    """Return and clear all queued artifacts."""
-    queue = _artifact_queue.get()
-    if not queue:
-        return []
-    result = list(queue)
-    queue.clear()
-    return result
-
-
-def queue_artifact(artifact: ArtifactEvent) -> None:
-    """Add an artifact to the current context queue."""
-    queue = _artifact_queue.get()
-    if queue is None:
-        new_queue: list[ArtifactEvent] = []
-        _artifact_queue.set(new_queue)
-        new_queue.append(artifact)
-    else:
-        queue.append(artifact)
 
 
 # ---------------------------------------------------------------------------
@@ -122,10 +89,9 @@ def build_artifact_tool() -> Any:
             content=content,
             language=language or None,
         )
-        queue_artifact(artifact)
 
         # Return a sentinel-prefixed JSON string that the streaming layer
-        # detects and emits as an SSE artifact event.
+        # detects and emits as a dedicated SSE artifact event.
         return ARTIFACT_SENTINEL + json.dumps(artifact.model_dump(mode="json"))
 
     return create_artifact
