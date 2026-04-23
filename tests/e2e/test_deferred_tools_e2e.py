@@ -233,8 +233,8 @@ async def test_tool_loop_guard_advises_when_llm_spins_on_tool_search(
         for m in search_results
         if "times in a row" in str(m.content) and "loop" in str(m.content).lower()
     ]
+    seen = "\n---\n".join(str(m.content)[:200] for m in search_results)
     assert advisories, (
-        "ToolLoopGuardMiddleware never appended its advisory to a tool_search "
-        "result even though the LLM spun 6 times. Contents seen:\n"
-        + "\n---\n".join(str(m.content)[:200] for m in search_results)
+        "ToolLoopGuardMiddleware never appended its advisory to a tool_search"
+        f" result even though the LLM spun 6 times. Contents seen:\n{seen}"
     )

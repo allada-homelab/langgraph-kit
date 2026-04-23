@@ -8,9 +8,11 @@ are unaffected.
 from __future__ import annotations
 
 import warnings
-from collections.abc import Iterator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from unittest.mock import patch
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 import pytest
 from langgraph.checkpoint.memory import (  # pyright: ignore[reportMissingImports]

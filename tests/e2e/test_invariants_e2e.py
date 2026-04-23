@@ -143,7 +143,8 @@ async def test_explicit_deferred_tools_condition_with_empty_registry_still_scrub
     )
     assert capturing.captured_calls
     prompt = "\n".join(str(getattr(m, "content", "")) for m in capturing.captured_calls[0])
+    excerpt = prompt[:300]
     assert _SECTION_MARKERS["deferred_tools_awareness"] not in prompt, (
-        "The kit must strip an explicitly-requested deferred_tools condition "
-        "when the registry is empty. Prompt excerpt: " + prompt[:300]
+        "The kit must strip an explicitly-requested deferred_tools condition"
+        f" when the registry is empty. Prompt excerpt: {excerpt}"
     )

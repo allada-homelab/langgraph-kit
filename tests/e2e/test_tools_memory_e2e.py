@@ -104,9 +104,8 @@ async def test_save_then_list_memories(
     # list_memories ToolMessage should reference both saved titles.
     list_msg = assert_tool_invoked(result, "list_memories")
     content = str(list_msg.content)
-    assert "pi" in content and "e" in content, (
-        f"list_memories didn't return both saved records: {content!r}"
-    )
+    assert "pi" in content, f"'pi' record missing from list: {content!r}"
+    assert "e" in content, f"'e' record missing from list: {content!r}"
     assert "Found 2 memories" in content or "2 memor" in content, (
         f"list_memories count summary missing: {content!r}"
     )
@@ -328,6 +327,9 @@ async def test_save_memory_with_invalid_type_returns_error_to_llm(
 
     msg = assert_tool_invoked(result, "save_memory")
     content = str(msg.content).lower()
-    assert "error" in content and "memory_type" in content, (
-        f"Expected structured error for invalid memory_type, got: {msg.content!r}"
+    assert "error" in content, (
+        f"Expected 'error' in save_memory response: {msg.content!r}"
+    )
+    assert "memory_type" in content, (
+        f"Expected 'memory_type' in error message: {msg.content!r}"
     )

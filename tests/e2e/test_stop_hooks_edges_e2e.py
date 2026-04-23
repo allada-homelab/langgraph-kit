@@ -25,9 +25,10 @@ class _NonBlockingFailingHook:
     """Hook that always raises. ``blocking`` attribute absent = non-blocking."""
 
     def __init__(self) -> None:
+        super().__init__()
         self.calls = 0
 
-    async def on_turn_complete(self, state: Any) -> None:  # noqa: ARG002
+    async def on_turn_complete(self, state: Any) -> None:
         self.calls += 1
         msg = "non-blocking boom"
         raise RuntimeError(msg)
@@ -38,7 +39,7 @@ class _BlockingFailingHook:
 
     blocking = True
 
-    async def on_turn_complete(self, state: Any) -> None:  # noqa: ARG002
+    async def on_turn_complete(self, state: Any) -> None:
         msg = "blocking boom"
         raise RuntimeError(msg)
 

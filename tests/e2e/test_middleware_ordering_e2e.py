@@ -37,6 +37,7 @@ class _CapturingStopHook:
     """
 
     def __init__(self) -> None:
+        super().__init__()
         self.calls: list[Any] = []
 
     async def on_turn_complete(self, state: Any) -> None:

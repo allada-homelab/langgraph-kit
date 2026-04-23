@@ -19,7 +19,7 @@ to reproduce the three-layer nesting every time.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
     AIMessage,
@@ -131,10 +131,10 @@ class CapturingScriptedChatModel(RecordedChatModel):
     model-path flow the e2e scenarios exercise.
     """
 
-    # Declared at the class level so pydantic lets instances carry the
-    # attribute. Using ``default_factory`` via Field keeps each instance's
-    # list independent.
-    captured_calls: list[list[Any]] = []
+    # Declared as ClassVar so pydantic doesn't try to treat it as a
+    # model field. The real per-instance list is set in ``__init__``
+    # via ``object.__setattr__`` (pydantic blocks normal assignment).
+    captured_calls: ClassVar[list[list[Any]]] = []
 
     def __init__(self, **data: Any) -> None:
         super().__init__(**data)

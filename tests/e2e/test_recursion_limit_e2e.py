@@ -43,7 +43,9 @@ async def test_build_time_recursion_limit_applies(
     ``GraphRecursionError`` from langgraph is raised cleanly to the
     caller — no partial state corruption, no silent truncation.
     """
-    from langgraph.errors import GraphRecursionError  # pyright: ignore[reportMissingImports]
+    from langgraph.errors import (
+        GraphRecursionError,  # pyright: ignore[reportMissingImports]
+    )
 
     # Script many tool calls so the agent is guaranteed to exceed a
     # small build-time limit.
@@ -76,7 +78,9 @@ async def test_runtime_recursion_limit_wins_over_build_default(
     (5), and confirm the run raises — proving runtime config takes
     precedence over whatever was bound at build.
     """
-    from langgraph.errors import GraphRecursionError  # pyright: ignore[reportMissingImports]
+    from langgraph.errors import (
+        GraphRecursionError,  # pyright: ignore[reportMissingImports]
+    )
 
     scripted = scripted_llm(_always_tool_call_script(30))
 

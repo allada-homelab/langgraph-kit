@@ -22,7 +22,6 @@ from tests.e2e.helpers import (
     answer,
     assert_tool_invoked,
     capturing_scripted_llm,
-    scripted_llm,
     tool_call_turn,
 )
 
@@ -218,10 +217,11 @@ async def test_multiple_plugins_compose_sections_and_tools(
 
     # Both section markers landed in the prompt.
     prompt = "\n".join(str(getattr(m, "content", "")) for m in capturing.captured_calls[0])
-    assert _SECTION_MARKER_A in prompt and _SECTION_MARKER_B in prompt, (
-        f"Multi-plugin section composition missing a marker in the prompt. "
-        f"A present: {_SECTION_MARKER_A in prompt}, "
-        f"B present: {_SECTION_MARKER_B in prompt}"
+    assert _SECTION_MARKER_A in prompt, (
+        f"plugin-a section missing from multi-plugin prompt: {prompt[:300]!r}"
+    )
+    assert _SECTION_MARKER_B in prompt, (
+        f"plugin-b section missing from multi-plugin prompt: {prompt[:300]!r}"
     )
 
 

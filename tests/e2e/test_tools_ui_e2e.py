@@ -100,8 +100,11 @@ async def test_emit_progress_rejects_invalid_counters(
     )
     msg = assert_tool_invoked(result, "emit_progress")
     content = str(msg.content).lower()
-    assert "error" in content and "current" in content, (
-        f"Expected structured error from emit_progress: {msg.content!r}"
+    assert "error" in content, (
+        f"Expected 'error' in emit_progress response: {msg.content!r}"
+    )
+    assert "current" in content, (
+        f"Expected error to reference 'current': {msg.content!r}"
     )
 
 
