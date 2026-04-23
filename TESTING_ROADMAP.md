@@ -1,6 +1,6 @@
 # Testing Roadmap
 
-**Status as of 2026-04-23:** Phase 2 (infrastructure) complete — pytest `e2e` marker registered; `tests/e2e/conftest.py` provides `checkpointer`, `e2e_store`, `patched_build_llm`, and autouse deepagents-deprecation filter; `tests/e2e/helpers.py` provides `scripted_llm`, `tool_call_turn`, `multi_tool_call_turn`, `answer`, `assert_tool_invoked`, `last_ai_message`. Smoke test confirms everything composes. Next action: Phase 3 — write the four MVP scenario files.
+**Status as of 2026-04-23:** Phase 3.1 (deferred_tools e2e) complete — 3 new e2e scenarios + a surfaced kit bug (ToolLoopGuardMiddleware's ContextVar-based counter silently failed under LangGraph's real task scheduling) fixed with thread_id-keyed module state and two new unit tests guarding the concurrent-task shape. Full suite: 404 passing. Next action: Phase 3.2 — `tests/e2e/test_middleware_ordering_e2e.py`.
 
 ## Goal
 
@@ -62,10 +62,11 @@ Prove a `RecordedChatModel` can drive a real kit-built graph through a multi-tur
 
 Four files, six tests total. Depth over breadth — each test catches a distinct class of composition bug.
 
-- [ ] `tests/e2e/test_deferred_tools_e2e.py`
-  - [ ] `test_deferred_tool_discoverable_and_callable` — populated registry; script `tool_search` → `call_deferred_tool` → final; assert deferred tool actually ran and its `ToolMessage` reached the LLM
-  - [ ] `test_empty_deferred_registry_does_not_push_llm_toward_tool_search` — default build with empty registry; script one user turn; assert the system prompt the LLM received does NOT contain the `deferred_tools_awareness` marker (direct regression guard)
-  - [ ] `test_tool_loop_guard_advises_when_llm_spins_on_tool_search` — populated registry; LLM scripted to call `tool_search` 6× in a row; assert `ToolLoopGuardMiddleware`'s advisory message appears
+- [x] `tests/e2e/test_deferred_tools_e2e.py`
+  - [x] `test_deferred_tool_discoverable_and_callable` — populated registry; script `tool_search` → `call_deferred_tool` → final; assert deferred tool actually ran and its `ToolMessage` reached the LLM
+  - [x] `test_empty_deferred_registry_does_not_push_llm_toward_tool_search` — default build with empty registry; script one user turn via `capturing_scripted_llm`; assert the system prompt the LLM *received* does NOT contain the `deferred_tools_awareness` marker (direct regression guard — would have caught the original bug)
+  - [x] `test_tool_loop_guard_advises_when_llm_spins_on_tool_search` — populated registry; LLM scripted to call `tool_search` 6× in a row; assert `ToolLoopGuardMiddleware`'s advisory message appears
+  - [x] **Bug surfaced:** `ToolLoopGuardMiddleware` kept its streak counter in a `ContextVar[dict]` set via `.set(new_dict)`, which is copy-on-write per asyncio task. LangGraph schedules each tool call as its own task, so every call saw `count=1` and the guard never fired under real execution. Unit tests missed this because they ran every call in a single coroutine. Fixed by keying on `thread_id` via a module-level dict (extracted from `runtime.execution_info.thread_id` in `abefore_agent`/`aafter_agent` and `request.runtime.config["configurable"]["thread_id"]` in `awrap_tool_call`). Added two unit tests (`test_streak_persists_across_sibling_asyncio_tasks`, `test_streak_isolated_between_concurrent_runs`) to guard against regressions of this class.
 - [ ] `tests/e2e/test_middleware_ordering_e2e.py`
   - [ ] `test_memory_extraction_runs_before_stop_hooks_see_state` — stop hook captures `state`; LLM scripted to `save_memory` then answer; assert memory is in `MockStore` AND hook saw the post-extraction state
 - [ ] `tests/e2e/test_commands_e2e.py`

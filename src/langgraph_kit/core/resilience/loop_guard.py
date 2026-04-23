@@ -20,7 +20,6 @@ middleware for any tool that turns out to be loop-prone in practice
 
 from __future__ import annotations
 
-import contextvars
 import logging
 from typing import Any
 
@@ -32,34 +31,90 @@ logger = logging.getLogger(__name__)
 DEFAULT_LOOP_THRESHOLD = 5
 
 
-# Per-request counter keyed by tool name. ContextVar keeps concurrent
-# invocations isolated — two simultaneous chat requests do NOT share
-# each other's counters. Default is ``None`` (not ``{}``) so the
-# contextvar doesn't share a single mutable dict across contexts —
-# :func:`_streak_snapshot` materializes a fresh empty dict per reader.
-_streak: contextvars.ContextVar[dict[str, int] | None] = contextvars.ContextVar(
-    "tool_loop_streak", default=None
-)
+# Per-run streak counter keyed by thread_id, with tool-name as the
+# inner dict key. One entry per active thread_id; cleared by
+# :meth:`ToolLoopGuardMiddleware.abefore_agent` at run start so a new
+# user turn never inherits the previous turn's streak, and (best-effort)
+# by :meth:`~ToolLoopGuardMiddleware.aafter_agent` at run end so the
+# module-level store stays bounded.
+#
+# Why thread_id and not something narrower:
+#   - LangGraph schedules each tool call as its own asyncio task.
+#     ``ContextVar.set()`` is copy-on-write per context, so a counter
+#     stored via ``_var.set(new_dict)`` never propagates to sibling
+#     tool-call tasks — every call saw ``count=1``. Mutating a
+#     context-inherited dict works in theory but in practice each tool
+#     call's task does NOT inherit the agent's abefore_agent context,
+#     so the shared-dict-via-ContextVar trick also fails.
+#   - ``id(request.runtime)`` varies per tool call because LangGraph
+#     constructs a fresh ``ToolRuntime`` each time.
+#   - ``thread_id`` is stable across ``abefore_agent`` → every
+#     ``awrap_tool_call`` → ``aafter_agent`` within one ``ainvoke`` and
+#     it uniquely identifies the conversation thread, giving natural
+#     isolation between concurrent users.
+#
+# The original implementation used a ``ContextVar[dict]`` and worked
+# under unit tests (all calls in one coroutine) but silently failed
+# under real graph execution. Unit tests are augmented in
+# ``test_loop_guard.py::test_streak_persists_across_sibling_asyncio_tasks``
+# to catch regressions of this class.
+_streaks: dict[Any, dict[str, int]] = {}
 
 
-def _streak_snapshot() -> dict[str, int]:
-    value = _streak.get()
-    return value if value is not None else {}
+_MISSING_THREAD_ID = "__loop_guard_no_thread_id__"
 
 
-def _streak_bump(name: str) -> int:
-    # Copy-on-write so one request can't mutate another's view mid-flight.
-    updated = {**_streak_snapshot(), name: _streak_snapshot().get(name, 0) + 1}
-    _streak.set(updated)
-    return updated[name]
+def _thread_id_from_runtime(runtime: Any) -> Any:
+    """Extract thread_id from a Runtime (abefore_agent / aafter_agent path).
+
+    ``Runtime.execution_info.thread_id`` is set by LangGraph during graph
+    execution. Falls back to a sentinel when unavailable so the guard
+    still keys consistently in direct-unit-test call sites that pass
+    ``None`` or a plain sentinel.
+    """
+    if runtime is None:
+        return _MISSING_THREAD_ID
+    exec_info = getattr(runtime, "execution_info", None)
+    tid = getattr(exec_info, "thread_id", None) if exec_info is not None else None
+    return tid if tid is not None else id(runtime)
 
 
-def _streak_reset(name: str) -> None:
+def _thread_id_from_request(request: Any) -> Any:
+    """Extract thread_id from a ToolCallRequest (awrap_tool_call path).
+
+    ``request.runtime.config["configurable"]["thread_id"]`` is populated
+    by LangGraph for every tool call in a run. Falls back to the
+    runtime's identity when the config shape isn't what we expect, so
+    direct-unit-test call sites keep working.
+    """
+    runtime = getattr(request, "runtime", None)
+    if runtime is None:
+        return _MISSING_THREAD_ID
+    config = getattr(runtime, "config", None)
+    if isinstance(config, dict):
+        tid = config.get("configurable", {}).get("thread_id")
+        if tid is not None:
+            return tid
+    return id(runtime)
+
+
+def _streak_bump(key: Any, name: str) -> int:
+    counters = _streaks.setdefault(key, {})
+    counters[name] = counters.get(name, 0) + 1
+    return counters[name]
+
+
+def _streak_reset(key: Any, name: str) -> None:
     """Zero the counter for ``name`` because a different tool ran."""
-    current = _streak_snapshot()
-    if name not in current:
+    counters = _streaks.get(key)
+    if counters is None:
         return
-    _streak.set({k: v for k, v in current.items() if k != name})
+    counters.pop(name, None)
+
+
+def _streak_clear(key: Any) -> None:
+    """Drop the per-run counter dict."""
+    _streaks.pop(key, None)
 
 
 class ToolLoopGuardMiddleware(_AgentMiddleware):  # type: ignore[misc]
@@ -116,10 +171,25 @@ class ToolLoopGuardMiddleware(_AgentMiddleware):  # type: ignore[misc]
     async def abefore_agent(
         self,
         state: Any,  # noqa: ARG002
-        runtime: Any,  # noqa: ARG002
+        runtime: Any,
     ) -> dict[str, Any] | None:
-        """Reset all streak counters at the start of a turn."""
-        _streak.set(None)
+        """Drop any stale streak entry for this thread at run start.
+
+        Each user turn (ainvoke) starts fresh, even on a thread that
+        previously accumulated a streak. ``aafter_agent`` normally
+        clears first, but we defensively clear here too so an
+        incomplete prior run can't poison the new one.
+        """
+        _streak_clear(_thread_id_from_runtime(runtime))
+        return None
+
+    async def aafter_agent(
+        self,
+        state: Any,  # noqa: ARG002
+        runtime: Any,
+    ) -> dict[str, Any] | None:
+        """Drop this thread's counters so ``_streaks`` stays bounded."""
+        _streak_clear(_thread_id_from_runtime(runtime))
         return None
 
     async def awrap_tool_call(self, request: Any, handler: Any) -> Any:
@@ -129,14 +199,15 @@ class ToolLoopGuardMiddleware(_AgentMiddleware):  # type: ignore[misc]
 
         tool_call = getattr(request, "tool_call", None)
         called = tool_call.get("name", "") if isinstance(tool_call, dict) else ""
+        key = _thread_id_from_request(request)
 
         if called != self._tool_name:
             # Any non-watched tool resets the streak — the agent made
             # forward progress on something else.
-            _streak_reset(self._tool_name)
+            _streak_reset(key, self._tool_name)
             return await handler(request)
 
-        count = _streak_bump(self._tool_name)
+        count = _streak_bump(key, self._tool_name)
         result = await handler(request)
 
         if count < self._threshold:

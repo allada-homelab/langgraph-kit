@@ -13,9 +13,37 @@ from langgraph_kit.core.resilience.loop_guard import (
 )
 
 
+_SHARED_RUNTIME = object()
+"""Stable identity for all ``_request`` calls in this module.
+
+The loop guard now keys its streak counter on ``id(request.runtime)``
+so two concurrent real-graph invocations (each with its own Runtime
+dataclass) stay isolated. Unit tests simulate a single run by sharing
+one sentinel across all ``_request`` calls; tests that want to model a
+boundary (e.g. ``abefore_agent_resets_streak_between_turns``) rely on
+the middleware's explicit clear, not on a new runtime.
+"""
+
+
+@pytest.fixture(autouse=True)
+def _isolate_guard_state() -> Any:
+    """Wipe the module-level streak store between tests.
+
+    The guard keys counters on thread_id; tests using ``_SHARED_RUNTIME``
+    collapse to ``id(_SHARED_RUNTIME)``. Without this fixture a prior
+    test's residual entry would poison the next test's first call.
+    """
+    from langgraph_kit.core.resilience import loop_guard
+
+    loop_guard._streaks.clear()
+    yield
+    loop_guard._streaks.clear()
+
+
 def _request(tool_name: str) -> Any:
     req = MagicMock()
     req.tool_call = {"name": tool_name, "args": {}}
+    req.runtime = _SHARED_RUNTIME
     return req
 
 
@@ -36,7 +64,7 @@ async def test_below_threshold_result_untouched() -> None:
     exploration.
     """
     mw = ToolLoopGuardMiddleware(threshold=5)
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
 
     original = _result("match for 'deploy'")
     handler = AsyncMock(return_value=original)
@@ -57,7 +85,7 @@ async def test_at_threshold_appends_advisory() -> None:
     suggesting it try a different approach.
     """
     mw = ToolLoopGuardMiddleware(threshold=5)
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
 
     handler = AsyncMock(side_effect=lambda _req: _result("search hit"))
 
@@ -85,7 +113,7 @@ async def test_different_tool_resets_streak() -> None:
     goes back to zero and we don't hassle it on the next tool_search.
     """
     mw = ToolLoopGuardMiddleware(threshold=3)
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
 
     handler = AsyncMock(side_effect=lambda _req: _result("ok"))
 
@@ -110,12 +138,12 @@ async def test_abefore_agent_resets_streak_between_turns() -> None:
     handler = AsyncMock(side_effect=lambda _req: _result("ok"))
 
     # Turn 1
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
     for _ in range(2):
         await mw.awrap_tool_call(_request("tool_search"), handler)
 
     # Turn 2 — counter reset
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
     result = await mw.awrap_tool_call(_request("tool_search"), handler)
     assert "times in a row" not in result.content
 
@@ -124,7 +152,7 @@ async def test_abefore_agent_resets_streak_between_turns() -> None:
 async def test_threshold_zero_disables_guard() -> None:
     """``threshold=0`` is the kill switch — the middleware is transparent."""
     mw = ToolLoopGuardMiddleware(threshold=0)
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
 
     original = _result("r")
     handler = AsyncMock(return_value=original)
@@ -140,7 +168,7 @@ async def test_custom_tool_name_and_threshold() -> None:
     mw = ToolLoopGuardMiddleware(
         tool_name="list_memories", threshold=2, advice="LOOP on {tool_name} x{count}"
     )
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
     handler = AsyncMock(side_effect=lambda _req: _result("ok"))
 
     # tool_search doesn't trigger this guard (different tool_name)
@@ -161,7 +189,7 @@ async def test_advisory_goes_to_string_tool_outputs() -> None:
     tools (like ``create_artifact``, ``save_memory``) return plain str.
     """
     mw = ToolLoopGuardMiddleware(threshold=1, advice="LOOP")
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
 
     handler = AsyncMock(return_value="raw string output")
     result = await mw.awrap_tool_call(_request("tool_search"), handler)
@@ -177,7 +205,7 @@ async def test_default_threshold_is_five() -> None:
     mw = ToolLoopGuardMiddleware()
     # We don't inspect the private attr, we verify the behavior: 4 pass
     # through, 5 triggers.
-    await mw.abefore_agent({}, None)
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
     handler = AsyncMock(side_effect=lambda _req: _result("x"))
     for _ in range(4):
         result = await mw.awrap_tool_call(_request("tool_search"), handler)
@@ -209,10 +237,91 @@ async def test_builder_stack_wires_the_guard() -> None:
     # The configured threshold is applied, not the default.
     # (We exercise it behaviorally rather than asserting a private attribute.)
     guard = guards[0]
-    await guard.abefore_agent({}, None)
+    await guard.abefore_agent({}, _SHARED_RUNTIME)
     handler = AsyncMock(side_effect=lambda _req: _result("x"))
     for _ in range(2):
         result = await guard.awrap_tool_call(_request("tool_search"), handler)
         assert "times in a row" not in result.content
     result = await guard.awrap_tool_call(_request("tool_search"), handler)
     assert "3 times in a row" in result.content
+
+
+@pytest.mark.asyncio
+async def test_streak_persists_across_sibling_asyncio_tasks() -> None:
+    """Guard must count across tool calls run as sibling asyncio tasks.
+
+    LangGraph schedules each tool call as its own asyncio task. The
+    previous implementation called ``ContextVar.set(new_dict)`` inside
+    ``awrap_tool_call`` — and ``set`` is copy-on-write per context, so
+    each child task created its own fresh dict and saw ``count=1``
+    forever. The guard never fired under real graph execution; unit
+    tests missed this because they ran every call in one coroutine.
+
+    The current implementation seeds a mutable dict in
+    ``abefore_agent`` (parent task) and **mutates it in place** from
+    each tool-call task. Child tasks inherit a context snapshot, but
+    the *values* in that snapshot (the dict reference) are shared, so
+    in-place mutations are visible across siblings. This test exercises
+    that exact shape.
+    """
+    import asyncio
+
+    mw = ToolLoopGuardMiddleware(threshold=3)
+    # Seed the shared dict in the parent context — tasks spawned below
+    # inherit its reference.
+    await mw.abefore_agent({}, _SHARED_RUNTIME)
+
+    handler = AsyncMock(side_effect=lambda _req: _result("x"))
+
+    async def _one_call() -> Any:
+        return await mw.awrap_tool_call(_request("tool_search"), handler)
+
+    results = []
+    for _ in range(3):
+        results.append(await asyncio.create_task(_one_call()))
+
+    assert "3 times in a row" in results[-1].content, (
+        "Streak did NOT persist across sibling tasks — this is the exact "
+        "shape that broke the original ContextVar.set()-based guard under "
+        "real LangGraph execution. Got: " + str(results[-1].content)
+    )
+
+
+@pytest.mark.asyncio
+async def test_streak_isolated_between_concurrent_runs() -> None:
+    """Two concurrent ``ainvoke`` executions must not share streak state.
+
+    LangGraph's ``ainvoke`` wraps each graph run in its own context
+    (runtime config, state, etc.). ContextVar-based state is therefore
+    naturally isolated between concurrent runs as long as each run
+    starts from a fresh ``abefore_agent``. We simulate that by running
+    two scenarios in independent ``contextvars.Context`` instances.
+    """
+    import asyncio
+    import contextvars
+
+    mw = ToolLoopGuardMiddleware(threshold=3)
+    handler = AsyncMock(side_effect=lambda _req: _result("x"))
+
+    async def run_one() -> Any:
+        await mw.abefore_agent({}, _SHARED_RUNTIME)
+        last = None
+        for _ in range(3):
+            last = await mw.awrap_tool_call(_request("tool_search"), handler)
+        return last
+
+    # Copy parent context into two independent snapshots before spawning.
+    # ``Context.run(...)`` executes the coroutine in that isolated
+    # context so ``_streak`` writes in one run don't leak into the other.
+    ctx_a = contextvars.copy_context()
+    ctx_b = contextvars.copy_context()
+
+    # ``Context.run`` is synchronous; we schedule each coroutine inside
+    # its own context via ``asyncio.Task`` constructor's ``context=`` arg.
+    loop = asyncio.get_event_loop()
+    task_a = loop.create_task(run_one(), context=ctx_a)
+    task_b = loop.create_task(run_one(), context=ctx_b)
+    result_a, result_b = await asyncio.gather(task_a, task_b)
+
+    assert "3 times in a row" in result_a.content
+    assert "3 times in a row" in result_b.content
