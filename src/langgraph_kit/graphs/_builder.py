@@ -42,6 +42,7 @@ def build_deep_agent(
     extra_sections: list[list[PromptSection]] | None = None,
     extra_providers: list[Any] | None = None,
     configure_tools: Any | None = None,
+    configure_deferred_tools: Any | None = None,
     conditions: set[str] | None = None,
 ) -> tuple[Any, Any]:
     """Build a deep agent with the standard skeleton.
@@ -65,6 +66,12 @@ def build_deep_agent(
     configure_tools:
         Optional callback ``(registry: ToolRegistry) -> None`` to register
         additional tools after the standard set.
+    configure_deferred_tools:
+        Optional callback ``(deferred: DeferredToolRegistry) -> None`` to
+        register tools the agent can discover via ``tool_search`` and
+        invoke via ``call_deferred_tool``. Deferred tools don't take up
+        room in the active tool-binding surface — use this for large or
+        rarely-used catalogs.
     conditions:
         Prompt conditions to activate. Defaults to the standard set.
     """
@@ -77,7 +84,7 @@ def build_deep_agent(
 
     # --- Tool registry ---
     tool_registry = ToolRegistry()
-    register_standard_tools(
+    deferred_registry = register_standard_tools(
         tool_registry,
         memory_mgr,
         store,
@@ -86,6 +93,8 @@ def build_deep_agent(
     )
     if configure_tools is not None:
         configure_tools(tool_registry)
+    if configure_deferred_tools is not None:
+        configure_deferred_tools(deferred_registry)
 
     # --- Prompt assembly ---
     section_registry = SectionRegistry()

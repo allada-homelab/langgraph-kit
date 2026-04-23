@@ -16,7 +16,11 @@ from langgraph_kit.core.orchestration.async_tasks import (
 from langgraph_kit.core.skills.registry import SkillRegistry
 from langgraph_kit.core.skills.tools import build_skill_tools
 from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
-from langgraph_kit.core.tools.deferred import DeferredToolRegistry, build_tool_search
+from langgraph_kit.core.tools.deferred import (
+    DeferredToolRegistry,
+    build_call_deferred_tool,
+    build_tool_search,
+)
 from langgraph_kit.core.tools.memory_tools import build_memory_tools
 from langgraph_kit.core.tools.registry import ToolRegistry
 from langgraph_kit.core.tools.result_retrieval import build_result_retrieval_tool
@@ -91,7 +95,14 @@ def register_retrieval_tool(registry: ToolRegistry, store: Any) -> None:
 
 
 def register_search_tool(registry: ToolRegistry) -> DeferredToolRegistry:
-    """Register the deferred tool search tool. Returns the deferred registry."""
+    """Register ``tool_search`` + ``call_deferred_tool`` and return the deferred registry.
+
+    Both tools are required for the deferred-tool flow to work end to end:
+    ``tool_search`` surfaces capabilities to the LLM, and
+    ``call_deferred_tool`` is the dispatcher the LLM invokes to actually
+    run a discovered tool. See ``langgraph_kit.core.tools.deferred`` for
+    the design rationale.
+    """
     deferred = DeferredToolRegistry()
     register_tool(
         registry,
@@ -99,6 +110,19 @@ def register_search_tool(registry: ToolRegistry) -> DeferredToolRegistry:
         id_prefix="",
         name="tool_search",
         tags=["discovery"],
+    )
+    register_tool(
+        registry,
+        build_call_deferred_tool(deferred),
+        id_prefix="",
+        name="call_deferred_tool",
+        tags=["discovery"],
+        prompt_guidance=(
+            "Use call_deferred_tool to invoke any tool discovered via "
+            "tool_search. Pass the tool's `id` (not its display name) and "
+            "a dict of keyword arguments matching the signature shown in "
+            "the search result."
+        ),
     )
     return deferred
 
@@ -186,14 +210,22 @@ def register_standard_tools(
     *,
     parent_thread_id: str,
     mcp_tools: list[Any] | None = None,
-) -> None:
-    """Register the full standard tool suite used by all deep agents."""
+) -> DeferredToolRegistry:
+    """Register the full standard tool suite used by all deep agents.
+
+    Returns the :class:`DeferredToolRegistry` that backs ``tool_search``
+    and ``call_deferred_tool``. Callers who want the agent to be able to
+    discover/invoke additional capabilities (without bloating the active
+    tool-call surface) should populate this registry before graph
+    construction.
+    """
     register_memory_tools(registry, memory_mgr)
     register_retrieval_tool(registry, store)
-    register_search_tool(registry)
+    deferred = register_search_tool(registry)
     register_skill_tools(registry)
     register_async_tools(registry, store, parent_thread_id=parent_thread_id)
     register_ui_tools(registry)
     register_hitl_tools(registry)
     for cap in mcp_tools or []:
         registry.register(cap)
+    return deferred

@@ -44,6 +44,7 @@ from langgraph_kit.core.prompt_assembly.sections import (
 from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
 from langgraph_kit.core.tools.deferred import (
     DeferredToolRegistry,
+    build_call_deferred_tool,
     build_tool_search,
 )
 
@@ -156,6 +157,182 @@ async def test_tool_search_returns_formatted() -> None:
     assert "Found 1 available tool(s)" in output
     assert "file_search" in output
     assert "Search files" in output
+
+
+@pytest.mark.asyncio
+async def test_tool_search_advertises_dispatcher() -> None:
+    """The search output MUST tell the agent how to invoke a discovered tool.
+
+    Regression test for a documented design flaw: earlier versions said
+    "call it by name — it will be activated automatically", but deferred
+    tools aren't bound to the LLM, so name-calling never reaches them.
+    Output must advertise ``call_deferred_tool`` instead, with the id
+    field + argument dict shape, so the model can actually reach the tool.
+    """
+    registry = DeferredToolRegistry()
+    registry.register(
+        _make_cap("fs", "file_search", "Search files", tags=["filesystem"])
+    )
+
+    output = await build_tool_search(registry)("file")
+    assert "call_deferred_tool" in output
+    # The id must be rendered distinctly from the display name so the LLM
+    # doesn't conflate the two when building its dispatcher call.
+    assert "id: `fs`" in output
+    # Signature hint so the LLM knows the argument shape.
+    assert "Signature:" in output
+
+
+@pytest.mark.asyncio
+async def test_call_deferred_tool_invokes_registered_callable() -> None:
+    """End-to-end: register a deferred tool, then call it via the dispatcher.
+
+    This is the happy path that the whole deferred-tool feature hinges on.
+    Before the fix there was no code path from tool_search to actual
+    invocation — this test would have been impossible to write.
+    """
+    registry = DeferredToolRegistry()
+
+    async def deploy(environment: str, dry_run: bool = False) -> str:
+        return f"deploy: env={environment} dry_run={dry_run}"
+
+    registry.register(
+        ToolCapability(
+            id="deploy_tool",
+            name="deploy",
+            description="Deploy to an environment",
+            fn=deploy,
+            tags=["ops"],
+            risk=ToolRisk.MUTATING,
+        )
+    )
+
+    dispatcher = build_call_deferred_tool(registry)
+    result = await dispatcher(
+        tool_id="deploy_tool", arguments={"environment": "staging", "dry_run": True}
+    )
+    assert result == "deploy: env=staging dry_run=True"
+
+
+@pytest.mark.asyncio
+async def test_call_deferred_tool_supports_sync_callables() -> None:
+    """Dispatcher must work whether the registered tool is sync or async.
+
+    Real-world deferred catalogs include both — MCP tools tend to be
+    async, but plain Python helpers registered by user code are often
+    synchronous. Both must round-trip through the dispatcher.
+    """
+    registry = DeferredToolRegistry()
+
+    def compute(a: int, b: int) -> int:
+        return a + b
+
+    registry.register(
+        ToolCapability(
+            id="add",
+            name="compute",
+            description="Add two integers",
+            fn=compute,
+            risk=ToolRisk.READ_ONLY,
+        )
+    )
+
+    dispatcher = build_call_deferred_tool(registry)
+    result = await dispatcher(tool_id="add", arguments={"a": 2, "b": 3})
+    # Non-string returns are JSON-serialized so the model gets a stable shape.
+    assert result == "5"
+
+
+@pytest.mark.asyncio
+async def test_call_deferred_tool_unknown_id_returns_error_string() -> None:
+    """Unknown tool ids must not raise — return an error message the LLM can read.
+
+    Tool functions that raise in-flight break the agent loop. Returning
+    a string keeps the model in control and gives it enough context to
+    re-query ``tool_search`` for the right id.
+    """
+    registry = DeferredToolRegistry()
+    registry.register(_make_cap("known", "known_tool"))
+
+    dispatcher = build_call_deferred_tool(registry)
+    result = await dispatcher(tool_id="unknown", arguments={})
+    assert "not found" in result
+    # Should surface the available ids so the model can recover.
+    assert "known" in result
+
+
+@pytest.mark.asyncio
+async def test_call_deferred_tool_parses_json_string_arguments() -> None:
+    """Some LLMs emit ``arguments`` as a JSON string instead of a dict.
+
+    Rejecting the call there would train the model to avoid the
+    dispatcher entirely, so the common case of a stringified dict is
+    decoded transparently. Malformed strings still fail with a useful
+    message.
+    """
+    registry = DeferredToolRegistry()
+
+    async def echo(msg: str) -> str:
+        return f"echo: {msg}"
+
+    registry.register(
+        ToolCapability(
+            id="echo",
+            name="echo",
+            description="Echo a message",
+            fn=echo,
+            risk=ToolRisk.READ_ONLY,
+        )
+    )
+
+    dispatcher = build_call_deferred_tool(registry)
+    result = await dispatcher(tool_id="echo", arguments='{"msg": "hi"}')  # type: ignore[arg-type]
+    assert result == "echo: hi"
+
+
+@pytest.mark.asyncio
+async def test_call_deferred_tool_wrong_args_returns_error_string() -> None:
+    """Argument shape mismatches must come back as an LLM-readable error."""
+    registry = DeferredToolRegistry()
+
+    async def needs_name(name: str) -> str:
+        return name
+
+    registry.register(
+        ToolCapability(
+            id="greet",
+            name="greet",
+            description="Greet by name",
+            fn=needs_name,
+            risk=ToolRisk.READ_ONLY,
+        )
+    )
+
+    dispatcher = build_call_deferred_tool(registry)
+    # Wrong kwarg name — the underlying TypeError would normally abort
+    # the tool call; the dispatcher must return a string instead.
+    result = await dispatcher(tool_id="greet", arguments={"wrong_kw": "x"})
+    assert "Error calling 'greet'" in result
+
+
+def test_register_search_tool_registers_both_search_and_dispatcher() -> None:
+    """``register_search_tool`` must put BOTH tools in the active registry.
+
+    Before the fix it only registered ``tool_search`` — the dispatcher
+    was missing entirely, so any tool discovered via search was
+    effectively unreachable.
+    """
+    from langgraph_kit.core.graph_builder.tools import register_search_tool
+    from langgraph_kit.core.tools.registry import ToolRegistry
+
+    registry = ToolRegistry()
+    deferred = register_search_tool(registry)
+
+    ids = {cap.id for cap in registry.list_all()}
+    assert "tool_search" in ids
+    assert "call_deferred_tool" in ids
+    # Returned deferred registry is the one both tools are bound to.
+    assert isinstance(deferred, DeferredToolRegistry)
 
 
 # ---------------------------------------------------------------------------
