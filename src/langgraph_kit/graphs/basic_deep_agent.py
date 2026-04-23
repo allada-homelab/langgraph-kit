@@ -20,7 +20,7 @@ from __future__ import annotations
 from typing import Any
 
 from langgraph_kit.graphs._basic_prompt import BASIC_SYSTEM_PROMPT
-from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT
+from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT, bind_kit_defaults
 from langgraph_kit.llm import build_llm
 
 
@@ -51,4 +51,4 @@ def build_basic_deep_agent(
         store=store,
         name="basic-deep-agent",
     )
-    return graph.with_config({"recursion_limit": recursion_limit})
+    return bind_kit_defaults(graph, recursion_limit=recursion_limit)

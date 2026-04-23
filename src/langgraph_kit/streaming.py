@@ -93,8 +93,25 @@ async def stream_agent_events(
         accumulated = ""
         yielded_up_to = 0
 
+        # Defense-in-depth: pre-merge any config bound to the graph via
+        # ``with_config`` so values like ``recursion_limit`` survive the
+        # ``astream_events`` codepath. Graphs built via the kit's builders
+        # already patch ``astream_events`` (see ``bind_kit_defaults``), but
+        # this helper accepts arbitrary user-supplied graphs too. The
+        # caller's config still wins because langgraph's ensure_config
+        # applies configs in order with later entries overriding earlier.
+        bound_config = getattr(graph, "config", None)
+        if bound_config:
+            from langgraph._internal._config import (  # pyright: ignore[reportMissingImports]
+                ensure_config as _lg_ensure_config,
+            )
+
+            effective_config: Any = _lg_ensure_config(bound_config, config)  # pyright: ignore[reportArgumentType]
+        else:
+            effective_config = config
+
         async for event in graph.astream_events(
-            input_data, config=config, version="v2"
+            input_data, config=effective_config, version="v2"
         ):
             # Drop events from kit-internal LLM calls (memory extraction,
             # consolidation, context compaction, routing). Without this

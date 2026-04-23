@@ -73,6 +73,49 @@ logger = logging.getLogger(__name__)
 DEFAULT_RECURSION_LIMIT: int = 100
 
 
+def bind_kit_defaults(graph: Any, *, recursion_limit: int) -> Any:
+    """Bind kit defaults to a compiled graph such that they survive ``astream_events``.
+
+    ``CompiledStateGraph.with_config({"recursion_limit": N})`` is honored by
+    ``ainvoke`` and ``astream`` — those paths run their own
+    ``ensure_config(self.config, config)`` inside ``Pregel.astream``. It is
+    **not** honored by ``astream_events``: that call goes through
+    ``Runnable.astream_events`` →
+    ``langchain_core.tracers.event_stream._astream_events_implementation_v2``,
+    which calls ``langchain_core.runnables.config.ensure_config(config)`` and
+    materializes a default ``recursion_limit=25`` into the dict before
+    dispatching to ``Pregel.astream``. Pregel's own merge then treats the 25
+    as an explicit caller value and clobbers the bound default.
+
+    We work around it by pre-merging ``self.config`` into the caller's config
+    on ``astream_events``, so the bound ``recursion_limit`` is already present
+    and non-default by the time ``langchain_core.ensure_config`` fills in
+    defaults. Caller-supplied ``config`` entries still win — the langgraph
+    variadic ``ensure_config`` applies configs in order with later values
+    overriding earlier ones.
+
+    The patch is installed as an instance attribute. ``CompiledStateGraph``
+    does not define ``__slots__ = ()``, so this takes precedence over the
+    ``Runnable.astream_events`` inherited from the class.
+    """
+    from langgraph._internal._config import (  # pyright: ignore[reportMissingImports]
+        ensure_config as _lg_ensure_config,
+    )
+
+    graph = graph.with_config({"recursion_limit": recursion_limit})
+    _orig_astream_events = graph.astream_events
+
+    async def _astream_events_with_bound_defaults(
+        input_: Any, config: Any = None, **kwargs: Any
+    ) -> Any:
+        merged = _lg_ensure_config(graph.config, config)
+        async for event in _orig_astream_events(input_, config=merged, **kwargs):
+            yield event
+
+    graph.astream_events = _astream_events_with_bound_defaults
+    return graph
+
+
 def _coerce_plugin_registry(
     plugins: PluginRegistry | list[PluginContribution] | None,
 ) -> PluginRegistry | None:
@@ -316,9 +359,9 @@ def build_deep_agent(
         backend=build_backend_factory(agent_name),
         name=agent_name,
     )
-    # Bind the default recursion_limit (see DEFAULT_RECURSION_LIMIT). This
-    # returns a new CompiledStateGraph with the config merged — Pregel-specific
-    # methods like ``aget_state`` are preserved. Runtime config passed to
-    # ``invoke``/``ainvoke``/``astream_events`` overrides this default.
-    graph = graph.with_config({"recursion_limit": recursion_limit})
+    # Bind the default recursion_limit (see DEFAULT_RECURSION_LIMIT). Uses
+    # ``bind_kit_defaults`` rather than a bare ``with_config`` so the bound
+    # default survives the ``astream_events`` codepath — see that helper's
+    # docstring for the langchain_core/langgraph config-merge interaction.
+    graph = bind_kit_defaults(graph, recursion_limit=recursion_limit)
     return graph, command_dispatcher

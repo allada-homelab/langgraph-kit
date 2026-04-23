@@ -139,3 +139,13 @@ def test_default_recursion_limit_is_100() -> None:
     that lowers it needs to be deliberate.
     """
     assert DEFAULT_RECURSION_LIMIT == 100
+
+
+# Note: tight regression coverage for the ``astream_events`` codepath —
+# where build-time ``recursion_limit`` bindings were silently clobbered to
+# 25 by langchain-core's default-materializing ``ensure_config`` — lives in
+# ``tests/test_bind_kit_defaults.py``. Those tests observe the runtime
+# config directly from inside the graph, which is a tighter signal than
+# whether a full deep-agent run raises ``GraphRecursionError`` (the
+# middleware stack's superstep budget makes raise/doesn't-raise a flaky
+# discriminator for values near 25).
