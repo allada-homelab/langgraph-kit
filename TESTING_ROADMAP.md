@@ -1,6 +1,6 @@
 # Testing Roadmap
 
-**Status as of 2026-04-23:** Phase 3.2 (middleware ordering e2e) complete — one scenario asserting save_memory → persistence → stop_hook ordering. Full suite: 405 passing. Next action: Phase 3.3 — `tests/e2e/test_commands_e2e.py` (`/compact` short-circuit).
+**Status as of 2026-04-23:** Phase 3 (MVP flagship scenarios) complete — 6 new e2e scenarios across 4 files, plus the `ToolLoopGuardMiddleware` fix that fell out of Phase 3.1 and 2 new unit tests guarding the concurrent-task shape. Full suite: 407 passing (397 baseline + 2 loop guard unit tests + 1 bind_tools unit test + 1 smoke test + 6 flagship scenarios). Next action: Phase 4 — seed `tests/e2e/FEATURE_INVENTORY.md` and start Cluster A (Tool system).
 
 ## Goal
 
@@ -69,11 +69,11 @@ Four files, six tests total. Depth over breadth — each test catches a distinct
   - [x] **Bug surfaced:** `ToolLoopGuardMiddleware` kept its streak counter in a `ContextVar[dict]` set via `.set(new_dict)`, which is copy-on-write per asyncio task. LangGraph schedules each tool call as its own task, so every call saw `count=1` and the guard never fired under real execution. Unit tests missed this because they ran every call in a single coroutine. Fixed by keying on `thread_id` via a module-level dict (extracted from `runtime.execution_info.thread_id` in `abefore_agent`/`aafter_agent` and `request.runtime.config["configurable"]["thread_id"]` in `awrap_tool_call`). Added two unit tests (`test_streak_persists_across_sibling_asyncio_tasks`, `test_streak_isolated_between_concurrent_runs`) to guard against regressions of this class.
 - [x] `tests/e2e/test_middleware_ordering_e2e.py`
   - [x] `test_save_memory_tool_persists_before_stop_hook_runs` — asserts tool-call persistence + stop-hook ordering: save_memory tool actually reaches MockStore, AND the stop hook's captured state contains the save_memory ToolMessage (i.e. hook ran after tool execution) — stop hook captures `state`; LLM scripted to `save_memory` then answer; assert memory is in `MockStore` AND hook saw the post-extraction state
-- [ ] `tests/e2e/test_commands_e2e.py`
-  - [ ] `test_slash_compact_short_circuits_llm` — `RecordedChatModel` with zero interactions (raises if called); user input `/compact`; assert no `ReplayMismatchError` (LLM never called), compact output returned, `jump_to: "end"` worked
-- [ ] `tests/e2e/test_plugins_e2e.py`
-  - [ ] `test_plugin_tool_and_section_reach_running_graph` — `PluginContribution` with one tool (`ping() -> "pong"`) and one section (`"TESTPLUGIN_MARKER"`); build agent; script LLM to call `ping()`; assert section in prompt, tool executed, `extensions` condition auto-activated
-- [ ] **Regression guard verification:** revert commit `1383151` locally; `uv run pytest tests/e2e/test_deferred_tools_e2e.py` fails on `test_empty_deferred_registry_does_not_push_llm_toward_tool_search`; restore; passes. This proves the layer catches the class of bug it was built for.
+- [x] `tests/e2e/test_commands_e2e.py`
+  - [x] `test_slash_compact_short_circuits_without_calling_llm` — zero-interaction scripted LLM; user input `/compact`; assert no `ReplayMismatchError` (LLM never called), dispatcher output reached state as an `AIMessage`. Guards the CommandMiddleware double-response bug from 0e21c21.
+- [x] `tests/e2e/test_plugins_e2e.py`
+  - [x] `test_plugin_tool_and_section_reach_running_graph` — `PluginContribution` with one tool (`ping() -> "pong-from-plugin"`) and one section (distinctive marker). Uses `capturing_scripted_llm` to inspect the system prompt the LLM received. Asserts (1) plugin section content reached the prompt, (2) `extensions` condition auto-activated, (3) plugin tool actually executed and returned its marker output. Surfaced: plugin tools' LLM-facing name is derived from `fn.__name__`, not `ToolCapability.name` — so plugin contributors need to name their function to match the intended tool name.
+- [ ] **Regression guard verification:** revert commit `1383151` locally; `uv run pytest tests/e2e/test_deferred_tools_e2e.py` fails on `test_empty_deferred_registry_does_not_push_llm_toward_tool_search`; restore; passes. This proves the layer catches the class of bug it was built for. *(deferred — optional, can be done any time.)*
 
 ### Phase 4 — exhaustive feature audit + near-full coverage
 
