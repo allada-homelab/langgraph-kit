@@ -20,6 +20,7 @@ from __future__ import annotations
 import importlib.util
 import sys
 from typing import TYPE_CHECKING, Any
+from unittest.mock import patch
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -44,6 +45,57 @@ def _import_module_from_path(name: str, path: Path) -> Any:
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def test_cli_main_new_invokes_generator(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """``python -m langgraph_kit.cli new <name>`` runs end-to-end.
+
+    Exercises the argparse entry point (``main()``) that users hit
+    from the shell. Guards against the subparser being renamed or the
+    ``--output-dir`` flag regressing.
+    """
+    from langgraph_kit import cli as cli_mod
+
+    argv = ["langgraph-kit", "new", "main-smoke", "--output-dir", str(tmp_path)]
+    with patch.object(sys, "argv", argv):
+        cli_mod.main()
+
+    output = capsys.readouterr().out
+    assert "Generated agent:" in output, (
+        f"CLI ``new`` should print 'Generated agent:'; got {output!r}"
+    )
+    assert (tmp_path / "main_smoke.py").exists(), (
+        "CLI ``new`` should write <fn_name>.py to the output dir"
+    )
+
+
+def test_cli_main_list_enumerates_templates(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """``python -m langgraph_kit.cli list`` runs and prints the template catalog."""
+    from langgraph_kit import cli as cli_mod
+
+    with patch.object(sys, "argv", ["langgraph-kit", "list"]):
+        cli_mod.main()
+
+    output = capsys.readouterr().out
+    assert "Available templates" in output
+    assert "default" in output
+
+
+def test_cli_main_no_args_prints_help(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Invoked with no subcommand, ``main()`` falls through to ``print_help``."""
+    from langgraph_kit import cli as cli_mod
+
+    with patch.object(sys, "argv", ["langgraph-kit"]):
+        cli_mod.main()
+
+    output = capsys.readouterr().out
+    assert "usage:" in output.lower()
 
 
 def test_cli_scaffolder_produces_an_importable_file(tmp_path: Path) -> None:
@@ -78,8 +130,6 @@ async def test_scaffolded_build_function_returns_a_working_graph(
     (tool registration, middleware stack, prompt composition), the
     scaffolded agent won't even reach the LLM and the smoke test dies.
     """
-    from unittest.mock import patch
-
     out = _generate_agent("smoke-scaffolded", output_dir=tmp_path)
     module = _import_module_from_path("_smoke_scaffolded", out)
 

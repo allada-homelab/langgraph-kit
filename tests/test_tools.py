@@ -203,3 +203,43 @@ class TestToolRegistry:
         registry.register(_make_capability(tool_id="x"))
         registry.remove("x")
         assert registry.get("x") is None
+
+    def test_empty_registry_compile_tools_returns_empty_list(self) -> None:
+        """An empty registry must not raise when ``compile_tools`` is called.
+
+        The kit's default-build path relies on ``compile_tools()`` being
+        safe to call even if the caller never registered anything — a
+        surface assertion because deepagents' ``create_agent`` accepts
+        an empty tool list but would reject ``None``.
+        """
+        registry = ToolRegistry()
+        tools = registry.compile_tools()
+        assert tools == []
+
+    def test_empty_registry_filter_returns_empty_list(self) -> None:
+        """``filter`` with any combination on an empty registry returns an empty list."""
+        registry = ToolRegistry()
+        assert registry.filter() == []
+        assert registry.filter(tags={"io"}) == []
+        assert registry.filter(max_risk=ToolRisk.READ_ONLY) == []
+
+    def test_register_upserts_on_id_collision(self) -> None:
+        """Registering a second capability with the same id replaces the first.
+
+        The builder relies on this for the "caller's ``configure_tools``
+        wins over plugin defaults on id collisions" contract. Asserting
+        it directly at the registry level guards against a future
+        refactor changing semantics to "first wins" or "raise on
+        collision".
+        """
+        registry = ToolRegistry()
+        registry.register(_make_capability(tool_id="x", name="first"))
+        registry.register(_make_capability(tool_id="x", name="second"))
+
+        caps = registry.list_all()
+        assert len(caps) == 1, (
+            f"id collision should upsert, not append; got {[c.name for c in caps]}"
+        )
+        assert caps[0].name == "second", (
+            "Second registration should win (upsert semantics)"
+        )

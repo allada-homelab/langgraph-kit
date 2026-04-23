@@ -150,6 +150,109 @@ async def test_status_returns_a_summary(
 
 
 @pytest.mark.asyncio
+async def test_tools_command_filters_by_tag(
+    checkpointer: Any, e2e_store: Any, patched_build_llm: Any
+) -> None:
+    """``/tools <tag>`` narrows the listing to tools matching the tag."""
+    msg = await _run_command(
+        checkpointer, e2e_store, patched_build_llm,
+        command="/tools memory",
+        thread_id="cmd-tools-tag",
+    )
+    content = str(msg.content)
+    # Every memory tool carries the "memory" tag; the listing should be
+    # non-empty and not mention tools from other groups.
+    assert "save_memory" in content
+    assert "tool_search" not in content
+
+
+@pytest.mark.asyncio
+async def test_tools_command_with_unknown_tag_returns_empty_listing(
+    checkpointer: Any, e2e_store: Any, patched_build_llm: Any
+) -> None:
+    """A tag nothing matches returns a 0-count header, not a crash."""
+    msg = await _run_command(
+        checkpointer, e2e_store, patched_build_llm,
+        command="/tools nonexistent-tag-8f3a",
+        thread_id="cmd-tools-notag",
+    )
+    content = str(msg.content)
+    assert "Registered Tools (0)" in content
+
+
+@pytest.mark.asyncio
+async def test_memory_command_lists_populated_store(
+    checkpointer: Any, e2e_store: Any, patched_build_llm: Any
+) -> None:
+    """``/memory`` on a populated store enumerates the records."""
+    from langgraph_kit.core.memory.models import (
+        MemoryRecord,
+        MemoryScope,
+        MemoryType,
+    )
+    from langgraph_kit.core.memory.persistent import PersistentMemoryManager
+
+    mgr = PersistentMemoryManager(e2e_store)
+    await mgr.create(
+        MemoryRecord(
+            title="remembered fact",
+            type=MemoryType.USER,
+            scope=MemoryScope.USER,
+            summary="s",
+            body="b",
+        )
+    )
+    msg = await _run_command(
+        checkpointer, e2e_store, patched_build_llm,
+        command="/memory",
+        thread_id="cmd-memory-pop",
+    )
+    assert "remembered fact" in str(msg.content)
+
+
+@pytest.mark.asyncio
+async def test_compact_command_on_small_state_reports_no_compaction(
+    checkpointer: Any, e2e_store: Any, patched_build_llm: Any
+) -> None:
+    """``/compact`` on a small context reports 'No compaction needed'."""
+    msg = await _run_command(
+        checkpointer, e2e_store, patched_build_llm,
+        command="/compact",
+        thread_id="cmd-compact-small",
+    )
+    content = str(msg.content)
+    assert "No compaction needed" in content
+
+
+@pytest.mark.asyncio
+async def test_context_command_reports_window_pressure(
+    checkpointer: Any, e2e_store: Any, patched_build_llm: Any
+) -> None:
+    """``/context`` dispatches through to ``PressureMonitor.assess`` and
+    surfaces the token / window / pressure fields in its output.
+
+    Regression guard for the command ↔ monitor wiring: if a future
+    refactor moves the pressure-monitor reference or changes its
+    reported field shape, the ``/context`` handler silently produces a
+    wrong (or empty) summary. Asserting on the structured keys here
+    pins the contract.
+    """
+    msg = await _run_command(
+        checkpointer, e2e_store, patched_build_llm,
+        command="/context",
+        thread_id="cmd-context",
+    )
+    content = str(msg.content)
+    assert "Context Window Status" in content, (
+        f"/context output should include the 'Context Window Status'"
+        f" header; got {content!r}"
+    )
+    assert "Estimated tokens" in content, "Expected 'Estimated tokens' row"
+    assert "Window limit" in content, "Expected 'Window limit' row"
+    assert "Pressure" in content, "Expected 'Pressure' row"
+
+
+@pytest.mark.asyncio
 async def test_unknown_command_falls_through_to_llm(
     checkpointer: Any, e2e_store: Any, patched_build_llm: Any
 ) -> None:

@@ -124,3 +124,113 @@ def test_build_aggregated_card_includes_registered_agent(
     assert registered_echo_agent in skill_ids, (
         f"Aggregated card should surface registered agents; skills: {skill_ids}"
     )
+
+
+def test_a2a_router_well_known_route_serves_aggregated_card(
+    registered_echo_agent: str,
+) -> None:
+    """``GET /.well-known/agent.json`` returns the aggregated card via the router."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from langgraph_kit.contrib.a2a import create_a2a_router
+
+    app = FastAPI()
+    app.include_router(create_a2a_router())
+    client = TestClient(app)
+
+    response = client.get("/.well-known/agent.json")
+    assert response.status_code == 200, response.text
+    card = response.json()
+    skill_ids = [s["id"] for s in card.get("skills", [])]
+    assert registered_echo_agent in skill_ids, (
+        f"A2A well-known card should list registered agent;"
+        f" got skills {skill_ids}"
+    )
+
+
+def test_a2a_invoke_route_handles_simple_content_format(
+    registered_echo_agent: str,
+) -> None:
+    """``POST /a2a/{id}`` with ``{"content": "..."}`` invokes and returns a Task."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from langgraph_kit.contrib.a2a import create_a2a_router
+
+    app = FastAPI()
+    app.include_router(create_a2a_router())
+    client = TestClient(app)
+
+    response = client.post(
+        f"/a2a/{registered_echo_agent}",
+        json={"content": "hello via route"},
+    )
+    assert response.status_code == 200, response.text
+    task = response.json()
+    assert task["status"]["state"] == "completed"
+    artifacts = task.get("artifacts", [])
+    assert artifacts, "A2A route should return at least one artifact"
+
+
+def test_a2a_invoke_route_rejects_body_without_text_content(
+    registered_echo_agent: str,
+) -> None:
+    """Body with no text parts → 400 rather than crashing downstream."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from langgraph_kit.contrib.a2a import create_a2a_router
+
+    app = FastAPI()
+    app.include_router(create_a2a_router())
+    client = TestClient(app)
+
+    response = client.post(f"/a2a/{registered_echo_agent}", json={})
+    assert response.status_code == 400, response.text
+
+
+def test_a2a_invoke_route_returns_404_for_unregistered_agent() -> None:
+    """Unregistered agent id → 404."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from langgraph_kit.contrib.a2a import create_a2a_router
+
+    app = FastAPI()
+    app.include_router(create_a2a_router())
+    client = TestClient(app)
+
+    response = client.post(
+        "/a2a/nonexistent-agent",
+        json={"content": "hi"},
+    )
+    assert response.status_code == 404, response.text
+
+
+def test_a2a_invoke_route_handles_jsonrpc_message_parts(
+    registered_echo_agent: str,
+) -> None:
+    """``{"params": {"message": {"parts": [{"kind": "text", ...}]}}}`` shape works."""
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from langgraph_kit.contrib.a2a import create_a2a_router
+
+    app = FastAPI()
+    app.include_router(create_a2a_router())
+    client = TestClient(app)
+
+    response = client.post(
+        f"/a2a/{registered_echo_agent}",
+        json={
+            "params": {
+                "message": {
+                    "parts": [{"kind": "text", "text": "jsonrpc hello"}],
+                }
+            }
+        },
+    )
+    assert response.status_code == 200, response.text
+    task = response.json()
+    assert task["status"]["state"] == "completed"

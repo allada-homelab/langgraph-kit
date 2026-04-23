@@ -7,6 +7,28 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Phase 4 testing complete — 90.55% line coverage, 765 tests passing.**
+  Grew the test suite from a 442-test / ~72%-coverage baseline to 765
+  tests / 90.55% coverage across 23 new module-level coverage files and
+  7 new e2e scenario files. New module-level coverage: evals
+  (`rule_based`, `model_graded`, `report`, `runner`), AG-UI streaming +
+  encoder, MCP server + client manager (with mocked MCP modules), git
+  worktree tools, async task manager, replay runner + extract helpers,
+  observability Langfuse gate, persistence URL normalization + both
+  connection branches, plugin loader, LLM factory provider routing,
+  cost callback token accumulation, tracing storage CRUD, shared memory
+  publish/sync + secret scanning, consolidation action application,
+  agent memory manager CRUD. New e2e coverage: `search_memories` tool
+  variants, deferred-tool argument-validation edges, prompt-composer
+  STABLE/VOLATILE priority + provider-failure isolation, tool-error
+  retry semantics (retryable `TimeoutError` vs non-retryable
+  `ValueError` observed in message stream), streaming-mode
+  `build_deep_agent`, `register_all` agent registration, and
+  `skills`/`async_tasks`/`extensions` ACTIVATION_SECTIONS invariants.
+  Regression guard verified — reverting the `deferred_tools` gating fix
+  causes the dedicated e2e tests to fail; restoring it returns them to
+  green.
+
 - **`RecordedChatModel.bind_tools` override.** The replay model
   subclasses `BaseChatModel`, and `BaseChatModel.bind_tools` raises
   `NotImplementedError` by default. `create_agent` and any LangChain
@@ -43,6 +65,20 @@ All notable changes to this project are documented here. This project adheres to
   and `tests/e2e/FEATURE_INVENTORY.md`.
 
 ### Fixed
+
+- **`a2a.py` `Request` import moved to module scope.** FastAPI's
+  route-signature type-hint resolver runs against module globals, not
+  the enclosing function's closure. With `from __future__ import
+  annotations` in effect (so all annotations are stringified), a
+  `from fastapi import Request` scoped inside `create_a2a_router()`
+  left `Request` invisible to FastAPI at route-binding time. FastAPI
+  silently fell back to treating `request: Request` route parameters
+  as query params, and every A2A endpoint then 422'd at call time on
+  any real request. The import now lives at module scope with a
+  comment documenting why it must stay there and a `# noqa: TC002`
+  because basedpyright would otherwise suggest moving it into
+  `TYPE_CHECKING`. Surfaced by the new `test_a2a_e2e.py` scenarios
+  that actually invoke the routes via `TestClient`.
 
 - **`approve_action` parameter `args` renamed to `action_args`.**
   LangChain's `StructuredTool` reserves the name `args` on its

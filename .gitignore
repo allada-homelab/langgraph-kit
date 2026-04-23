@@ -212,3 +212,6 @@ __marimo__/
 
 .remember/
 .improver/
+
+# LangGraph checkpoints
+checkpoints.db

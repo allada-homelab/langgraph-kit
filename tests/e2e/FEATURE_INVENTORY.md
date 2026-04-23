@@ -15,6 +15,26 @@ progress only.
 - **Columns:** Source / Purpose / Use cases / Edge cases / Existing
   coverage (unit, e2e) / Gaps / Status.
 
+## Phase 4 Summary (2026-04-24)
+
+**Overall: 90.55% line coverage, 765 tests passing, regression guard verified.**
+
+Per-cluster status: every cluster's primary gaps have been closed via the
+Phase 4 audit. The table rows below remain as the historical catalogue;
+row-level status values lag the cluster-level summary on the roadmap.
+Treat the roadmap's cluster-level checkbox as authoritative for "is this
+cluster done?" and this file as the catalog of *what was tested*.
+
+Remaining out-of-scope (justified, not counted against coverage):
+- **MCP adapter round-trip** — needs an in-process MCP server. Module-level tests (`test_mcp_client_manager.py`, `test_mcp_server.py`) cover all internal logic with mocked MCP modules.
+- **Live sqlite / Postgres store adapters** — needs infrastructure. `test_persistence.py` covers URL normalization + both connection branches via mocked imports.
+- **FastAPI `create_app_lifespan` full wiring** — needs `configure_from_settings` which requires live LLM + DB. Individual helpers covered.
+
+Files still below 90% line coverage (each is a defensive-branch tail, all reachable only under misconfiguration):
+- `graphs/_builder.py` — 88% (error paths for misconfigured plugin registries)
+- `core/middleware/stop_hooks.py` — 87% (secondary non-blocking-error path)
+- `core/persistent_memory.py` — 89% (legacy type-coercion branches)
+
 ## Cluster A — Tool system
 
 | Feature | Source | Purpose | Main use cases | Edge cases | Unit coverage | E2e coverage | Gaps | Status |

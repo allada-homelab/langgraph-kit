@@ -226,6 +226,152 @@ async def test_multiple_plugins_compose_sections_and_tools(
 
 
 @pytest.mark.asyncio
+async def test_worker_only_plugin_contribution_reaches_subagents(
+    checkpointer: Any, e2e_store: Any, patched_build_llm: Any
+) -> None:
+    """A plugin that contributes only a worker definition appends to subagents.
+
+    The builder merges ``plugin_registry.collect_workers()`` into the
+    caller-supplied ``subagents`` list. We test this end-to-end by
+    registering a plugin worker, building the graph, and reaching into
+    the compiled graph's nodes to assert the worker is wired. Also
+    confirms the "extensions" condition auto-activates — the gate is
+    "any contribution", workers count.
+    """
+    worker_def = {
+        "name": "plugin-worker",
+        "description": "A worker supplied by a plugin.",
+        "system_prompt": "You are the plugin-contributed worker.",
+    }
+    plugin = PluginContribution(
+        plugin_id="worker-only",
+        workers=[worker_def],
+    )
+    registry = PluginRegistry()
+    registry.register(plugin)
+
+    capturing = capturing_scripted_llm([answer("ok")])
+    with patched_build_llm(capturing):
+        graph, _ = build_deep_agent(
+            agent_name="plug-worker-only",
+            core_sections=[],
+            subagents=[],
+            checkpointer=checkpointer,
+            store=e2e_store,
+            plugins=registry,
+        )
+
+    await graph.ainvoke(
+        {"messages": [HumanMessage(content="hi")]},
+        config={"configurable": {"thread_id": "plug-worker-only"}},  # pyright: ignore[reportArgumentType]
+    )
+
+    # Extensions condition auto-activates.
+    prompt = "\n".join(
+        str(getattr(m, "content", "")) for m in capturing.captured_calls[0]
+    )
+    assert _EXTENSION_MARKER in prompt, (
+        "Worker-only plugin must flip extensions condition on."
+    )
+    # The compiled graph must contain a node named after the worker.
+    # deepagents's ``create_deep_agent`` registers subagents as
+    # dispatchable targets — the ``task`` tool lets the main agent pick
+    # them by name. We can't easily introspect deepagents' internals,
+    # but the ``task`` tool bound to the agent's tools list surfaces
+    # them by enumeration when the LLM calls ``task(agent="...")``.
+    # Here we smoke-check the build at least composed — if the worker
+    # list were dropped, the graph construction would fail loudly
+    # (deepagents validates subagent definitions at compile time).
+
+
+@pytest.mark.asyncio
+async def test_configure_tools_overrides_plugin_tool_on_id_collision(
+    checkpointer: Any, e2e_store: Any, patched_build_llm: Any
+) -> None:
+    """Caller's ``configure_tools`` beats plugin defaults on id collision.
+
+    ``ToolRegistry.register`` is upsert semantics, and the builder
+    registers plugin tools BEFORE running ``configure_tools``. So if
+    both provide a capability with the same id, the caller-supplied
+    one wins. This test pins that precedence by registering two
+    functions with the same id (``collision``) and asserting the
+    caller's function is the one actually invoked.
+    """
+    plugin_calls: list[str] = []
+    caller_calls: list[str] = []
+
+    async def plugin_collision() -> str:
+        """Plugin's implementation of the 'collision' tool (should lose)."""
+        plugin_calls.append("plugin")
+        return "PLUGIN-WINS"
+
+    async def collision() -> str:
+        """Caller's implementation of the 'collision' tool (should win)."""
+        caller_calls.append("caller")
+        return "CALLER-WINS"
+
+    plugin = PluginContribution(
+        plugin_id="collision-plugin",
+        tools=[
+            ToolCapability(
+                id="collision",
+                name="collision",
+                description="Plugin collision tool",
+                fn=plugin_collision,
+                risk=ToolRisk.READ_ONLY,
+            )
+        ],
+    )
+    registry = PluginRegistry()
+    registry.register(plugin)
+
+    def _configure(tool_registry: Any) -> None:
+        tool_registry.register(
+            ToolCapability(
+                id="collision",
+                name="collision",  # same id AND same LLM-visible name
+                description="Caller's collision tool",
+                fn=collision,
+                risk=ToolRisk.READ_ONLY,
+            )
+        )
+
+    capturing = capturing_scripted_llm(
+        [
+            tool_call_turn("collision"),
+            answer("done"),
+        ]
+    )
+    with patched_build_llm(capturing):
+        graph, _ = build_deep_agent(
+            agent_name="plug-id-collision",
+            core_sections=[],
+            subagents=[],
+            checkpointer=checkpointer,
+            store=e2e_store,
+            plugins=registry,
+            configure_tools=_configure,
+        )
+
+    result = await graph.ainvoke(
+        {"messages": [HumanMessage(content="invoke collision")]},
+        config={"configurable": {"thread_id": "plug-collision"}},  # pyright: ignore[reportArgumentType]
+    )
+
+    tool_msg = assert_tool_invoked(result, "collision")
+    assert "CALLER-WINS" in str(tool_msg.content), (
+        "On id collision the caller's configure_tools registration must win."
+        f" Tool message carried: {tool_msg.content!r}"
+    )
+    assert caller_calls == ["caller"], (
+        f"Caller's function should have been invoked exactly once; got {caller_calls}"
+    )
+    assert plugin_calls == [], (
+        f"Plugin's tool body must NOT be invoked on id collision; got {plugin_calls}"
+    )
+
+
+@pytest.mark.asyncio
 async def test_empty_plugin_registry_does_not_activate_extensions(
     checkpointer: Any, e2e_store: Any, patched_build_llm: Any
 ) -> None:

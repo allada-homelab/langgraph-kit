@@ -14,6 +14,16 @@ import logging
 from typing import Any
 from uuid import uuid4
 
+# FastAPI's route-signature type-hint resolver runs against module globals,
+# not the ``create_a2a_router`` function closure — with
+# ``from __future__ import annotations`` all annotations are stringified,
+# so ``Request`` MUST be importable at module scope or FastAPI misclassifies
+# ``request: Request`` parameters as query params (422 at call time). Keep
+# the top-level import here rather than moving it back inside the factory.
+from fastapi import (
+    Request,  # noqa: TC002 — FastAPI needs this at module scope for type-hint resolution (see comment above)
+)
+
 from langgraph_kit.registry import get, get_metadata, list_agents
 
 logger = logging.getLogger(__name__)
@@ -144,7 +154,7 @@ def create_a2a_router(*, get_current_user: Any = None) -> Any:  # noqa: ARG001
     - ``GET /.well-known/agent.json`` — aggregated Agent Card
     - ``POST /a2a/{agent_id}`` — invoke agent via A2A message
     """
-    from fastapi import APIRouter, HTTPException, Request, status
+    from fastapi import APIRouter, HTTPException, status
     from fastapi.responses import JSONResponse
 
     router = APIRouter(tags=["a2a"])
