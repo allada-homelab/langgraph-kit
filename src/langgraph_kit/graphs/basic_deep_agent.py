@@ -9,6 +9,10 @@ starting a new domain agent.
 Requires the ``deepagents`` package (included in the langgraph
 dependency group). If not installed, this agent is skipped
 during registration.
+
+The built graph is bound to :data:`~langgraph_kit.graphs._builder.DEFAULT_RECURSION_LIMIT`
+(100). Override with ``recursion_limit=<n>`` here or
+``config={"recursion_limit": <n>}`` at invoke time.
 """
 
 from __future__ import annotations
@@ -16,19 +20,35 @@ from __future__ import annotations
 from typing import Any
 
 from langgraph_kit.graphs._basic_prompt import BASIC_SYSTEM_PROMPT
+from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT
 from langgraph_kit.llm import build_llm
 
 
-def build_basic_deep_agent(checkpointer: Any, store: Any) -> Any:
-    """Build and compile a basic deep agent graph."""
+def build_basic_deep_agent(
+    checkpointer: Any,
+    store: Any,
+    *,
+    recursion_limit: int = DEFAULT_RECURSION_LIMIT,
+) -> Any:
+    """Build and compile a basic deep agent graph.
+
+    Parameters
+    ----------
+    recursion_limit:
+        Default LangGraph recursion limit bound to the compiled graph.
+        Defaults to :data:`DEFAULT_RECURSION_LIMIT` (100). Pass a higher
+        value for long-running runs, or override per-invocation via
+        ``config={"recursion_limit": N}``.
+    """
     from deepagents import (
         create_deep_agent,  # pyright: ignore[reportMissingModuleSource]
     )
 
-    return create_deep_agent(
+    graph = create_deep_agent(
         model=build_llm(),
         system_prompt=BASIC_SYSTEM_PROMPT,
         checkpointer=checkpointer,
         store=store,
         name="basic-deep-agent",
     )
+    return graph.with_config({"recursion_limit": recursion_limit})

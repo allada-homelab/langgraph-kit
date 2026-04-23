@@ -461,6 +461,9 @@ def test_build_coding_agent_returns_graph(mock_store: Any) -> None:
 
     checkpointer = MagicMock()
     fake_graph = MagicMock(name="compiled_graph")
+    # `with_config` returns itself so the identity check below continues to work;
+    # real `CompiledStateGraph.with_config` returns a new graph with merged config.
+    fake_graph.with_config.return_value = fake_graph
     deepagents_mod = MagicMock()
     deepagents_mod.create_deep_agent.return_value = fake_graph
     fake_llm = MagicMock(name="fake_llm")
@@ -484,6 +487,7 @@ def test_build_coding_agent_returns_graph(mock_store: Any) -> None:
 
     assert graph is fake_graph
     deepagents_mod.create_deep_agent.assert_called_once()
+    fake_graph.with_config.assert_called_once_with({"recursion_limit": 100})
 
     # Verify it was called with coding-specific args
     call_kwargs = deepagents_mod.create_deep_agent.call_args

@@ -21,17 +21,25 @@ Uses `create_deep_agent()` from the deepagents package, which provides:
 from deepagents import create_deep_agent
 from langgraph_kit import build_llm
 from langgraph_kit.graphs._basic_prompt import BASIC_SYSTEM_PROMPT
+from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT
 
 
-def build_basic_deep_agent(checkpointer, store):
-    return create_deep_agent(
+def build_basic_deep_agent(
+    checkpointer, store, *, recursion_limit=DEFAULT_RECURSION_LIMIT
+):
+    graph = create_deep_agent(
         model=build_llm(),
         system_prompt=BASIC_SYSTEM_PROMPT,
         checkpointer=checkpointer,
         store=store,
         name="basic-deep-agent",
     )
+    return graph.with_config({"recursion_limit": recursion_limit})
 ```
+
+## Recursion Limit
+
+Defaults to `DEFAULT_RECURSION_LIMIT` (100). Override at build time with `recursion_limit=500`, or per-invocation with `config={"recursion_limit": 500}`. See the [agents overview](overview.md#recursion-limit) for details.
 
 ## Features
 

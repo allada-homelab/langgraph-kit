@@ -64,12 +64,22 @@ See [Workers](../orchestration/workers.md) for full definitions.
 ## Build Function
 
 ```python
-def build_coding_agent(checkpointer, store, mcp_tools=None):
+def build_coding_agent(
+    checkpointer,
+    store,
+    *,
+    mcp_tools=None,
+    recursion_limit=DEFAULT_RECURSION_LIMIT,  # 100
+):
     """Build the coding agent with reference-agent infrastructure + coding overlays.
 
     Returns: (compiled_graph, command_dispatcher)
     """
 ```
+
+## Recursion Limit
+
+Defaults to `DEFAULT_RECURSION_LIMIT` (100). Coding tasks that span many workers, tool calls, and worktree operations can bump into this quickly — raise it for long autonomous runs via `recursion_limit=<n>` at build time, or `config={"recursion_limit": <n>}` per invocation. See the [agents overview](overview.md#recursion-limit) for details.
 
 ## When to Use
 

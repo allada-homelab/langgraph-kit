@@ -24,7 +24,7 @@ from langgraph_kit.core.tools.worktree import (
     WORKTREE_GUIDANCE_SECTION,
     build_worktree_tools,
 )
-from langgraph_kit.graphs._builder import build_deep_agent
+from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT, build_deep_agent
 from langgraph_kit.graphs.reference_deep_agent import _CORE_SECTIONS
 
 
@@ -42,9 +42,18 @@ def _register_worktree_tools(registry: ToolRegistry) -> None:
 
 
 def build_coding_agent(
-    checkpointer: Any, store: Any, *, mcp_tools: list[Any] | None = None
+    checkpointer: Any,
+    store: Any,
+    *,
+    mcp_tools: list[Any] | None = None,
+    recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> Any:
-    """Build the coding agent by layering coding-profile overlays onto the reference skeleton."""
+    """Build the coding agent by layering coding-profile overlays onto the reference skeleton.
+
+    ``recursion_limit`` defaults to :data:`DEFAULT_RECURSION_LIMIT` (100);
+    pass a higher value for long autonomous runs, or override at invoke
+    time with ``config={"recursion_limit": N}``.
+    """
     return build_deep_agent(
         agent_name="coding-agent",
         core_sections=_CORE_SECTIONS,
@@ -59,4 +68,5 @@ def build_coding_agent(
         ],
         extra_providers=[GitContextProvider()],
         configure_tools=_register_worktree_tools,
+        recursion_limit=recursion_limit,
     )

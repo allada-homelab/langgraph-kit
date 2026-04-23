@@ -47,6 +47,8 @@ from langgraph_kit.graphs.reference_deep_agent import build_reference_deep_agent
 graph, dispatcher = build_reference_deep_agent(checkpointer, store, mcp_tools=[])
 ```
 
+> **⚠️ Recursion limit defaults to `100`** — not LangGraph's native `25`. A full-stack deep agent easily burns through 25 supersteps on a single real task (middleware passes, worker round-trips, tool loops), so every deep agent built by this kit binds `recursion_limit=100` via `.with_config()`. Raise it for long autonomous runs — pass `recursion_limit=500` to any `build_*_deep_agent` / `build_coding_agent` call, or override per-run with `config={"recursion_limit": 500}` on `ainvoke` / `astream_events`. The constant lives at [`langgraph_kit.graphs.DEFAULT_RECURSION_LIMIT`](src/langgraph_kit/graphs/_builder.py).
+
 ### What's wired in
 
 **Layered prompt assembly** — five core sections registered at build time:

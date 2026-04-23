@@ -17,7 +17,7 @@ from langgraph_kit.core.prompt_assembly.sections import (
     PromptSection,
     SectionStability,
 )
-from langgraph_kit.graphs._builder import build_deep_agent
+from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT, build_deep_agent
 
 # ---------------------------------------------------------------------------
 # Prompt sections — stable core + volatile context
@@ -108,9 +108,18 @@ _CORE_SECTIONS = [
 
 
 def build_reference_deep_agent(
-    checkpointer: Any, store: Any, *, mcp_tools: list[Any] | None = None
+    checkpointer: Any,
+    store: Any,
+    *,
+    mcp_tools: list[Any] | None = None,
+    recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> Any:
-    """Build the reference deep agent with all kit features wired together."""
+    """Build the reference deep agent with all kit features wired together.
+
+    ``recursion_limit`` defaults to :data:`DEFAULT_RECURSION_LIMIT` (100);
+    pass a higher value for long autonomous runs, or override at invoke
+    time with ``config={"recursion_limit": N}``.
+    """
     return build_deep_agent(
         agent_name="reference-deep-agent",
         core_sections=_CORE_SECTIONS,
@@ -118,4 +127,5 @@ def build_reference_deep_agent(
         checkpointer=checkpointer,
         store=store,
         mcp_tools=mcp_tools,
+        recursion_limit=recursion_limit,
     )

@@ -5,6 +5,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Changed
+
+- **Deep agents now default to `recursion_limit=100`** (up from LangGraph's
+  native 25). `build_deep_agent`, `build_basic_deep_agent`,
+  `build_reference_deep_agent`, and `build_coding_agent` all bind the
+  default via `graph.with_config({"recursion_limit": 100})` so Pregel
+  supersteps spent on prompt assembly, middleware, worker round-trips,
+  and tool loops don't raise `GraphRecursionError` on realistic runs.
+  The value is exposed as
+  `langgraph_kit.graphs.DEFAULT_RECURSION_LIMIT` and can be overridden
+  per-build via a new `recursion_limit=<n>` kwarg on every deep-agent
+  builder, or per-run via `config={"recursion_limit": <n>}` on
+  `ainvoke` / `astream_events` (runtime config wins over the build-time
+  default). See the prominent call-out in `README.md`,
+  `docs/agents/overview.md`, and the individual agent pages.
+
 ## [0.9.5] — 2026-04-22
 
 ### Fixed

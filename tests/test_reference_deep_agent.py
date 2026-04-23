@@ -126,6 +126,9 @@ def test_build_reference_deep_agent_returns_graph(mock_store: Any) -> None:
     checkpointer = MagicMock()
 
     fake_graph = MagicMock(name="compiled_graph")
+    # `with_config` returns itself so the identity check below continues to work;
+    # real `CompiledStateGraph.with_config` returns a new graph with merged config.
+    fake_graph.with_config.return_value = fake_graph
     deepagents_mod = MagicMock()
     deepagents_mod.create_deep_agent.return_value = fake_graph
     fake_llm = MagicMock(name="fake_llm")
@@ -150,3 +153,38 @@ def test_build_reference_deep_agent_returns_graph(mock_store: Any) -> None:
 
     assert graph is fake_graph
     deepagents_mod.create_deep_agent.assert_called_once()
+    fake_graph.with_config.assert_called_once_with({"recursion_limit": 100})
+
+
+def test_build_reference_deep_agent_accepts_recursion_limit_override(
+    mock_store: Any,
+) -> None:
+    """Custom recursion_limit is forwarded to the compiled graph."""
+    checkpointer = MagicMock()
+
+    fake_graph = MagicMock(name="compiled_graph")
+    fake_graph.with_config.return_value = fake_graph
+    deepagents_mod = MagicMock()
+    deepagents_mod.create_deep_agent.return_value = fake_graph
+    fake_llm = MagicMock(name="fake_llm")
+
+    backends_mod = MagicMock()
+    module_patches = {
+        "deepagents": deepagents_mod,
+        "deepagents.backends": backends_mod,
+        "deepagents.backends.composite": backends_mod.composite,
+        "deepagents.backends.state": backends_mod.state,
+        "deepagents.backends.store": backends_mod.store,
+    }
+
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch("langgraph_kit.graphs._builder.build_llm", return_value=fake_llm),
+    ):
+        build_reference_deep_agent(
+            checkpointer=checkpointer,
+            store=mock_store,
+            recursion_limit=500,
+        )
+
+    fake_graph.with_config.assert_called_once_with({"recursion_limit": 500})

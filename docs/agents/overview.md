@@ -36,6 +36,26 @@ async with create_persistence() as (checkpointer, store):
 
 This calls each agent's build function and registers the resulting graph with its ID. Agents that fail to build (e.g., missing dependencies) are silently skipped.
 
+## Recursion Limit
+
+> **All deep agents default to `recursion_limit=100`** — significantly higher than LangGraph's native default of `25`, which is not enough for a full-stack deep agent (prompt assembly, middleware, worker round-trips, and tool loops all consume supersteps).
+
+Override per build:
+
+```python
+graph, dispatcher = build_reference_deep_agent(
+    checkpointer, store, recursion_limit=500
+)
+```
+
+Override per invocation (wins over the build-time default):
+
+```python
+await graph.ainvoke(input_data, config={"recursion_limit": 500})
+```
+
+The default lives at `langgraph_kit.graphs.DEFAULT_RECURSION_LIMIT`. Raise it for long autonomous runs; lower it to cap runaway loops in tests or evals.
+
 ## Graph Builder
 
 The [Graph Builder](graph-builder.md) package (`core/graph_builder/`) provides shared factories used by the reference and coding agents:

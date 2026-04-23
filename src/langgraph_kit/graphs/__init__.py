@@ -1,6 +1,12 @@
 """Agent graph registration.
 
 Called during app startup to compile and register all agent graphs.
+
+All deep agents built by this package default to
+:data:`DEFAULT_RECURSION_LIMIT` (100). Override per-build with
+``recursion_limit=<n>`` on any ``build_*_deep_agent`` /
+``build_coding_agent`` call, or per-invocation with
+``config={"recursion_limit": <n>}``.
 """
 
 from __future__ import annotations
@@ -8,9 +14,12 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT
 from langgraph_kit.registry import AgentMetadata, register
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["DEFAULT_RECURSION_LIMIT", "register_all"]
 
 
 def register_all(

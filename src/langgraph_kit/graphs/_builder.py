@@ -3,6 +3,26 @@
 Both reference_deep_agent and coding_agent follow the same build sequence
 (LLM → tools → prompt assembly → middleware → create_deep_agent). This module
 captures that skeleton so each agent only specifies its unique overlays.
+
+.. _recursion-limit:
+
+Default recursion limit
+-----------------------
+Deep agents built by this module default to ``recursion_limit = 100`` (vs.
+LangGraph's own default of 25). This is set high because full-stack deep
+agents routinely burn through the default on a single real task — prompt
+assembly, middleware passes, worker round-trips, and tool loops all count
+against the limit, and Pregel raises ``GraphRecursionError`` the moment
+it is hit.
+
+**To override**: pass ``recursion_limit=<n>`` to
+:func:`build_deep_agent` (or the higher-level wrappers like
+``build_reference_deep_agent`` / ``build_coding_agent``) at build time,
+or pass ``config={"recursion_limit": <n>}`` at invoke/stream time — the
+runtime config wins over the build-time default.
+
+Raise it higher (e.g. 200, 500) for long-running autonomous runs; lower
+it to cap runaway loops in tests or evals. See :data:`DEFAULT_RECURSION_LIMIT`.
 """
 
 from __future__ import annotations
@@ -30,6 +50,21 @@ from langgraph_kit.core.prompt_assembly.sections import (
 from langgraph_kit.core.tools.registry import ToolRegistry
 from langgraph_kit.llm import build_llm
 
+#: Default recursion limit applied to every deep agent built by this module.
+#:
+#: LangGraph's own default is 25, which is not enough for a full-stack deep
+#: agent: a single real task can easily spend that many supersteps on prompt
+#: assembly, middleware, worker round-trips, and tool loops, and Pregel raises
+#: ``GraphRecursionError`` the moment the limit is hit.
+#:
+#: **Override per build**:
+#: ``build_reference_deep_agent(..., recursion_limit=500)``.
+#:
+#: **Override per run**:
+#: ``graph.ainvoke(input, config={"recursion_limit": 500})``
+#: (runtime config wins over the build-time default).
+DEFAULT_RECURSION_LIMIT: int = 100
+
 
 def build_deep_agent(
     *,
@@ -44,6 +79,7 @@ def build_deep_agent(
     configure_tools: Any | None = None,
     configure_deferred_tools: Any | None = None,
     conditions: set[str] | None = None,
+    recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> tuple[Any, Any]:
     """Build a deep agent with the standard skeleton.
 
@@ -74,6 +110,13 @@ def build_deep_agent(
         rarely-used catalogs.
     conditions:
         Prompt conditions to activate. Defaults to the standard set.
+    recursion_limit:
+        Default LangGraph ``recursion_limit`` bound to the compiled graph
+        via ``with_config``. Defaults to
+        :data:`DEFAULT_RECURSION_LIMIT` (100). Pass a higher value for
+        long-running autonomous runs, or override per-invocation via
+        ``graph.ainvoke(..., config={"recursion_limit": N})``. See the
+        module docstring for more context.
     """
     from deepagents import (
         create_deep_agent as _create,  # pyright: ignore[reportMissingModuleSource]
@@ -159,4 +202,9 @@ def build_deep_agent(
         backend=build_backend_factory(agent_name),
         name=agent_name,
     )
+    # Bind the default recursion_limit (see DEFAULT_RECURSION_LIMIT). This
+    # returns a new CompiledStateGraph with the config merged — Pregel-specific
+    # methods like ``aget_state`` are preserved. Runtime config passed to
+    # ``invoke``/``ainvoke``/``astream_events`` overrides this default.
+    graph = graph.with_config({"recursion_limit": recursion_limit})
     return graph, command_dispatcher

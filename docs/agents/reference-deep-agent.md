@@ -70,7 +70,13 @@ Pre-composed as `GENERAL_WORKERS` — see [Workers](../orchestration/workers.md)
 ## Build Function
 
 ```python
-def build_reference_deep_agent(checkpointer, store, mcp_tools=None):
+def build_reference_deep_agent(
+    checkpointer,
+    store,
+    *,
+    mcp_tools=None,
+    recursion_limit=DEFAULT_RECURSION_LIMIT,  # 100
+):
     """Build the reference deep agent with all kit features.
 
     Returns: (compiled_graph, command_dispatcher)
@@ -78,6 +84,10 @@ def build_reference_deep_agent(checkpointer, store, mcp_tools=None):
 ```
 
 Returns a tuple of the compiled graph and command dispatcher, both registered together.
+
+## Recursion Limit
+
+Defaults to `DEFAULT_RECURSION_LIMIT` (100) — high enough for realistic multi-turn runs with worker delegation and tool loops, where LangGraph's native default of 25 is not. Raise it for long autonomous runs by passing `recursion_limit=<n>` to the builder, or override per-invocation with `config={"recursion_limit": <n>}`. See the [agents overview](overview.md#recursion-limit) for details.
 
 ## Middleware Stack
 
