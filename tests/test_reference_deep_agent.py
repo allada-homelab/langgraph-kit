@@ -645,9 +645,7 @@ def test_explicit_deferred_tools_condition_with_empty_registry_is_stripped(
     system_prompt = deepagents_mod.create_deep_agent.call_args.kwargs["system_prompt"]
     assert _DEFERRED_SECTION_MARKER not in system_prompt
 
-    warnings = [
-        r.getMessage() for r in caplog.records if r.levelname == "WARNING"
-    ]
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
     assert any("'deferred_tools' was requested" in msg for msg in warnings), warnings
 
 

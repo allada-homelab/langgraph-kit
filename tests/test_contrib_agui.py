@@ -18,7 +18,9 @@ from langgraph_kit.contrib.agui import AGUIEncoder
 
 def _get_data_lines(chunk: str) -> list[str]:
     """Extract ``data: ...`` payload lines from an SSE chunk."""
-    return [line[len("data: "):] for line in chunk.split("\n") if line.startswith("data: ")]
+    return [
+        line[len("data: ") :] for line in chunk.split("\n") if line.startswith("data: ")
+    ]
 
 
 def test_run_started_and_finished_carry_thread_and_run_ids() -> None:
@@ -49,14 +51,12 @@ def test_text_token_sequence_brackets_with_start_and_end() -> None:
 
     first = enc.encode_text_token("hello")
     assert len(first) == 2, (
-        f"First token should produce 2 frames (START + CONTENT);"
-        f" got {len(first)}"
+        f"First token should produce 2 frames (START + CONTENT); got {len(first)}"
     )
 
     second = enc.encode_text_token(" world")
     assert len(second) == 1, (
-        f"Subsequent tokens should produce 1 frame (CONTENT only);"
-        f" got {len(second)}"
+        f"Subsequent tokens should produce 1 frame (CONTENT only); got {len(second)}"
     )
 
     end = enc.encode_text_end()
@@ -85,8 +85,7 @@ def test_tool_call_bracket_emits_start_args_and_end() -> None:
     assert any("pong-result" in f for f in end_frames)
 
 
-def test_encode_custom_serializes_arbitrary_values(
-) -> None:
+def test_encode_custom_serializes_arbitrary_values() -> None:
     enc = AGUIEncoder(thread_id="t-c", run_id="r-c")
     frame = enc.encode_custom("budget", {"tokens_used": 123})
     assert "budget" in frame
@@ -99,9 +98,7 @@ def test_run_id_defaults_to_generated_uuid() -> None:
     enc_b = AGUIEncoder(thread_id="t-a")
     assert enc_a.run_id
     assert enc_b.run_id
-    assert enc_a.run_id != enc_b.run_id, (
-        "Separate encoders must get distinct run ids"
-    )
+    assert enc_a.run_id != enc_b.run_id, "Separate encoders must get distinct run ids"
 
 
 def test_thread_id_defaults_to_empty_string() -> None:

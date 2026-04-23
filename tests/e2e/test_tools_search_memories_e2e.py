@@ -72,9 +72,7 @@ async def test_search_memories_returns_matching_records(
         f"search_memories should carry the record title back to the LLM;"
         f" got {content!r}"
     )
-    assert "tacos" in content.lower(), (
-        "Body/summary should appear in the search result"
-    )
+    assert "tacos" in content.lower(), "Body/summary should appear in the search result"
 
 
 @pytest.mark.asyncio

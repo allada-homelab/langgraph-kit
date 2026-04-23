@@ -34,9 +34,7 @@ class _FakeMCP:
 
     def tool(self, *, name: str, description: str) -> Any:
         def _decorator(fn: Any) -> Any:
-            self.registered.append(
-                {"name": name, "description": description, "fn": fn}
-            )
+            self.registered.append({"name": name, "description": description, "fn": fn})
             return fn
 
         return _decorator

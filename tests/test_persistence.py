@@ -37,7 +37,6 @@ def test_connection_url_strips_psycopg_driver_suffix() -> None:
         assert _connection_url() == "postgresql://user:pw@host:5432/db"
 
 
-
 def test_connection_url_passes_sqlite_through_unchanged() -> None:
     with patch(
         "langgraph_kit.persistence.get_config",

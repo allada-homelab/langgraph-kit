@@ -61,7 +61,9 @@ async def test_help_lists_available_commands(
     checkpointer: Any, e2e_store: Any, patched_build_llm: Any
 ) -> None:
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/help",
         thread_id="cmd-help",
     )
@@ -79,7 +81,9 @@ async def test_memory_with_empty_store_reports_empty(
     checkpointer: Any, e2e_store: Any, patched_build_llm: Any
 ) -> None:
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/memory",
         thread_id="cmd-memory-empty",
     )
@@ -94,7 +98,9 @@ async def test_memory_invalid_scope_surfaces_error(
     checkpointer: Any, e2e_store: Any, patched_build_llm: Any
 ) -> None:
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/memory not-a-scope",
         thread_id="cmd-memory-badscope",
     )
@@ -109,7 +115,9 @@ async def test_tools_lists_registered_tools(
     checkpointer: Any, e2e_store: Any, patched_build_llm: Any
 ) -> None:
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/tools",
         thread_id="cmd-tools",
     )
@@ -125,7 +133,9 @@ async def test_skills_lists_available_skills(
     checkpointer: Any, e2e_store: Any, patched_build_llm: Any
 ) -> None:
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/skills",
         thread_id="cmd-skills",
     )
@@ -140,7 +150,9 @@ async def test_status_returns_a_summary(
     checkpointer: Any, e2e_store: Any, patched_build_llm: Any
 ) -> None:
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/status",
         thread_id="cmd-status",
     )
@@ -155,7 +167,9 @@ async def test_tools_command_filters_by_tag(
 ) -> None:
     """``/tools <tag>`` narrows the listing to tools matching the tag."""
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/tools memory",
         thread_id="cmd-tools-tag",
     )
@@ -172,7 +186,9 @@ async def test_tools_command_with_unknown_tag_returns_empty_listing(
 ) -> None:
     """A tag nothing matches returns a 0-count header, not a crash."""
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/tools nonexistent-tag-8f3a",
         thread_id="cmd-tools-notag",
     )
@@ -203,7 +219,9 @@ async def test_memory_command_lists_populated_store(
         )
     )
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/memory",
         thread_id="cmd-memory-pop",
     )
@@ -216,7 +234,9 @@ async def test_compact_command_on_small_state_reports_no_compaction(
 ) -> None:
     """``/compact`` on a small context reports 'No compaction needed'."""
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/compact",
         thread_id="cmd-compact-small",
     )
@@ -238,7 +258,9 @@ async def test_context_command_reports_window_pressure(
     pins the contract.
     """
     msg = await _run_command(
-        checkpointer, e2e_store, patched_build_llm,
+        checkpointer,
+        e2e_store,
+        patched_build_llm,
         command="/context",
         thread_id="cmd-context",
     )

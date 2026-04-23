@@ -27,9 +27,7 @@ def _config(**overrides: Any) -> AgentConfig:
 
 def test_build_openai_passes_model_base_url_and_api_key() -> None:
     with patch("langchain_openai.ChatOpenAI") as ChatOpenAI:
-        _build_openai(
-            "gpt-4o", _config(llm_base_url="https://x", llm_api_key="sk-x")
-        )
+        _build_openai("gpt-4o", _config(llm_base_url="https://x", llm_api_key="sk-x"))
     ChatOpenAI.assert_called_once_with(
         model="gpt-4o", streaming=True, base_url="https://x", api_key="sk-x"
     )
@@ -84,15 +82,16 @@ def test_build_google_uses_google_api_key_kwarg() -> None:
         else:
             sys.modules["langchain_google_genai"] = original
 
-    fake_google.assert_called_once_with(
-        model="gemini-pro", google_api_key="goog-key"
-    )
+    fake_google.assert_called_once_with(model="gemini-pro", google_api_key="goog-key")
 
 
 def test_build_llm_routes_claude_models_to_anthropic() -> None:
     with (
         patch("langgraph_kit.llm._build_anthropic") as route_anthropic,
-        patch("langgraph_kit.llm.get_config", return_value=_config(llm_model="claude-3-opus")),
+        patch(
+            "langgraph_kit.llm.get_config",
+            return_value=_config(llm_model="claude-3-opus"),
+        ),
     ):
         build_llm()
     route_anthropic.assert_called_once()
@@ -101,7 +100,9 @@ def test_build_llm_routes_claude_models_to_anthropic() -> None:
 def test_build_llm_routes_gemini_models_to_google() -> None:
     with (
         patch("langgraph_kit.llm._build_google") as route_google,
-        patch("langgraph_kit.llm.get_config", return_value=_config(llm_model="gemini-1.5")),
+        patch(
+            "langgraph_kit.llm.get_config", return_value=_config(llm_model="gemini-1.5")
+        ),
     ):
         build_llm()
     route_google.assert_called_once()

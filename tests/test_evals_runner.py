@@ -116,9 +116,7 @@ async def test_run_isolates_metric_failures_to_that_metric() -> None:
     broken = _AlwaysFailingMetric()
     working = _BoolMetric(values=[True, True])
 
-    report = await EvalRunner(
-        langfuse=lf, metrics=[broken, working]
-    ).run(dry_run=True)
+    report = await EvalRunner(langfuse=lf, metrics=[broken, working]).run(dry_run=True)
 
     assert report.metrics["broken"].count == 0
     assert report.metrics["boolean"].count == 2

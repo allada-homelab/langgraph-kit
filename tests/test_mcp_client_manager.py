@@ -86,9 +86,7 @@ def fake_mcp_modules() -> Iterator[dict[str, Any]]:
 
     stdio_client_mock = MagicMock(side_effect=lambda params: state["stdio_ctx"])
     sse_client_mock = MagicMock(side_effect=lambda **kwargs: state["stdio_ctx"])
-    streamable_client_mock = MagicMock(
-        side_effect=lambda **kwargs: state["stdio_ctx"]
-    )
+    streamable_client_mock = MagicMock(side_effect=lambda **kwargs: state["stdio_ctx"])
 
     adapters_stub = MagicMock(
         load_mcp_tools=AsyncMock(side_effect=lambda *a, **kw: state["loaded_tools"])
@@ -165,8 +163,7 @@ async def test_stdio_transport_loads_tools_and_wraps_them(
     fake_mcp_modules["loaded_tools"] = fake_mcp_modules["session"]._tools
 
     servers_json = (
-        '[{"name":"my-server","transport":"stdio",'
-        '"command":"echo","args":["hello"]}]'
+        '[{"name":"my-server","transport":"stdio","command":"echo","args":["hello"]}]'
     )
     mgr = MCPClientManager(servers_json)
     contribution = await mgr.connect_all()

@@ -82,9 +82,7 @@ async def test_list_all_unfiltered_collects_every_type(
 async def test_update_mutates_in_place(manager: AgentMemoryManager) -> None:
     rec = _record(body="before")
     await manager.create(rec)
-    updated = await manager.update(
-        rec.id, {"body": "after"}, memory_type=rec.type
-    )
+    updated = await manager.update(rec.id, {"body": "after"}, memory_type=rec.type)
     assert updated is not None
     assert updated.body == "after"
 
@@ -145,6 +143,4 @@ async def test_snapshot_from_copies_each_record_into_agent_namespace(
     listed = await manager.list_all()
     assert {r.title for r in listed} == {"a", "b"}
     # Source attribution: every snapshotted record tags the originating id.
-    assert all(
-        (r.source or "").startswith("snapshot_from:") for r in listed
-    )
+    assert all((r.source or "").startswith("snapshot_from:") for r in listed)

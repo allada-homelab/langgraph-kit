@@ -156,9 +156,9 @@ async def test_recorder_save_load_roundtrip_preserves_interactions(
     assert isinstance(loaded, ConversationRecording)
     assert loaded.agent_id == "rt-agent"
     # Each interaction preserved its type tag across the round-trip.
-    assert all(
-        i.kind in ("llm", "tool") for i in loaded.interactions
-    ), f"Interactions should all be llm/tool; got {[i.kind for i in loaded.interactions]}"
+    assert all(i.kind in ("llm", "tool") for i in loaded.interactions), (
+        f"Interactions should all be llm/tool; got {[i.kind for i in loaded.interactions]}"
+    )
 
 
 @pytest.mark.asyncio

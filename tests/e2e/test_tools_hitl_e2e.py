@@ -146,7 +146,9 @@ async def test_approve_action_response_path_carries_user_reason(
     ]
     assert approval_msgs, "approve_action should have produced a ToolMessage"
     content = str(approval_msgs[-1].content)
-    assert "rejected" in content.lower(), f"Response should carry 'rejected': {content!r}"
+    assert "rejected" in content.lower(), (
+        f"Response should carry 'rejected': {content!r}"
+    )
     assert "too risky right now" in content, (
         f"Response should include the user's message verbatim: {content!r}"
     )

@@ -98,8 +98,7 @@ async def test_invoke_agent_a2a_returns_task_envelope(
     assert artifacts, f"A2A response should include artifacts; got {result}"
     parts = artifacts[0].get("parts", [])
     assert any(
-        p.get("kind") == "text" and "echo-from-a2a" in p.get("text", "")
-        for p in parts
+        p.get("kind") == "text" and "echo-from-a2a" in p.get("text", "") for p in parts
     ), f"Agent response text missing from Task artifacts: {artifacts!r}"
 
 
@@ -144,8 +143,7 @@ def test_a2a_router_well_known_route_serves_aggregated_card(
     card = response.json()
     skill_ids = [s["id"] for s in card.get("skills", [])]
     assert registered_echo_agent in skill_ids, (
-        f"A2A well-known card should list registered agent;"
-        f" got skills {skill_ids}"
+        f"A2A well-known card should list registered agent; got skills {skill_ids}"
     )
 
 

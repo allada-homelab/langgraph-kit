@@ -30,9 +30,7 @@ from tests.e2e.helpers import answer, capturing_scripted_llm
 pytestmark = pytest.mark.e2e
 
 
-def _synthetic_history(
-    *, n_tool_msgs: int, tool_size: int
-) -> list[Any]:
+def _synthetic_history(*, n_tool_msgs: int, tool_size: int) -> list[Any]:
     """Build a synthetic prior-turn history with oversized tool outputs.
 
     Each tool message is > 2000 chars (microcompact truncates those), and
@@ -42,9 +40,12 @@ def _synthetic_history(
     history: list[Any] = []
     for i in range(n_tool_msgs):
         history.append(HumanMessage(content=f"turn {i} user"))
-        history.append(AIMessage(content="", tool_calls=[
-            {"id": f"call_{i}", "name": "fetch", "args": {"i": i}}
-        ]))
+        history.append(
+            AIMessage(
+                content="",
+                tool_calls=[{"id": f"call_{i}", "name": "fetch", "args": {"i": i}}],
+            )
+        )
         history.append(
             ToolMessage(
                 content=f"BIGRESULT_{i}:" + ("x" * tool_size),

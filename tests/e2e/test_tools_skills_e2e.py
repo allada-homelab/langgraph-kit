@@ -117,9 +117,7 @@ async def test_read_skill_unknown_name_returns_not_found(
 
     msg = assert_tool_invoked(result, "read_skill")
     content = str(msg.content)
-    assert "not found" in content.lower(), (
-        f"Expected not-found error; got: {content!r}"
-    )
+    assert "not found" in content.lower(), f"Expected not-found error; got: {content!r}"
     assert "Available" in content, (
         f"Not-found error should list available skills; got: {content!r}"
     )

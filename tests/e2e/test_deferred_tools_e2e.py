@@ -164,10 +164,7 @@ async def test_empty_deferred_registry_does_not_push_llm_toward_tool_search(
     # (later calls may come from sub-workers like the memory extractor).
     assert capturing.captured_calls, "scripted model was never invoked"
     agent_messages = capturing.captured_calls[0]
-    combined = "\n".join(
-        str(getattr(m, "content", ""))
-        for m in agent_messages
-    )
+    combined = "\n".join(str(getattr(m, "content", "")) for m in agent_messages)
     assert _DEFERRED_AWARENESS_MARKER not in combined, (
         "deferred_tools_awareness section leaked into the prompt even though the "
         "DeferredToolRegistry was empty — the regression has returned. "

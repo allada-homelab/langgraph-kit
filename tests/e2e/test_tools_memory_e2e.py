@@ -195,9 +195,9 @@ async def test_save_update_then_read_shows_update(
     )
 
     update_msg = assert_tool_invoked(pass2, "update_memory")
-    assert "updated" in str(update_msg.content).lower() or mem_id in str(update_msg.content), (
-        f"update_memory didn't confirm the update: {update_msg.content!r}"
-    )
+    assert "updated" in str(update_msg.content).lower() or mem_id in str(
+        update_msg.content
+    ), f"update_memory didn't confirm the update: {update_msg.content!r}"
 
     # list_memories result should mention the new summary, not the old
     # one — evidence the update actually mutated the stored record.
@@ -280,7 +280,11 @@ async def test_delete_memory_removes_it_from_list(
     assert "to-delete" not in content, (
         f"Deleted record still appears in list: {content!r}"
     )
-    assert "No memories found" in content or "Found 0" in content or "to-delete" not in content
+    assert (
+        "No memories found" in content
+        or "Found 0" in content
+        or "to-delete" not in content
+    )
 
 
 @pytest.mark.asyncio

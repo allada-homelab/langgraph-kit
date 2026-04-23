@@ -194,9 +194,7 @@ def test_queue_enqueue_then_status_round_trip(
     assert enq_body["queued"] is True
     assert enq_body["queue_depth"] >= 1
 
-    status_resp = client.get(
-        f"/agents/{registered_agent}/threads/queue-thread-1/queue"
-    )
+    status_resp = client.get(f"/agents/{registered_agent}/threads/queue-thread-1/queue")
     assert status_resp.status_code == 200, status_resp.text
     status_body = status_resp.json()
     assert status_body["queue_depth"] >= 1
@@ -214,9 +212,7 @@ def test_thread_messages_endpoint_returns_empty_for_new_thread(
     from fastapi.testclient import TestClient
 
     client = TestClient(fastapi_app)
-    response = client.get(
-        f"/agents/{registered_agent}/threads/empty-thread/messages"
-    )
+    response = client.get(f"/agents/{registered_agent}/threads/empty-thread/messages")
     assert response.status_code == 200, response.text
     assert response.json() == []
 
@@ -229,9 +225,7 @@ def test_thread_state_endpoint_reports_idle_for_unused_thread(
     from fastapi.testclient import TestClient
 
     client = TestClient(fastapi_app)
-    response = client.get(
-        f"/agents/{registered_agent}/threads/fresh-thread/state"
-    )
+    response = client.get(f"/agents/{registered_agent}/threads/fresh-thread/state")
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["thread_id"] == "fresh-thread"
@@ -444,8 +438,6 @@ def test_thread_history_endpoint_returns_empty_list_for_unused_thread(
     from fastapi.testclient import TestClient
 
     client = TestClient(fastapi_app)
-    response = client.get(
-        f"/agents/{registered_agent}/threads/no-history/history"
-    )
+    response = client.get(f"/agents/{registered_agent}/threads/no-history/history")
     assert response.status_code == 200, response.text
     assert isinstance(response.json(), list)

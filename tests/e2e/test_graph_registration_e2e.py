@@ -91,9 +91,7 @@ def test_register_all_registers_every_kit_agent(
     with (
         patch("langgraph_kit.graphs._builder.build_llm", return_value=scripted),
         patch("langgraph_kit.graphs.echo_agent.build_llm", return_value=scripted),
-        patch(
-            "langgraph_kit.graphs.basic_deep_agent.build_llm", return_value=scripted
-        ),
+        patch("langgraph_kit.graphs.basic_deep_agent.build_llm", return_value=scripted),
         patch(
             "langgraph_kit.graphs.supervisor_agent.build_llm",
             return_value=scripted,

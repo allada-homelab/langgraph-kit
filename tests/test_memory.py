@@ -233,9 +233,7 @@ class TestPersistentMemoryManager:
         self, manager: PersistentMemoryManager
     ) -> None:
         """``update`` must not invent records when the id is absent — it returns None."""
-        result = await manager.update(
-            "does-not-exist", MemoryScope.USER, {"body": "x"}
-        )
+        result = await manager.update("does-not-exist", MemoryScope.USER, {"body": "x"})
         assert result is None
 
     @pytest.mark.asyncio
@@ -293,9 +291,7 @@ class TestPersistentMemoryManager:
         self, manager: PersistentMemoryManager
     ) -> None:
         """Scopes with no records should not appear in the survey."""
-        await manager.create(
-            _make_record(scope=MemoryScope.USER, type=MemoryType.USER)
-        )
+        await manager.create(_make_record(scope=MemoryScope.USER, type=MemoryType.USER))
         scopes = await manager.list_all_scopes()
         assert MemoryScope.USER in scopes
         # Scopes we never wrote to should stay out of the result.
@@ -313,9 +309,7 @@ class TestPersistentMemoryManager:
         types aren't returned even though MockStore returns whatever is
         in the namespace it's given.
         """
-        await manager.create(
-            _make_record(title="user-typed", type=MemoryType.USER)
-        )
+        await manager.create(_make_record(title="user-typed", type=MemoryType.USER))
         await manager.create(
             _make_record(title="feedback-typed", type=MemoryType.FEEDBACK)
         )

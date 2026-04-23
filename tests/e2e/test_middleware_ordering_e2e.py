@@ -107,7 +107,9 @@ async def test_save_memory_tool_persists_before_stop_hook_runs(
 
     # 1. Tool actually ran — its ToolMessage is in the final state.
     tool_msg = assert_tool_invoked(result, "save_memory")
-    assert "pi" in str(tool_msg.content).lower() or "sav" in str(tool_msg.content).lower(), (
+    assert (
+        "pi" in str(tool_msg.content).lower() or "sav" in str(tool_msg.content).lower()
+    ), (
         f"save_memory ToolMessage content doesn't look like a save confirmation: "
         f"{tool_msg.content!r}"
     )

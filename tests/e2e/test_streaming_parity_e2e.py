@@ -63,6 +63,7 @@ async def test_ainvoke_and_streaming_final_state_match(
     differently on the streaming path (separate ``aget_state`` call vs
     direct return value).
     """
+
     # Two separate scripts — ``RecordedChatModel._call_index`` advances
     # across every ``_generate`` call, so sharing one script between the
     # ainvoke and stream legs would leave the stream leg with nothing to
@@ -90,9 +91,7 @@ async def test_ainvoke_and_streaming_final_state_match(
         config={"configurable": {"thread_id": "parity-invoke"}},  # pyright: ignore[reportArgumentType]
     )
     invoke_tools = [
-        m.name
-        for m in invoke_result["messages"]
-        if isinstance(m, ToolMessage)
+        m.name for m in invoke_result["messages"] if isinstance(m, ToolMessage)
     ]
     assert "probe" in invoke_tools
 

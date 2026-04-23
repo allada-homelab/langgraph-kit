@@ -24,9 +24,7 @@ pytestmark = pytest.mark.e2e
 
 
 @pytest.mark.asyncio
-async def test_build_basic_deep_agent_smoke(
-    checkpointer: Any, e2e_store: Any
-) -> None:
+async def test_build_basic_deep_agent_smoke(checkpointer: Any, e2e_store: Any) -> None:
     """``build_basic_deep_agent`` produces a working graph end-to-end.
 
     Basic deep agent has no kit middleware, memory, or tools — just a

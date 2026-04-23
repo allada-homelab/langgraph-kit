@@ -106,9 +106,7 @@ def test_to_lc_messages_user_with_image_attachment_uses_image_url_part() -> None
     )
     [lc] = _to_lc_messages([msg])
     parts = lc.content
-    assert any(
-        isinstance(p, dict) and p.get("type") == "image_url" for p in parts
-    )
+    assert any(isinstance(p, dict) and p.get("type") == "image_url" for p in parts)
 
 
 def test_to_lc_messages_user_with_pdf_attachment_uses_image_url_part() -> None:
@@ -127,9 +125,7 @@ def test_to_lc_messages_user_with_pdf_attachment_uses_image_url_part() -> None:
     [lc] = _to_lc_messages([msg])
     parts = lc.content
     # PDF takes the image_url path per the kit's current contract.
-    assert any(
-        isinstance(p, dict) and p.get("type") == "image_url" for p in parts
-    )
+    assert any(isinstance(p, dict) and p.get("type") == "image_url" for p in parts)
 
 
 def test_to_lc_messages_assistant_and_system_pass_through() -> None:

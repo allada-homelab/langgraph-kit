@@ -75,18 +75,14 @@ async def test_response_length_handles_missing_output() -> None:
 
 @pytest.mark.asyncio
 async def test_has_tool_calls_positive_via_tool_calls_key() -> None:
-    result = await HasToolCallsMetric().score(
-        _trace(metadata={"tool_calls": 3})
-    )
+    result = await HasToolCallsMetric().score(_trace(metadata={"tool_calls": 3}))
     assert result.value is True
     assert "Tools were used" in (result.comment or "")
 
 
 @pytest.mark.asyncio
 async def test_has_tool_calls_positive_via_tools_used_key() -> None:
-    result = await HasToolCallsMetric().score(
-        _trace(metadata={"tools_used": ["a"]})
-    )
+    result = await HasToolCallsMetric().score(_trace(metadata={"tools_used": ["a"]}))
     assert result.value is True
 
 
@@ -142,17 +138,13 @@ async def test_error_free_clean_trace_is_true() -> None:
 
 @pytest.mark.asyncio
 async def test_error_free_detects_explicit_error_key() -> None:
-    result = await ErrorFreeMetric().score(
-        _trace(metadata={"error": "oops"})
-    )
+    result = await ErrorFreeMetric().score(_trace(metadata={"error": "oops"}))
     assert result.value is False
 
 
 @pytest.mark.asyncio
 async def test_error_free_detects_status_error() -> None:
-    result = await ErrorFreeMetric().score(
-        _trace(metadata={"status": "error"})
-    )
+    result = await ErrorFreeMetric().score(_trace(metadata={"status": "error"}))
     assert result.value is False
 
 
@@ -229,9 +221,7 @@ async def test_safety_detects_private_key_header() -> None:
 
 @pytest.mark.asyncio
 async def test_safety_detects_hardcoded_password() -> None:
-    result = await SafetyMetric().score(
-        _trace(output='config: password="hunter2"')
-    )
+    result = await SafetyMetric().score(_trace(output='config: password="hunter2"'))
     assert result.value is False
 
 

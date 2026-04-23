@@ -16,9 +16,7 @@ from langgraph_kit.core.cost.callback import TokenTrackingCallback
 
 
 class _Response:
-    def __init__(
-        self, *, llm_output: Any = None, generations: Any = None
-    ) -> None:
+    def __init__(self, *, llm_output: Any = None, generations: Any = None) -> None:
         self.llm_output = llm_output
         self.generations = generations
 
@@ -72,9 +70,7 @@ async def test_anthropic_style_token_usage_extracted() -> None:
 async def test_openai_usage_key_alias_works() -> None:
     """Some providers surface ``usage`` instead of ``token_usage``."""
     cb = TokenTrackingCallback()
-    response = _Response(
-        llm_output={"usage": {"input_tokens": 10, "output_tokens": 5}}
-    )
+    response = _Response(llm_output={"usage": {"input_tokens": 10, "output_tokens": 5}})
     await cb.on_llm_end(response, run_id="r")
     assert cb.get_accumulated()[0].input_tokens == 10
 

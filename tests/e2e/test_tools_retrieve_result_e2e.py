@@ -81,9 +81,7 @@ async def test_retrieve_result_returns_full_persisted_content(
         f"retrieve_result should have returned the full persisted content;"
         f" got {content[:200]!r}"
     )
-    assert "big_upstream" in content, (
-        "Retrieval header should identify the source tool"
-    )
+    assert "big_upstream" in content, "Retrieval header should identify the source tool"
 
 
 @pytest.mark.asyncio

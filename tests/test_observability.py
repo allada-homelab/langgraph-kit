@@ -59,16 +59,12 @@ def test_langfuse_enabled_when_fully_configured() -> None:
 
 
 def test_init_langfuse_returns_none_when_disabled() -> None:
-    with patch(
-        "langgraph_kit.observability.get_config", return_value=_config()
-    ):
+    with patch("langgraph_kit.observability.get_config", return_value=_config()):
         assert init_langfuse() is None
 
 
 def test_create_langfuse_handler_returns_none_when_disabled() -> None:
-    with patch(
-        "langgraph_kit.observability.get_config", return_value=_config()
-    ):
+    with patch("langgraph_kit.observability.get_config", return_value=_config()):
         assert create_langfuse_handler() is None
 
 

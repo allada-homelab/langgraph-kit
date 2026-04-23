@@ -205,8 +205,9 @@ async def test_non_retryable_exception_is_not_retried(
     )
     final_error = errored[-1]
     content = str(final_error.content)
-    assert "ValueError" in content, f"Error should carry exception type; got {content!r}"
+    assert "ValueError" in content, (
+        f"Error should carry exception type; got {content!r}"
+    )
     assert "retryable: False" in content, (
-        f"Error ToolMessage should tag the failure as non-retryable;"
-        f" got {content!r}"
+        f"Error ToolMessage should tag the failure as non-retryable; got {content!r}"
     )

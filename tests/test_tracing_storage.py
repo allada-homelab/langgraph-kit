@@ -62,9 +62,7 @@ async def test_save_trace_prunes_oldest_when_limit_exceeded(mock_store: Any) -> 
 
     # Insert 5 traces with increasing timestamps.
     for i in range(5):
-        await ts.save_trace(
-            "thr", _record(f"t{i}", f"2026-01-0{i + 1}T00:00:00Z")
-        )
+        await ts.save_trace("thr", _record(f"t{i}", f"2026-01-0{i + 1}T00:00:00Z"))
 
     # The two oldest (t0, t1) should have been pruned.
     remaining_keys = set(mock_store._data.get(("traces", "thr"), {}).keys())

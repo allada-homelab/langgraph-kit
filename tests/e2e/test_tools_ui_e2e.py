@@ -62,9 +62,9 @@ async def test_create_artifact_round_trip(
     )
     msg = assert_tool_invoked(result, "create_artifact")
     content = str(msg.content)
-    assert "hello.py" in content or "print" in content or "artifact" in content.lower(), (
-        f"create_artifact produced unexpected content: {content!r}"
-    )
+    assert (
+        "hello.py" in content or "print" in content or "artifact" in content.lower()
+    ), f"create_artifact produced unexpected content: {content!r}"
 
 
 @pytest.mark.asyncio

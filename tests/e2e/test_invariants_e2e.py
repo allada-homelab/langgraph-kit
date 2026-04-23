@@ -81,7 +81,9 @@ async def test_default_build_does_not_activate_deferred_tools_condition(
         config={"configurable": {"thread_id": "inv-deferred"}},  # pyright: ignore[reportArgumentType]
     )
     assert capturing.captured_calls
-    prompt = "\n".join(str(getattr(m, "content", "")) for m in capturing.captured_calls[0])
+    prompt = "\n".join(
+        str(getattr(m, "content", "")) for m in capturing.captured_calls[0]
+    )
     assert _SECTION_MARKERS["deferred_tools_awareness"] not in prompt, (
         "deferred_tools_awareness leaked into a default-build prompt. "
         "Empty DeferredToolRegistry must NOT auto-activate the condition."
@@ -114,7 +116,9 @@ async def test_default_build_does_not_activate_extensions_condition(
         config={"configurable": {"thread_id": "inv-extensions"}},  # pyright: ignore[reportArgumentType]
     )
     assert capturing.captured_calls
-    prompt = "\n".join(str(getattr(m, "content", "")) for m in capturing.captured_calls[0])
+    prompt = "\n".join(
+        str(getattr(m, "content", "")) for m in capturing.captured_calls[0]
+    )
     assert _SECTION_MARKERS["extension_awareness"] not in prompt, (
         "extension_awareness leaked into a prompt with no plugins registered. "
         "The condition must auto-gate on a non-empty PluginRegistry."
@@ -213,8 +217,7 @@ async def test_async_tasks_condition_active_implies_async_tools_reachable(
     async_msgs = [
         m
         for m in result["messages"]
-        if isinstance(m, ToolMessage)
-        and getattr(m, "name", None) == "list_async_tasks"
+        if isinstance(m, ToolMessage) and getattr(m, "name", None) == "list_async_tasks"
     ]
     assert async_msgs, (
         "`async_tasks` condition is active in the default build but"
@@ -323,7 +326,9 @@ async def test_explicit_deferred_tools_condition_with_empty_registry_still_scrub
         config={"configurable": {"thread_id": "inv-explicit"}},  # pyright: ignore[reportArgumentType]
     )
     assert capturing.captured_calls
-    prompt = "\n".join(str(getattr(m, "content", "")) for m in capturing.captured_calls[0])
+    prompt = "\n".join(
+        str(getattr(m, "content", "")) for m in capturing.captured_calls[0]
+    )
     excerpt = prompt[:300]
     assert _SECTION_MARKERS["deferred_tools_awareness"] not in prompt, (
         "The kit must strip an explicitly-requested deferred_tools condition"

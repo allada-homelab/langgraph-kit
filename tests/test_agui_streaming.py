@@ -44,26 +44,20 @@ def test_map_sse_token_emits_text_frames() -> None:
 
 def test_map_sse_tool_call_start() -> None:
     enc = _encoder()
-    events = _map_sse_to_agui(
-        {"tool_call_start": {"id": "c1", "name": "ping"}}, enc
-    )
+    events = _map_sse_to_agui({"tool_call_start": {"id": "c1", "name": "ping"}}, enc)
     assert events
 
 
 def test_map_sse_tool_call_end() -> None:
     enc = _encoder()
-    events = _map_sse_to_agui(
-        {"tool_call_end": {"id": "c1", "output": "pong"}}, enc
-    )
+    events = _map_sse_to_agui({"tool_call_end": {"id": "c1", "output": "pong"}}, enc)
     assert events
     assert any("pong" in e for e in events)
 
 
 def test_map_sse_command_result_emits_text() -> None:
     enc = _encoder()
-    events = _map_sse_to_agui(
-        {"command_result": {"output": "ran /foo"}}, enc
-    )
+    events = _map_sse_to_agui({"command_result": {"output": "ran /foo"}}, enc)
     # command_result text goes through encode_text_token.
     assert any("ran /foo" in e for e in events)
 
@@ -175,9 +169,7 @@ async def test_stream_agui_events_wraps_sse_source(monkeypatch: Any) -> None:
     Assertion: the output stream starts with RUN_STARTED, contains the
     mapped events from each SSE line, and ends with RUN_FINISHED.
     """
-    monkeypatch.setattr(
-        "langgraph_kit.streaming.stream_agent_events", _fake_sse_source
-    )
+    monkeypatch.setattr("langgraph_kit.streaming.stream_agent_events", _fake_sse_source)
     frames = []
     async for frame in stream_agui_events(
         _FakeGraph(),
@@ -207,9 +199,7 @@ async def test_stream_agui_events_emits_run_error_on_upstream_exception(
         raise RuntimeError(msg)
         yield ""  # pragma: no cover (make it a generator)
 
-    monkeypatch.setattr(
-        "langgraph_kit.streaming.stream_agent_events", _raising_source
-    )
+    monkeypatch.setattr("langgraph_kit.streaming.stream_agent_events", _raising_source)
     frames = []
     async for frame in stream_agui_events(
         _FakeGraph(),
@@ -321,9 +311,7 @@ async def test_stream_agui_events_sse_json_parse_failure_is_skipped(
         yield 'data: {"token": "valid"}\n\n'
         yield "data: [DONE]\n\n"
 
-    monkeypatch.setattr(
-        "langgraph_kit.streaming.stream_agent_events", _garbage_source
-    )
+    monkeypatch.setattr("langgraph_kit.streaming.stream_agent_events", _garbage_source)
     frames = []
     async for frame in stream_agui_events(
         _FakeGraph(),

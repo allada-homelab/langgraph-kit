@@ -74,9 +74,7 @@ def recording_path(tmp_path: Path) -> Path:
     return path
 
 
-def _simple_graph_builder(
-    checkpointer: Any, store: Any, *, llm: Any
-) -> Any:
+def _simple_graph_builder(checkpointer: Any, store: Any, *, llm: Any) -> Any:
     """Minimal LangGraph StateGraph that forwards the LLM's response."""
 
     async def llm_node(state: dict, config: RunnableConfig) -> dict:
@@ -241,9 +239,7 @@ def test_assertions_output_similarity_both_empty_passes() -> None:
     empty = ConversationRecording(interactions=[])
     # No LLM interactions — _get_final_output raises, so the method guards.
     rec_with_empty_content = ConversationRecording(
-        interactions=[
-            LLMInteraction(sequence_num=1, output_message={"content": ""})
-        ]
+        interactions=[LLMInteraction(sequence_num=1, output_message={"content": ""})]
     )
     ReplayAssertions(
         rec_with_empty_content, rec_with_empty_content

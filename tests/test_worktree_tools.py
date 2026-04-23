@@ -147,9 +147,7 @@ async def test_enter_worktree_git_error_surfaces() -> None:
     with patch.object(
         worktree_mod, "_run_git", new=AsyncMock(return_value=(1, "", "bad"))
     ):
-        assert (
-            "could not list worktrees" in (await enter("any")).lower()
-        )
+        assert "could not list worktrees" in (await enter("any")).lower()
 
 
 @pytest.mark.asyncio
@@ -212,9 +210,7 @@ async def test_exit_worktree_force_remove_also_fails() -> None:
 async def test_run_git_handles_missing_binary_gracefully() -> None:
     """``_run_git`` returns ``(1, "", exc_message)`` when git isn't on PATH."""
 
-    async def raise_file_not_found(
-        *args: str, **kwargs: Any
-    ) -> Any:
+    async def raise_file_not_found(*args: str, **kwargs: Any) -> Any:
         _ = args
         _ = kwargs
         msg = "no git"

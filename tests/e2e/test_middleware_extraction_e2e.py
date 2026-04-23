@@ -76,9 +76,7 @@ async def test_extraction_emits_recorded_memory_to_store(
     recording = ConversationRecording(
         interactions=[
             LLMInteraction(sequence_num=1, output_message=answer("ok")),
-            LLMInteraction(
-                sequence_num=2, output_message=answer(extraction_payload)
-            ),
+            LLMInteraction(sequence_num=2, output_message=answer(extraction_payload)),
         ]
     )
     model = RecordedChatModel(recording=recording)
@@ -115,7 +113,7 @@ async def test_extraction_emits_recorded_memory_to_store(
         v
         for v in memory_records.values()
         if "tacos" in str(v.get("title", "")).lower()
-           or "tacos" in str(v.get("body", "")).lower()
+        or "tacos" in str(v.get("body", "")).lower()
     ]
     assert matched, (
         f"No extracted record mentions 'tacos' — payload wasn't threaded through."

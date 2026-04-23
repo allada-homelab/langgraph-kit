@@ -207,14 +207,10 @@ async def test_list_tasks_filter_by_status(
     await manager.cancel(task_b.task_id)
     gate_b.set()
 
-    running_only = await manager.list_tasks(
-        status_filter=AsyncTaskStatus.RUNNING
-    )
+    running_only = await manager.list_tasks(status_filter=AsyncTaskStatus.RUNNING)
     assert [t.agent_name for t in running_only] == ["a"]
 
-    cancelled_only = await manager.list_tasks(
-        status_filter=AsyncTaskStatus.CANCELLED
-    )
+    cancelled_only = await manager.list_tasks(status_filter=AsyncTaskStatus.CANCELLED)
     assert [t.agent_name for t in cancelled_only] == ["b"]
 
     # Cleanup — release the running task.

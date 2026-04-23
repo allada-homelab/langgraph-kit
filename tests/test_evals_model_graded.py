@@ -109,9 +109,7 @@ async def test_score_parses_plain_json_response() -> None:
 @pytest.mark.asyncio
 async def test_score_clamps_out_of_range_values() -> None:
     # Score >1 clamps to 1; <0 clamps to 0.
-    over = LLMJudgeMetric(
-        name="over", rubric_text="r", llm=_FakeLLM('{"score": 1.8}')
-    )
+    over = LLMJudgeMetric(name="over", rubric_text="r", llm=_FakeLLM('{"score": 1.8}'))
     result = await over.score(_trace())
     assert result.value == 1.0
 

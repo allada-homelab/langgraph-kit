@@ -206,6 +206,4 @@ def last_ai_message(state: Any) -> AIMessage:
         if isinstance(msg, AIMessage):
             return msg
     summary = [type(m).__name__ for m in messages]
-    raise AssertionError(
-        f"No AIMessage found in state; got {summary}"
-    )
+    raise AssertionError(f"No AIMessage found in state; got {summary}")
