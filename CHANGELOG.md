@@ -5,6 +5,41 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **Memory extractor no longer leaks JSON candidates into the user-facing
+  chat stream.** `AutoMemoryExtractor`, `MemoryConsolidator`,
+  `PressureMiddleware._full_compaction`, and `LLMRoutingStrategy.route` now
+  tag their internal `llm.ainvoke(...)` calls with
+  `langgraph_kit:internal` and a call-site-specific tag so consumers can
+  filter the resulting `on_chat_model_stream` events out of
+  `astream_events(version="v2")`. Previously, the extractor's JSON array
+  (or `[]`) was indistinguishable from the main agent's reply and was
+  appearing as trailing text in chat bubbles after the real response
+  finished. The kit's `stream_agent_events` SSE helper now applies this
+  filter automatically.
+- **Memory extractor no longer crash-logs on unknown `type` values.** The
+  extractor prompt gave the model enough latitude to invent enum members
+  (observed: `"type": "assistant"`), which caused
+  `MemoryType(candidate["type"])` to raise `ValueError` inside a
+  `logger.exception` handler — producing a traceback that looked like a
+  hard crash. Candidates are now pre-validated via a new
+  `coerce_memory_type` helper and bad ones are dropped at WARN with the
+  offending value named; sibling candidates still persist. Same guard
+  applied to `MemoryConsolidator`'s merge action, which previously would
+  have deleted the source records before crashing on the invalid enum.
+
+### Added
+
+- `langgraph_kit.core.internal_tags` module exposing `INTERNAL_TAG`,
+  per-call tags (`MEMORY_EXTRACTION_TAG`, `MEMORY_CONSOLIDATION_TAG`,
+  `CONTEXT_COMPACTION_TAG`, `AGENT_ROUTING_TAG`), and an
+  `internal_llm_config(...)` helper. Consumers streaming events directly
+  can filter any kit-internal call with
+  `if INTERNAL_TAG in (event.get("tags") or ()): continue`.
+- `langgraph_kit.core.memory.models.coerce_memory_type` for safe
+  validation of LLM-produced memory type values.
+
 ## [0.9.0] — 2026-04-22
 
 ### Fixed
