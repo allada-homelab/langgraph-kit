@@ -5,7 +5,49 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`RecordedChatModel.bind_tools` override.** The replay model
+  subclasses `BaseChatModel`, and `BaseChatModel.bind_tools` raises
+  `NotImplementedError` by default. `create_agent` and any LangChain
+  agent flow call `bind_tools` during construction, so without an
+  override the recorded model could not drive a real compiled graph
+  — defeating the whole point of the replay system. The override is a
+  pass-through (tool schemas don't change what a recording serves,
+  since tool_calls are already baked into each
+  `LLMInteraction.output_message`).
+
+- **End-to-end test layer (`tests/e2e/`).** New pytest `e2e` marker,
+  shared fixtures (`checkpointer`, `e2e_store`, `patched_build_llm`),
+  and scripting helpers (`scripted_llm`, `tool_call_turn`, `answer`,
+  `CapturingScriptedChatModel`, `assert_tool_invoked`,
+  `last_ai_message`) for driving real compiled graphs with a scripted
+  `RecordedChatModel`. 45 scenarios across 17 files cover deferred
+  tools, memory tools (CRUD round-trip), skills, UI tools, every
+  built-in slash command, middleware ordering, plugin contributions
+  (section-only, tool-only, multi-plugin), stop-hook error paths,
+  recursion-limit behavior, builder smoke, and cross-cluster
+  condition/capability invariants that generalize the `deferred_tools`
+  bug class. See `TESTING_ROADMAP.md` and
+  `tests/e2e/FEATURE_INVENTORY.md`.
+
 ### Fixed
+
+- **`ToolLoopGuardMiddleware` streak counter now survives real graph
+  execution.** The guard previously stored per-run streak counts in a
+  `ContextVar[dict]` via `.set(new_dict)`. `ContextVar.set` is
+  copy-on-write per asyncio task, and LangGraph schedules each tool
+  call as its own task — so every call saw `count=1` and the guard
+  never fired under real execution. Unit tests missed the bug because
+  they ran every call in a single coroutine. The guard now keys its
+  streak counter on `thread_id` via a module-level dict
+  (`runtime.execution_info.thread_id` in `abefore_agent` /
+  `aafter_agent`, `runtime.config["configurable"]["thread_id"]` in
+  `awrap_tool_call`), which is stable across all hook points within
+  one `ainvoke` and different between concurrent threads. Two new unit
+  tests (`test_streak_persists_across_sibling_asyncio_tasks`,
+  `test_streak_isolated_between_concurrent_runs`) guard against
+  regressions of the task-scheduling shape.
 
 - **`deferred_tools` activation is now gated on registry population.**
   The `deferred_tools_awareness` prompt section tells the LLM to call
