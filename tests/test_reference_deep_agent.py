@@ -529,3 +529,166 @@ def test_configure_tools_wins_over_plugin_tool_id_collision(mock_store: Any) -> 
     assert plugin_version not in tools, (
         "configure_tools must run AFTER plugin merge so caller overrides win"
     )
+
+
+# ---------------------------------------------------------------------------
+# deferred_tools auto-gating
+# ---------------------------------------------------------------------------
+# The ``deferred_tools_awareness`` activation section tells the LLM to
+# call ``tool_search`` to discover capabilities that aren't bound to its
+# tool surface. If the ``DeferredToolRegistry`` is empty, honoring that
+# instruction produces an always-empty search, which on recursion-bound
+# runs manifests as spinning on ``tool_search``. The builder must gate
+# activation on whether the registry is actually populated.
+
+_DEFERRED_SECTION_MARKER = "use the tool_search tool to discover"
+
+
+def test_empty_deferred_registry_does_not_activate_deferred_tools_condition(
+    mock_store: Any,
+) -> None:
+    """No ``configure_deferred_tools=`` → no deferred_tools_awareness in prompt."""
+    from langgraph_kit.graphs._builder import build_deep_agent
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_deep_agent(
+            agent_name="empty-deferred",
+            core_sections=[],
+            subagents=[],
+            checkpointer=MagicMock(),
+            store=mock_store,
+        )
+
+    system_prompt = deepagents_mod.create_deep_agent.call_args.kwargs["system_prompt"]
+    assert _DEFERRED_SECTION_MARKER not in system_prompt
+
+
+def test_populated_deferred_registry_activates_deferred_tools_condition(
+    mock_store: Any,
+) -> None:
+    """``configure_deferred_tools=`` that populates the registry flips the condition on."""
+    from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
+    from langgraph_kit.graphs._builder import build_deep_agent
+
+    async def _runtime_tool() -> str:
+        return "ok"
+
+    def _configure_deferred(registry: Any) -> None:
+        registry.register(
+            ToolCapability(
+                id="runtime_tool",
+                name="runtime_tool",
+                description="a tool the LLM must discover via tool_search",
+                fn=_runtime_tool,
+                risk=ToolRisk.READ_ONLY,
+            )
+        )
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_deep_agent(
+            agent_name="populated-deferred",
+            core_sections=[],
+            subagents=[],
+            checkpointer=MagicMock(),
+            store=mock_store,
+            configure_deferred_tools=_configure_deferred,
+        )
+
+    system_prompt = deepagents_mod.create_deep_agent.call_args.kwargs["system_prompt"]
+    assert _DEFERRED_SECTION_MARKER in system_prompt
+
+
+def test_explicit_deferred_tools_condition_with_empty_registry_is_stripped(
+    mock_store: Any,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Explicit ``conditions={"deferred_tools"}`` + empty registry → stripped with warning.
+
+    Honoring the condition would push the LLM toward an always-empty
+    ``tool_search``. Fail loud (warn) and drop the condition so the
+    build stays usable.
+    """
+    from langgraph_kit.graphs._builder import build_deep_agent
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+        caplog.at_level("WARNING", logger="langgraph_kit.graphs._builder"),
+    ):
+        build_deep_agent(
+            agent_name="explicit-empty",
+            core_sections=[],
+            subagents=[],
+            checkpointer=MagicMock(),
+            store=mock_store,
+            conditions={"memory", "deferred_tools", "skills"},
+        )
+
+    system_prompt = deepagents_mod.create_deep_agent.call_args.kwargs["system_prompt"]
+    assert _DEFERRED_SECTION_MARKER not in system_prompt
+
+    warnings = [
+        r.getMessage() for r in caplog.records if r.levelname == "WARNING"
+    ]
+    assert any("'deferred_tools' was requested" in msg for msg in warnings), warnings
+
+
+def test_explicit_deferred_tools_condition_with_populated_registry_is_kept(
+    mock_store: Any,
+) -> None:
+    """Explicit ``conditions={"deferred_tools"}`` + populated registry → section stays."""
+    from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
+    from langgraph_kit.graphs._builder import build_deep_agent
+
+    async def _runtime_tool() -> str:
+        return "ok"
+
+    def _configure_deferred(registry: Any) -> None:
+        registry.register(
+            ToolCapability(
+                id="runtime_tool",
+                name="runtime_tool",
+                description="a tool the LLM must discover via tool_search",
+                fn=_runtime_tool,
+                risk=ToolRisk.READ_ONLY,
+            )
+        )
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_deep_agent(
+            agent_name="explicit-populated",
+            core_sections=[],
+            subagents=[],
+            checkpointer=MagicMock(),
+            store=mock_store,
+            conditions={"memory", "deferred_tools", "skills"},
+            configure_deferred_tools=_configure_deferred,
+        )
+
+    system_prompt = deepagents_mod.create_deep_agent.call_args.kwargs["system_prompt"]
+    assert _DEFERRED_SECTION_MARKER in system_prompt

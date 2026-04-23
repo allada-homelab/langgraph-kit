@@ -147,8 +147,14 @@ def build_{{fn_name}}(
     )
 
     # --- Build ---
+    # "deferred_tools" is intentionally omitted: register_standard_tools
+    # returns an empty DeferredToolRegistry by default, and activating
+    # the deferred_tools_awareness section against an empty registry
+    # tells the LLM to call tool_search for capabilities that do not
+    # exist. Add "deferred_tools" back to this set once you populate
+    # the registry (see langgraph_kit.core.tools.deferred).
     system_prompt = composer.compose_sections_only(
-        conditions={"memory", "orchestration", "deferred_tools", "skills", "async_tasks"}
+        conditions={"memory", "orchestration", "skills", "async_tasks"}
     )
 
     graph = create_deep_agent(

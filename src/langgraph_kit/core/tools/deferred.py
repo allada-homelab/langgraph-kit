@@ -41,6 +41,12 @@ class DeferredToolRegistry:
         super().__init__()
         self._tools: dict[str, ToolCapability] = {}
 
+    def __len__(self) -> int:
+        return len(self._tools)
+
+    def __bool__(self) -> bool:
+        return bool(self._tools)
+
     def register(self, capability: ToolCapability) -> None:
         self._tools[capability.id] = capability
 

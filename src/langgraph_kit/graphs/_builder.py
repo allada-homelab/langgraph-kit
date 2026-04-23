@@ -27,6 +27,7 @@ it to cap runaway loops in tests or evals. See :data:`DEFAULT_RECURSION_LIMIT`.
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from langgraph_kit.core.context_management.pressure import PressureMonitor
@@ -53,6 +54,8 @@ from langgraph_kit.core.prompt_assembly.sections import (
 )
 from langgraph_kit.core.tools.registry import ToolRegistry
 from langgraph_kit.llm import build_llm
+
+logger = logging.getLogger(__name__)
 
 #: Default recursion limit applied to every deep agent built by this module.
 #:
@@ -246,24 +249,49 @@ def build_deep_agent(
     )
 
     # --- Compose system prompt ---
-    # Auto-activate the "extensions" condition when the caller supplied
-    # anything plugin-shaped (MCP tools, extra prompt sections, or a
-    # populated PluginRegistry). The ``extension_awareness`` activation
-    # section tells the model that plugin-provided capabilities are
-    # first-class; gating it on any actual extension avoids bloating the
-    # prompt on vanilla builds. Callers passing an explicit
-    # ``conditions=`` set stay in control.
+    # Auto-activate capability-awareness conditions based on what is
+    # actually wired up. ``extensions`` is added when any plugin-shaped
+    # input is present (MCP tools, extra sections, or a populated
+    # PluginRegistry). ``deferred_tools`` is added only when the
+    # DeferredToolRegistry is populated — activating its prompt section
+    # ("use tool_search to discover additional capabilities… don't
+    # assume unavailable — search first") against an empty registry
+    # pushes the LLM to call a search that always returns nothing, which
+    # on recursion-bound runs manifests as spinning on tool_search.
+    # Callers passing an explicit ``conditions=`` stay in control, with
+    # one exception: if they request "deferred_tools" but the registry
+    # is empty the condition is stripped and a warning is logged,
+    # because honoring it would produce the same misdirection.
     auto_conditions: set[str] = {
         "memory",
         "orchestration",
-        "deferred_tools",
         "skills",
         "async_tasks",
     }
     has_plugins = plugin_registry is not None and bool(plugin_registry.list_plugins())
     if mcp_tools or extra_sections or has_plugins:
         auto_conditions.add("extensions")
-    active_conditions = conditions or auto_conditions
+    if deferred_registry:
+        auto_conditions.add("deferred_tools")
+
+    if conditions is None:
+        active_conditions = auto_conditions
+    else:
+        active_conditions = set(conditions)
+        if "deferred_tools" in active_conditions and not deferred_registry:
+            logger.warning(
+                (
+                    "build_deep_agent(agent_name=%r): 'deferred_tools' was"
+                    " requested in conditions= but the DeferredToolRegistry"
+                    " is empty. Dropping the condition to avoid prompting"
+                    " the LLM to call tool_search against an empty catalog."
+                    " Either remove 'deferred_tools' from conditions or"
+                    " pass configure_deferred_tools= to populate the"
+                    " registry."
+                ),
+                agent_name,
+            )
+            active_conditions.discard("deferred_tools")
     system_prompt = composer.compose_sections_only(conditions=active_conditions)
 
     # --- Build the deep agent ---

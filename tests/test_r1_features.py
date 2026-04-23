@@ -187,6 +187,17 @@ def _make_cap(
     )
 
 
+def test_deferred_registry_bool_and_len_reflect_content() -> None:
+    """Builder code relies on ``bool(registry)`` to gate the deferred_tools condition."""
+    registry = DeferredToolRegistry()
+    assert len(registry) == 0
+    assert not registry  # empty is falsy
+
+    registry.register(_make_cap("fs", "file_search"))
+    assert len(registry) == 1
+    assert registry  # populated is truthy
+
+
 def test_deferred_search_by_name() -> None:
     registry = DeferredToolRegistry()
     registry.register(_make_cap("fs", "file_search", "Search files on disk"))

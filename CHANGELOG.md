@@ -5,6 +5,24 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **`deferred_tools` activation is now gated on registry population.**
+  The `deferred_tools_awareness` prompt section tells the LLM to call
+  `tool_search` to discover capabilities that aren't in its tool
+  surface — useful when a `DeferredToolRegistry` is populated, actively
+  harmful when it isn't (the LLM searches, finds nothing, and on
+  recursion-bound runs can spin on `tool_search`). The builder now
+  only auto-activates the `"deferred_tools"` condition when
+  `bool(deferred_registry)` is true, and, for callers who pass an
+  explicit `conditions=` set that includes `"deferred_tools"` without
+  populating the registry, logs a warning and drops the condition.
+  `DeferredToolRegistry` gained `__bool__` / `__len__` so callers and
+  tests can cheaply check population. The generated-agent scaffold
+  (`python -m langgraph_kit.cli new …`) and the reference
+  `build_deep_agent` auto-defaults were updated to stop including
+  `"deferred_tools"` unconditionally.
+
 ### Changed
 
 - **Deep agents now default to `recursion_limit=100`** (up from LangGraph's
