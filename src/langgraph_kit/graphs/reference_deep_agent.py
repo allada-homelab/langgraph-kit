@@ -112,6 +112,7 @@ def build_reference_deep_agent(
     store: Any,
     *,
     mcp_tools: list[Any] | None = None,
+    plugins: Any = None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
@@ -119,6 +120,11 @@ def build_reference_deep_agent(
     ``recursion_limit`` defaults to :data:`DEFAULT_RECURSION_LIMIT` (100);
     pass a higher value for long autonomous runs, or override at invoke
     time with ``config={"recursion_limit": N}``.
+
+    ``plugins`` accepts a ``PluginRegistry`` or a list of
+    ``PluginContribution`` objects whose tools, prompt sections, and
+    worker definitions are merged into the build. See
+    :func:`langgraph_kit.graphs._builder.build_deep_agent` for details.
     """
     return build_deep_agent(
         agent_name="reference-deep-agent",
@@ -127,5 +133,6 @@ def build_reference_deep_agent(
         checkpointer=checkpointer,
         store=store,
         mcp_tools=mcp_tools,
+        plugins=plugins,
         recursion_limit=recursion_limit,
     )

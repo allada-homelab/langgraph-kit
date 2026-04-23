@@ -35,6 +35,10 @@ from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
 from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
 from langgraph_kit.core.graph_builder.tools import register_standard_tools
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
+from langgraph_kit.core.plugins.registry import (
+    PluginContribution,
+    PluginRegistry,
+)
 from langgraph_kit.core.prompt_assembly.activation import ACTIVATION_SECTIONS
 from langgraph_kit.core.prompt_assembly.composer import PromptComposer
 from langgraph_kit.core.prompt_assembly.context_providers import (
@@ -66,6 +70,26 @@ from langgraph_kit.llm import build_llm
 DEFAULT_RECURSION_LIMIT: int = 100
 
 
+def _coerce_plugin_registry(
+    plugins: PluginRegistry | list[PluginContribution] | None,
+) -> PluginRegistry | None:
+    """Accept the three supported input shapes and return a PluginRegistry.
+
+    - ``None``: no plugins, skip the merge entirely (return ``None``).
+    - A pre-built :class:`PluginRegistry`: use it as-is.
+    - A list of :class:`PluginContribution`: wrap in a fresh registry so
+      the builder only branches on one type downstream.
+    """
+    if plugins is None:
+        return None
+    if isinstance(plugins, PluginRegistry):
+        return plugins
+    registry = PluginRegistry()
+    for contrib in plugins:
+        registry.register(contrib)
+    return registry
+
+
 def build_deep_agent(
     *,
     agent_name: str,
@@ -80,6 +104,7 @@ def build_deep_agent(
     configure_deferred_tools: Any | None = None,
     stop_hooks: list[Any] | None = None,
     tool_search_loop_threshold: int = 5,
+    plugins: PluginRegistry | list[PluginContribution] | None = None,
     conditions: set[str] | None = None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> tuple[Any, Any]:
@@ -123,6 +148,17 @@ def build_deep_agent(
         return content suggesting the agent try an alternate approach
         (e.g. invoking a previously-discovered tool directly via
         ``call_deferred_tool``). Defaults to 5. Set to ``0`` to disable.
+    plugins:
+        Plugin contributions to merge into this agent build. Accepts a
+        :class:`PluginRegistry` or a bare list of
+        :class:`PluginContribution` objects. Each contribution's
+        ``tools`` are registered on the active tool surface,
+        ``sections`` are added to the prompt assembly, and ``workers``
+        are appended to ``subagents``. Plugin tools run BEFORE the
+        ``configure_tools`` callback so caller-level overrides win over
+        plugin defaults. When any plugin contributes anything the
+        ``"extensions"`` prompt condition is auto-activated so the agent
+        is told plugin capabilities are first-class.
     conditions:
         Prompt conditions to activate. Defaults to the standard set.
     recursion_limit:
@@ -140,6 +176,11 @@ def build_deep_agent(
     llm = build_llm()
     memory_mgr = PersistentMemoryManager(store)
 
+    # Normalize the plugin input so the rest of the builder only has to
+    # deal with one shape. Accept either a pre-built PluginRegistry or a
+    # bare list of PluginContribution (ergonomic for inline cases).
+    plugin_registry = _coerce_plugin_registry(plugins)
+
     # --- Tool registry ---
     tool_registry = ToolRegistry()
     deferred_registry = register_standard_tools(
@@ -149,6 +190,11 @@ def build_deep_agent(
         parent_thread_id=f"{agent_name}-global",
         mcp_tools=mcp_tools,
     )
+    # Plugin tools merge BEFORE the configure_tools callback so the
+    # caller's explicit overrides beat plugin defaults on id collisions
+    # (ToolRegistry.register is an upsert by capability.id).
+    if plugin_registry is not None:
+        tool_registry.register_many(plugin_registry.collect_tools())
     if configure_tools is not None:
         configure_tools(tool_registry)
     if configure_deferred_tools is not None:
@@ -158,6 +204,11 @@ def build_deep_agent(
     section_registry = SectionRegistry()
     section_registry.register_many(core_sections)
     section_registry.register_many(ACTIVATION_SECTIONS)
+    # Plugin-contributed sections go between activation sections and
+    # caller-supplied extra_sections so explicit user input wins over
+    # plugin defaults on id collisions.
+    if plugin_registry is not None:
+        section_registry.register_many(plugin_registry.collect_sections())
     for section_list in extra_sections or []:
         section_registry.register_many(section_list)
 
@@ -196,11 +247,12 @@ def build_deep_agent(
 
     # --- Compose system prompt ---
     # Auto-activate the "extensions" condition when the caller supplied
-    # anything plugin-shaped (MCP tools or extra prompt sections). The
-    # ``extension_awareness`` activation section tells the model that
-    # plugin-provided capabilities are first-class; gating it on any
-    # actual extension avoids bloating the prompt on vanilla builds.
-    # Callers passing an explicit ``conditions=`` set stay in control.
+    # anything plugin-shaped (MCP tools, extra prompt sections, or a
+    # populated PluginRegistry). The ``extension_awareness`` activation
+    # section tells the model that plugin-provided capabilities are
+    # first-class; gating it on any actual extension avoids bloating the
+    # prompt on vanilla builds. Callers passing an explicit
+    # ``conditions=`` set stay in control.
     auto_conditions: set[str] = {
         "memory",
         "orchestration",
@@ -208,12 +260,20 @@ def build_deep_agent(
         "skills",
         "async_tasks",
     }
-    if mcp_tools or extra_sections:
+    has_plugins = plugin_registry is not None and bool(plugin_registry.list_plugins())
+    if mcp_tools or extra_sections or has_plugins:
         auto_conditions.add("extensions")
     active_conditions = conditions or auto_conditions
     system_prompt = composer.compose_sections_only(conditions=active_conditions)
 
     # --- Build the deep agent ---
+    # Plugin workers extend the caller-supplied ``subagents`` list.
+    # Appended (not prepended) so caller-declared workers keep priority
+    # in any deepagents routing that walks the list in order.
+    merged_subagents: list[dict[str, Any]] = list(subagents)
+    if plugin_registry is not None:
+        merged_subagents.extend(plugin_registry.collect_workers())
+
     # ``subagents`` is a list of dict-shaped specs (deepagents accepts both
     # the typed ``SubAgent`` dataclass and the dict form at runtime, but
     # the stub only types the dataclass path).
@@ -222,7 +282,7 @@ def build_deep_agent(
         tools=tool_registry.compile_tools(),
         system_prompt=system_prompt,
         middleware=middleware,
-        subagents=subagents,  # pyright: ignore[reportArgumentType]
+        subagents=merged_subagents,  # pyright: ignore[reportArgumentType]
         checkpointer=checkpointer,
         store=store,
         backend=build_backend_factory(agent_name),

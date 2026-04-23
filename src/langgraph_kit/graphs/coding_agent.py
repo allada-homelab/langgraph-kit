@@ -46,6 +46,7 @@ def build_coding_agent(
     store: Any,
     *,
     mcp_tools: list[Any] | None = None,
+    plugins: Any = None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
 ) -> Any:
     """Build the coding agent by layering coding-profile overlays onto the reference skeleton.
@@ -53,6 +54,10 @@ def build_coding_agent(
     ``recursion_limit`` defaults to :data:`DEFAULT_RECURSION_LIMIT` (100);
     pass a higher value for long autonomous runs, or override at invoke
     time with ``config={"recursion_limit": N}``.
+
+    ``plugins`` forwards to :func:`build_deep_agent` — accepts a
+    ``PluginRegistry`` or list of ``PluginContribution`` whose tools,
+    prompt sections, and workers are merged into this build.
     """
     return build_deep_agent(
         agent_name="coding-agent",
@@ -61,6 +66,7 @@ def build_coding_agent(
         checkpointer=checkpointer,
         store=store,
         mcp_tools=mcp_tools,
+        plugins=plugins,
         extra_sections=[
             CODING_WORKFLOW_SECTIONS,
             CODING_SEARCH_SECTIONS,
