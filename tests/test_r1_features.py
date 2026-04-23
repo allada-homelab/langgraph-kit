@@ -295,6 +295,95 @@ async def test_consolidate_skips_single_record(mock_store: Any) -> None:
 
 
 @pytest.mark.asyncio
+async def test_consolidate_skips_merge_with_invalid_type(mock_store: Any) -> None:
+    """An invalid ``type`` on a merge action must not crash the whole pass.
+
+    Companion regression to the extractor enum bug: consolidation used
+    ``MemoryType(merged_data.get("type", "user"))`` with no guard, so an LLM
+    invention like ``"type": "assistant"`` would raise ValueError on merge.
+    With coerce_memory_type, the bad merge is skipped (recorded as an error)
+    and the source records are preserved instead of being deleted with no
+    replacement.
+    """
+    pmm = PersistentMemoryManager(mock_store)
+
+    r1 = _make_record(title="A")
+    r1.scope = MemoryScope.USER
+    await pmm.create(r1)
+    r2 = _make_record(title="B")
+    r2.scope = MemoryScope.USER
+    await pmm.create(r2)
+
+    # Bad merge: type "assistant" is not a MemoryType.
+    # Sibling action (keep on r1) must still be counted.
+    llm_response = MagicMock()
+    llm_response.content = json.dumps(
+        [
+            {
+                "action": "merge",
+                "source_ids": [r1.id, r2.id],
+                "merged": {
+                    "title": "Merged",
+                    "type": "assistant",
+                    "summary": "s",
+                    "body": "b",
+                },
+            },
+            {"action": "keep", "id": r1.id},
+        ]
+    )
+    mock_llm = AsyncMock()
+    mock_llm.ainvoke.return_value = llm_response
+
+    consolidator = MemoryConsolidator(pmm, mock_llm)
+    result = await consolidator.consolidate(scope=MemoryScope.USER)
+
+    # Merge was skipped, keep still counted.
+    assert result.merged == 0
+    assert result.kept == 1
+    # Source records preserved — they were NOT deleted by a partially-applied
+    # merge.
+    assert await pmm.get(r1.id, MemoryScope.USER) is not None
+    assert await pmm.get(r2.id, MemoryScope.USER) is not None
+
+
+@pytest.mark.asyncio
+async def test_consolidate_tags_llm_call_as_internal(mock_store: Any) -> None:
+    """MemoryConsolidator.ainvoke must carry INTERNAL_TAG + consolidation tag.
+
+    Same leak class as extraction — without tagging, the consolidator's
+    JSON-action stream would leak into any user-facing transcript that
+    happened to be running (rare in practice, but the filter is cheap).
+    """
+    from langgraph_kit.core.internal_tags import (
+        INTERNAL_TAG,
+        MEMORY_CONSOLIDATION_TAG,
+    )
+
+    pmm = PersistentMemoryManager(mock_store)
+    for i in range(2):
+        rec = _make_record(title=f"Rec {i}")
+        rec.scope = MemoryScope.USER
+        await pmm.create(rec)
+
+    llm_response = MagicMock()
+    llm_response.content = "[]"
+    mock_llm = AsyncMock()
+    mock_llm.ainvoke.return_value = llm_response
+
+    consolidator = MemoryConsolidator(pmm, mock_llm)
+    await consolidator.consolidate(scope=MemoryScope.USER)
+
+    mock_llm.ainvoke.assert_awaited_once()
+    config = mock_llm.ainvoke.call_args.kwargs.get("config")
+    assert config is not None
+    tags = config.get("tags", [])
+    assert INTERNAL_TAG in tags
+    assert MEMORY_CONSOLIDATION_TAG in tags
+    assert config.get("run_name") == "memory_consolidation"
+
+
+@pytest.mark.asyncio
 async def test_consolidate_deletes_stale(mock_store: Any) -> None:
     pmm = PersistentMemoryManager(mock_store)
 

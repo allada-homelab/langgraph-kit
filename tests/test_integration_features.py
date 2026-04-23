@@ -868,6 +868,40 @@ class TestSupervisorRouter:
         assert decision.target_agent_id == "fallback"
         assert "fallback" in decision.reasoning.lower()
 
+    @pytest.mark.asyncio
+    async def test_llm_routing_tags_call_as_internal(self) -> None:
+        """Router's ainvoke must carry INTERNAL_TAG + AGENT_ROUTING_TAG.
+
+        The router fires an LLM call while an outer graph may be streaming
+        to the user; tagging prevents its "here's who should handle this"
+        JSON from leaking into the user-visible chat stream.
+        """
+        from langgraph_kit.core.internal_tags import (
+            AGENT_ROUTING_TAG,
+            INTERNAL_TAG,
+        )
+        from langgraph_kit.core.orchestration.routing import (
+            AgentCapability,
+            LLMRoutingStrategy,
+        )
+
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.return_value = MagicMock(
+            content='{"target_agent_id": "a", "reasoning": "r", "delegated_prompt": "p"}'
+        )
+
+        caps = [AgentCapability(agent_id="a", name="A", description="A", tags=[])]
+        router = LLMRoutingStrategy(mock_llm)
+        await router.route("hi", caps)
+
+        mock_llm.ainvoke.assert_awaited_once()
+        config = mock_llm.ainvoke.call_args.kwargs.get("config")
+        assert config is not None
+        tags = config.get("tags", [])
+        assert INTERNAL_TAG in tags
+        assert AGENT_ROUTING_TAG in tags
+        assert config.get("run_name") == "agent_routing"
+
     def test_supervisor_excludes_self_from_capabilities(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:

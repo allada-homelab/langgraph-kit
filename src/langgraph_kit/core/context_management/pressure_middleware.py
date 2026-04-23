@@ -20,6 +20,10 @@ from langgraph_kit.core.context_management.pressure import (
     MitigationStrategy,
     PressureMonitor,
 )
+from langgraph_kit.core.internal_tags import (
+    CONTEXT_COMPACTION_TAG,
+    internal_llm_config,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -101,8 +105,16 @@ class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
             HumanMessage(content=_render_conversation(messages)),
         ]
 
+        # Tag the call so consumers streaming via astream_events can filter
+        # the compactor's chat_model events out of the user-facing transcript
+        # — see langgraph_kit.core.internal_tags for rationale.
         try:
-            response = await self._llm.ainvoke(compaction_input)
+            response = await self._llm.ainvoke(
+                compaction_input,
+                config=internal_llm_config(
+                    CONTEXT_COMPACTION_TAG, run_name="context_compaction"
+                ),
+            )
         except Exception:
             logger.warning("FULL_COMPACTION LLM call failed", exc_info=True)
             self._monitor.record_compaction_failure()

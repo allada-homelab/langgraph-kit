@@ -98,3 +98,33 @@ async def test_full_compaction_without_llm_is_noop() -> None:
 
     result = await middleware.abefore_agent(state, MagicMock())
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_full_compaction_tags_llm_call_as_internal() -> None:
+    """Compactor's ainvoke must carry INTERNAL_TAG + CONTEXT_COMPACTION_TAG.
+
+    Without these tags, the summary tokens stream back into the user's
+    chat bubble alongside the agent's real reply.
+    """
+    from langgraph_kit.core.internal_tags import (
+        CONTEXT_COMPACTION_TAG,
+        INTERNAL_TAG,
+    )
+
+    monitor = PressureMonitor()
+    llm = MagicMock()
+    llm.ainvoke = AsyncMock(return_value=AIMessage(content=_VALID_SUMMARY))
+
+    middleware = PressureMiddleware(monitor, llm=llm, compaction_tail_size=3)
+
+    messages = _critical_pressure_messages()
+    await middleware.abefore_agent({"messages": messages}, MagicMock())
+
+    llm.ainvoke.assert_awaited_once()
+    config = llm.ainvoke.call_args.kwargs.get("config")
+    assert config is not None, "compactor must pass config= to ainvoke"
+    tags = config.get("tags", [])
+    assert INTERNAL_TAG in tags
+    assert CONTEXT_COMPACTION_TAG in tags
+    assert config.get("run_name") == "context_compaction"

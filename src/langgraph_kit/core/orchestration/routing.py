@@ -7,6 +7,11 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from langgraph_kit.core.internal_tags import (
+    AGENT_ROUTING_TAG,
+    internal_llm_config,
+)
+
 logger = logging.getLogger(__name__)
 
 
@@ -72,7 +77,13 @@ class LLMRoutingStrategy:
         messages.append(HumanMessage(content=message))
 
         try:
-            response = await self._llm.ainvoke(messages)
+            # Tag the call so consumers streaming via astream_events can filter
+            # the router's chat_model events out of the user-facing transcript
+            # — see langgraph_kit.core.internal_tags for rationale.
+            response = await self._llm.ainvoke(
+                messages,
+                config=internal_llm_config(AGENT_ROUTING_TAG, run_name="agent_routing"),
+            )
             content = (
                 response.content if hasattr(response, "content") else str(response)
             )

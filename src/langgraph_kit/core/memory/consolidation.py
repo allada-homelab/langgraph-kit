@@ -5,8 +5,16 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langgraph_kit.core.internal_tags import (
+    MEMORY_CONSOLIDATION_TAG,
+    internal_llm_config,
+)
 from langgraph_kit.core.memory._parsing import parse_json_array
-from langgraph_kit.core.memory.models import MemoryRecord, MemoryScope, MemoryType
+from langgraph_kit.core.memory.models import (
+    MemoryRecord,
+    MemoryScope,
+    coerce_memory_type,
+)
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 
 logger = logging.getLogger(__name__)
@@ -90,11 +98,18 @@ class MemoryConsolidator:
         memories_text = self._format_records(records)
         prompt = _CONSOLIDATION_PROMPT.format(memories=memories_text)
 
-        # Call LLM
+        # Call LLM. Tag the call so consumers streaming via astream_events
+        # can filter the chat_model events out of the user-facing transcript —
+        # see langgraph_kit.core.internal_tags for rationale.
         try:
             from langchain_core.messages import HumanMessage
 
-            response = await self._llm.ainvoke([HumanMessage(content=prompt)])
+            response = await self._llm.ainvoke(
+                [HumanMessage(content=prompt)],
+                config=internal_llm_config(
+                    MEMORY_CONSOLIDATION_TAG, run_name="memory_consolidation"
+                ),
+            )
             raw = response.content if hasattr(response, "content") else str(response)
         except Exception:
             logger.exception("Consolidation LLM call failed")
@@ -153,13 +168,24 @@ class MemoryConsolidator:
                     source_ids = action.get("source_ids", [])
                     merged_data = action.get("merged", {})
                     if source_ids and merged_data:
+                        # Guard enum construction — see coerce_memory_type
+                        # docstring. Skip instead of silently defaulting to
+                        # USER so we don't mislabel a merged record.
+                        mem_type = coerce_memory_type(merged_data.get("type"))
+                        if mem_type is None:
+                            logger.warning(
+                                "Consolidation merge action has unrecognized type=%r; skipping. Source ids=%s",
+                                merged_data.get("type"),
+                                source_ids,
+                            )
+                            continue
                         # Delete source records
                         for sid in source_ids:
                             await self._memory.delete(sid, scope)
                         # Create merged record
                         record = MemoryRecord(
                             title=merged_data.get("title", "Merged"),
-                            type=MemoryType(merged_data.get("type", "user")),
+                            type=mem_type,
                             scope=scope,
                             summary=merged_data.get("summary", ""),
                             body=merged_data.get("body", ""),
