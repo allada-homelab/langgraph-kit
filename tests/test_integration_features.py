@@ -523,6 +523,46 @@ class TestConversationReplay:
         result2 = model.invoke([HumanMessage(content="q2")])
         assert result2.content == "Second response"
 
+    def test_recorded_chat_model_bind_tools_is_noop_returning_self(self) -> None:
+        """``bind_tools`` must return a Runnable that still serves scripted responses.
+
+        ``create_agent`` and any LangChain agent flow calls ``bind_tools``
+        on its model at construction time. ``BaseChatModel.bind_tools``
+        raises ``NotImplementedError`` by default — without an override,
+        ``RecordedChatModel`` cannot drive a real compiled graph,
+        defeating the whole point of the replay system.
+
+        Tool schemas don't affect a recorded response (the recording
+        already has ``tool_calls`` baked into each ``output_message``),
+        so the override is a pass-through. This test locks in that
+        contract so a future change to ``bind_tools`` doesn't silently
+        break the e2e test layer.
+        """
+        from langgraph_kit.replay import (
+            ConversationRecording,
+            LLMInteraction,
+            RecordedChatModel,
+        )
+
+        recording = ConversationRecording(
+            interactions=[
+                LLMInteraction(
+                    sequence_num=1,
+                    output_message={"role": "assistant", "content": "bound"},
+                ),
+            ],
+        )
+        model = RecordedChatModel(recording=recording)
+
+        def _dummy_tool(x: int) -> int:
+            return x
+
+        bound = model.bind_tools([_dummy_tool])
+        assert bound is model  # pass-through by design
+
+        result = bound.invoke([HumanMessage(content="ignored")])
+        assert result.content == "bound"
+
     def test_recorded_chat_model_raises_on_exhaustion(self) -> None:
         """Setup: recording with 1 interaction. Run: call twice. Analyze: raises mismatch."""
         from langgraph_kit.replay import (

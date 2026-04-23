@@ -7,6 +7,7 @@ from typing import Any, ClassVar
 
 from langchain_core.language_models import (  # pyright: ignore[reportMissingModuleSource]
     BaseChatModel,
+    LanguageModelInput,
 )
 from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
     AIMessage,
@@ -16,6 +17,7 @@ from langchain_core.outputs import (  # pyright: ignore[reportMissingModuleSourc
     ChatGeneration,
     ChatResult,
 )
+from langchain_core.runnables import Runnable  # pyright: ignore[reportMissingModuleSource]
 
 from langgraph_kit.replay.models import ConversationRecording, LLMInteraction
 
@@ -84,6 +86,30 @@ class RecordedChatModel(BaseChatModel):
             "agent_id": self.recording.agent_id,
             "total_interactions": len(self.recording.llm_interactions),
         }
+
+    def bind_tools(
+        self,
+        tools: Any,  # noqa: ARG002
+        *,
+        tool_choice: Any = None,  # noqa: ARG002
+        **kwargs: Any,  # noqa: ARG002
+    ) -> Runnable[LanguageModelInput, AIMessage]:
+        """Return self unchanged — recorded responses already include tool calls.
+
+        ``create_agent`` (and any LangChain agent flow) calls ``bind_tools``
+        on its model during construction so the LLM can see the active
+        tool schemas. A recording is served verbatim: whatever
+        ``tool_calls`` the recorded LLM decided on are already baked into
+        each ``LLMInteraction.output_message``. The bound tool list
+        doesn't change what we emit, so binding is a no-op and we hand
+        back the same model.
+
+        Without this override, ``BaseChatModel.bind_tools`` raises
+        ``NotImplementedError`` and the recorded model cannot drive a
+        real compiled graph — defeating the whole point of the replay
+        system.
+        """
+        return self
 
 
 def _interaction_to_result(interaction: LLMInteraction) -> ChatResult:

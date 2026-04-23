@@ -1,6 +1,6 @@
 # Testing Roadmap
 
-**Status as of 2026-04-23:** Phase 0 (roadmap commit) complete. Next action: Phase 1 — write `tests/e2e/test_spike.py` and confirm `RecordedChatModel` composes with a real `build_reference_deep_agent`-built graph.
+**Status as of 2026-04-23:** Phase 1 (spike) complete — `RecordedChatModel` drives a real `build_reference_deep_agent` graph through a multi-turn tool-calling conversation. Surfaced two carryovers for Phase 2: (1) needed `bind_tools` on `RecordedChatModel` (fixed), (2) deepagents v0.6 `DeprecationWarning`s fire on real graph invocation and need a conftest-level filter. Next action: Phase 2 — scaffold `tests/e2e/conftest.py` and `tests/e2e/helpers.py`.
 
 ## Goal
 
@@ -34,9 +34,11 @@ Full rationale lives in the commit that introduced this file.
 
 Prove a `RecordedChatModel` can drive a real kit-built graph through a multi-turn conversation with tool calls. If this fails, the rest of the plan is wrong — stop and re-scope.
 
-- [ ] Write `tests/e2e/test_spike.py` — build `build_reference_deep_agent` with `RecordedChatModel` scripted for (turn 1: tool call → turn 2: final content); `ainvoke`; assert tool call landed in state and final content reached the user
-- [ ] Run it (`uv run pytest tests/e2e/test_spike.py -v`) — passes
-- [ ] Delete `test_spike.py` (cleanup — spike only existed to de-risk the approach)
+- [x] Write `tests/e2e/test_spike.py` — build `build_reference_deep_agent` with `RecordedChatModel` scripted for (turn 1: tool call → turn 2: final content); `ainvoke`; assert tool call landed in state and final content reached the user
+- [x] Run it (`uv run pytest tests/e2e/test_spike.py -v`) — passes
+- [x] Delete `test_spike.py` (cleanup — spike only existed to de-risk the approach)
+- [x] Fix surfaced gap: `RecordedChatModel.bind_tools` was missing, making it unusable against `create_agent`. Added as pass-through override with a unit test in `test_integration_features.py`.
+- [x] Noted: deepagents v0.6 `DeprecationWarning`s (`backend=` factory, `StateBackend(runtime)`) fire during real graph invocation. Filter globally in `tests/e2e/conftest.py` in Phase 2.
 
 ### Phase 2 — infrastructure
 
