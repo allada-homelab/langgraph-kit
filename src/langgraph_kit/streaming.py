@@ -11,6 +11,7 @@ from langgraph_kit.core.artifacts import (
     ARTIFACT_SENTINEL,
     init_artifact_queue,
 )
+from langgraph_kit.core.internal_tags import INTERNAL_TAG
 from langgraph_kit.core.ui_events import (
     CITATION_SENTINEL,
     PROGRESS_SENTINEL,
@@ -99,6 +100,13 @@ async def stream_agent_events(
         async for event in graph.astream_events(
             input_data, config=config, version="v2"
         ):
+            # Drop events from kit-internal LLM calls (memory extraction,
+            # consolidation, context compaction, routing). Without this
+            # filter, their tokens and tool-call metadata leak into the
+            # user-facing transcript — see langgraph_kit.core.internal_tags.
+            if INTERNAL_TAG in (event.get("tags") or ()):
+                continue
+
             kind = event["event"]
 
             # --- Tool call start ---

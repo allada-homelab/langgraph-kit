@@ -138,6 +138,94 @@ async def test_extract_handles_malformed_response(
     assert result == []
 
 
+@pytest.mark.asyncio
+async def test_extract_skips_invalid_type_and_keeps_rest(
+    memory_manager: PersistentMemoryManager,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """An invalid ``type`` value on one candidate must not kill the batch.
+
+    Regression test for the production crash: the extractor LLM returned a
+    candidate with ``"type": "assistant"`` (not a MemoryType member); the
+    enum constructor raised ValueError and the surrounding per-candidate
+    try/except logged a traceback that looked like a hard failure. With
+    pre-validation via ``coerce_memory_type``, the bad candidate is dropped
+    at WARN (no traceback) and sibling candidates still persist.
+    """
+    llm_response = """[
+        {
+            "action": "create",
+            "title": "Available Tools and Operational Constraints",
+            "type": "assistant",
+            "scope": "assistant",
+            "summary": "Captures current toolset",
+            "body": "Available tools: ls, read_file, ..."
+        },
+        {
+            "action": "create",
+            "title": "User prefers TDD",
+            "type": "feedback",
+            "scope": "user",
+            "summary": "Test-first workflow requested",
+            "body": "Write failing tests before implementing features."
+        }
+    ]"""
+    llm = _make_llm_mock(llm_response)
+    extractor = AutoMemoryExtractor(memory_manager, llm)
+
+    with caplog.at_level("WARNING", logger="langgraph_kit.core.memory.extraction"):
+        result = await extractor.extract(
+            recent_messages=[MagicMock(type="human", content="hi")]
+        )
+
+    # Only the valid candidate persisted.
+    assert len(result) == 1
+    assert result[0].title == "User prefers TDD"
+
+    # The invalid one was reported at WARN — not as a traceback-bearing
+    # ``logger.exception`` — and named the offending value so the operator
+    # can diagnose the extractor prompt.
+    warning_texts = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("assistant" in text for text in warning_texts), warning_texts
+    # And no ERROR-level noise from an unhandled enum ValueError.
+    assert not any(r.levelname == "ERROR" for r in caplog.records), [
+        r.getMessage() for r in caplog.records
+    ]
+
+
+@pytest.mark.asyncio
+async def test_extract_tags_llm_call_with_internal_tag(
+    memory_manager: PersistentMemoryManager,
+) -> None:
+    """The extractor's ainvoke must carry ``langgraph_kit:internal`` and
+    ``langgraph_kit:memory_extraction`` tags so consumers can filter the
+    resulting chat_model events out of the user-facing SSE stream.
+
+    Regression test for the leak bug: without these tags, the extractor's
+    JSON output would stream back to the user's chat bubble after the main
+    agent reply finished.
+    """
+    from langgraph_kit.core.internal_tags import (
+        INTERNAL_TAG,
+        MEMORY_EXTRACTION_TAG,
+    )
+
+    llm = _make_llm_mock("[]")
+    extractor = AutoMemoryExtractor(memory_manager, llm)
+
+    await extractor.extract(recent_messages=[MagicMock(type="human", content="hi")])
+
+    llm.ainvoke.assert_awaited_once()
+    call_kwargs = llm.ainvoke.call_args.kwargs
+    config = call_kwargs.get("config")
+    assert config is not None, "ainvoke must be called with a config= kwarg"
+    tags = config.get("tags", [])
+    assert INTERNAL_TAG in tags
+    assert MEMORY_EXTRACTION_TAG in tags
+    # run_name is visible on astream_events; useful for observability too.
+    assert config.get("run_name") == "memory_extraction"
+
+
 # ---------------------------------------------------------------------------
 # ExtractionMiddleware tests
 # ---------------------------------------------------------------------------

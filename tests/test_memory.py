@@ -11,6 +11,7 @@ from langgraph_kit.core.memory.models import (
     MemoryRecord,
     MemoryScope,
     MemoryType,
+    coerce_memory_type,
 )
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 from langgraph_kit.core.memory.session import (
@@ -52,6 +53,31 @@ def _make_record(**kwargs: object) -> MemoryRecord:
 # ===========================================================================
 # MemoryRecord model tests (synchronous)
 # ===========================================================================
+
+
+class TestCoerceMemoryType:
+    """Pre-validation helper that replaces raw ``MemoryType(value)`` calls.
+
+    Motivated by a crash where an extractor LLM emitted ``"type": "assistant"``
+    (outside the taxonomy) and the resulting ValueError polluted error logs
+    with a full traceback.
+    """
+
+    def test_valid_string_returns_member(self) -> None:
+        for name in ("user", "feedback", "project", "reference"):
+            assert coerce_memory_type(name) == MemoryType(name)
+
+    def test_already_enum_is_returned_as_is(self) -> None:
+        assert coerce_memory_type(MemoryType.FEEDBACK) is MemoryType.FEEDBACK
+
+    def test_invalid_string_returns_none(self) -> None:
+        # Real-world values that the extractor has produced.
+        for bad in ("assistant", "system", "note", "", "USER"):
+            assert coerce_memory_type(bad) is None, bad
+
+    def test_non_string_returns_none(self) -> None:
+        for bad in (None, 42, [], {}, object()):
+            assert coerce_memory_type(bad) is None
 
 
 class TestMemoryRecord:

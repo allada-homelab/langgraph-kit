@@ -28,6 +28,24 @@ class MemoryScope(StrEnum):
     TEAM = "team"
 
 
+def coerce_memory_type(value: Any) -> MemoryType | None:
+    """Return a :class:`MemoryType` if ``value`` is a valid member, else ``None``.
+
+    Guards enum construction against freeform LLM output. Extractor and
+    consolidator models occasionally produce values outside the taxonomy
+    (e.g. ``"assistant"``, ``"system"``, ``"note"``); callers should skip
+    such candidates rather than defaulting them to a potentially wrong type.
+    """
+    if isinstance(value, MemoryType):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        return MemoryType(value)
+    except ValueError:
+        return None
+
+
 class MemoryRecord(BaseModel):
     """A single unit of persistent memory stored in LangGraph Store."""
 

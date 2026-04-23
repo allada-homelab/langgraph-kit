@@ -5,11 +5,15 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langgraph_kit.core.internal_tags import (
+    MEMORY_EXTRACTION_TAG,
+    internal_llm_config,
+)
 from langgraph_kit.core.memory._parsing import parse_json_array
 from langgraph_kit.core.memory.models import (
     MemoryRecord,
     MemoryScope,
-    MemoryType,
+    coerce_memory_type,
 )
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 
@@ -107,11 +111,19 @@ class AutoMemoryExtractor:
             recent_messages=messages_text,
         )
 
-        # Call LLM for extraction (text-only, no tools)
+        # Call LLM for extraction (text-only, no tools). The call is tagged so
+        # that consumers streaming via astream_events can filter the emitted
+        # chat_model events out of the user-facing transcript — see
+        # langgraph_kit.core.internal_tags for rationale.
         try:
             from langchain_core.messages import HumanMessage
 
-            response = await self._llm.ainvoke([HumanMessage(content=prompt)])
+            response = await self._llm.ainvoke(
+                [HumanMessage(content=prompt)],
+                config=internal_llm_config(
+                    MEMORY_EXTRACTION_TAG, run_name="memory_extraction"
+                ),
+            )
             raw = response.content if hasattr(response, "content") else str(response)
         except Exception:
             logger.exception("Memory extraction LLM call failed")
@@ -171,9 +183,20 @@ class AutoMemoryExtractor:
                     continue
 
                 # action == "create"
+                mem_type = coerce_memory_type(candidate.get("type"))
+                if mem_type is None:
+                    # Extractor LLMs sometimes invent enum members (e.g.
+                    # "assistant", "system", "note"). Skip rather than crash
+                    # the batch or silently coerce to a wrong default.
+                    logger.warning(
+                        "Extraction candidate has unrecognized type=%r; skipping. Candidate title=%r",
+                        candidate.get("type"),
+                        candidate.get("title"),
+                    )
+                    continue
                 record = MemoryRecord(
                     title=candidate.get("title", "Untitled"),
-                    type=MemoryType(candidate.get("type", "user")),
+                    type=mem_type,
                     scope=scope,
                     summary=candidate.get("summary", ""),
                     body=candidate.get("body", ""),
