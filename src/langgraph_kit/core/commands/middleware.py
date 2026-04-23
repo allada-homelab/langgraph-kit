@@ -8,6 +8,9 @@ from typing import Any
 from langchain.agents.middleware.types import (
     AgentMiddleware as _AgentMiddleware,
 )
+from langchain.agents.middleware.types import (
+    hook_config,
+)
 
 from langgraph_kit.core.commands.dispatch import CommandDispatcher
 
@@ -18,14 +21,22 @@ class CommandMiddleware(_AgentMiddleware):  # type: ignore[misc]
     """Intercepts user messages starting with ``/`` and routes them to the CommandDispatcher.
 
     If the command is handled, the middleware short-circuits the agent loop
-    by injecting the command output as an AI message and skipping the LLM call.
-    Unrecognized commands pass through to the agent normally.
+    by injecting the command output as an AI message and jumping to ``end``
+    so the LLM is never called for this turn. Unrecognized commands pass
+    through to the agent normally.
+
+    The short-circuit requires two cooperating pieces that a naive
+    implementation would miss: a ``jump_to: "end"`` return value AND the
+    :func:`langchain.agents.middleware.types.hook_config` ``can_jump_to``
+    allowlist — without the decorator, LangChain's graph wiring ignores
+    ``jump_to`` and the model runs anyway, producing a duplicate response.
     """
 
     def __init__(self, dispatcher: CommandDispatcher) -> None:
         super().__init__()
         self._dispatcher = dispatcher
 
+    @hook_config(can_jump_to=["end"])
     async def abefore_agent(
         self,
         state: Any,
@@ -53,15 +64,24 @@ class CommandMiddleware(_AgentMiddleware):  # type: ignore[misc]
         if not result.handled:
             return None
 
-        # Short-circuit: replace the last user message exchange with command output
+        # Short-circuit: emit the command result as an AI message and
+        # jump_to "end" so the graph terminates without invoking the model.
+        # Returning messages goes through the ``add_messages`` reducer which
+        # appends by default but *replaces in place* when message ids match
+        # — which is how the ``/compact`` branch below delivers a mutated
+        # transcript without leaving duplicates.
         from langchain_core.messages import (
             AIMessage,  # pyright: ignore[reportMissingModuleSource]
         )
 
-        # Some commands (e.g. /compact) produce a replacement message list
         compacted: list[Any] | None = result.metadata.get("compacted_messages")
         if compacted is not None:
-            compacted.append(AIMessage(content=result.output))
-            return {"messages": compacted}
+            return {
+                "messages": [*compacted, AIMessage(content=result.output)],
+                "jump_to": "end",
+            }
 
-        return {"messages": [AIMessage(content=result.output)]}
+        return {
+            "messages": [AIMessage(content=result.output)],
+            "jump_to": "end",
+        }
