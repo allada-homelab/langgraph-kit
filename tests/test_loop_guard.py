@@ -12,7 +12,6 @@ from langgraph_kit.core.resilience.loop_guard import (
     ToolLoopGuardMiddleware,
 )
 
-
 _SHARED_RUNTIME = object()
 """Stable identity for all ``_request`` calls in this module.
 

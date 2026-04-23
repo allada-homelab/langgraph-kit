@@ -50,10 +50,18 @@ def _format_response(response: Any) -> str:
 def build_approve_action_tool() -> Any:
     """Create the ``approve_action`` tool for agents."""
 
+    # The argument is named ``action_args`` rather than ``args`` because
+    # langchain's StructuredTool internal schema already reserves the
+    # attribute name ``args`` — passing a tool with a literal ``args``
+    # parameter makes LangChain mangle it to ``v__args`` when dispatching,
+    # which then fails at call time with:
+    #   TypeError: approve_action() got an unexpected keyword argument 'v__args'
+    # The interrupt payload still speaks ``{"action_request": {"args": ...}}``
+    # so the frontend/resume contract is unchanged.
     async def approve_action(
         action: str,
         description: str,
-        args: dict[str, Any] | None = None,
+        action_args: dict[str, Any] | None = None,
     ) -> str:
         """Request user approval before performing a risky action.
 
@@ -64,7 +72,7 @@ def build_approve_action_tool() -> Any:
         Args:
             action: Short name for the action (e.g. "delete_file", "git_push")
             description: Human-readable explanation of what will happen
-            args: Optional details about the action (e.g. {"path": "/etc/config"})
+            action_args: Optional details about the action (e.g. {"path": "/etc/config"})
         """
         from langgraph.types import (
             interrupt,  # pyright: ignore[reportMissingModuleSource]
@@ -72,7 +80,7 @@ def build_approve_action_tool() -> Any:
 
         response = interrupt(
             {
-                "action_request": {"action": action, "args": args or {}},
+                "action_request": {"action": action, "args": action_args or {}},
                 "config": {
                     "allow_ignore": True,
                     "allow_respond": True,

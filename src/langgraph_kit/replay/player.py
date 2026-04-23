@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 from difflib import SequenceMatcher
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from langchain_core.language_models import (  # pyright: ignore[reportMissingModuleSource]
     BaseChatModel,
-    LanguageModelInput,
 )
 from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
     AIMessage,
@@ -17,9 +16,16 @@ from langchain_core.outputs import (  # pyright: ignore[reportMissingModuleSourc
     ChatGeneration,
     ChatResult,
 )
-from langchain_core.runnables import Runnable  # pyright: ignore[reportMissingModuleSource]
 
 from langgraph_kit.replay.models import ConversationRecording, LLMInteraction
+
+if TYPE_CHECKING:
+    from langchain_core.language_models import (  # pyright: ignore[reportMissingModuleSource]
+        LanguageModelInput,
+    )
+    from langchain_core.runnables import (  # pyright: ignore[reportMissingModuleSource]
+        Runnable,
+    )
 
 
 class ReplayMismatchError(Exception):

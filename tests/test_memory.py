@@ -228,6 +228,106 @@ class TestPersistentMemoryManager:
         assert isinstance(results, list)
         assert all(isinstance(r, MemoryRecord) for r in results)
 
+    @pytest.mark.asyncio
+    async def test_update_unknown_id_returns_none(
+        self, manager: PersistentMemoryManager
+    ) -> None:
+        """``update`` must not invent records when the id is absent — it returns None."""
+        result = await manager.update(
+            "does-not-exist", MemoryScope.USER, {"body": "x"}
+        )
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_update_relocates_record_when_type_changes(
+        self, manager: PersistentMemoryManager, mock_store: Any
+    ) -> None:
+        """Changing a record's ``type`` moves it to the new type-scoped namespace.
+
+        Without the old-namespace delete the record would exist in two
+        places, and reads that probe by type would return duplicates.
+        """
+        record = _make_record(type=MemoryType.USER, scope=MemoryScope.USER)
+        await manager.create(record)
+        old_ns = ("memory", MemoryScope.USER.value, MemoryType.USER.value)
+        assert record.id in mock_store._data.get(old_ns, {}), (
+            "precondition: record should live in the user/user namespace"
+        )
+
+        updated = await manager.update(
+            record.id,
+            record.scope,
+            {"type": MemoryType.FEEDBACK.value},
+        )
+        assert updated is not None
+        assert updated.type == MemoryType.FEEDBACK
+
+        new_ns = ("memory", MemoryScope.USER.value, MemoryType.FEEDBACK.value)
+        assert record.id in mock_store._data.get(new_ns, {}), (
+            "record should now live under the new type's namespace"
+        )
+        assert record.id not in mock_store._data.get(old_ns, {}), (
+            "old namespace should no longer hold the relocated record"
+        )
+
+    @pytest.mark.asyncio
+    async def test_get_without_type_probes_every_type_namespace(
+        self, manager: PersistentMemoryManager
+    ) -> None:
+        """``get(record_id, scope, memory_type=None)`` searches across all types."""
+        record = _make_record(
+            title="hide-and-seek",
+            type=MemoryType.PROJECT,
+            scope=MemoryScope.USER,
+        )
+        await manager.create(record)
+
+        # Caller doesn't remember which type this record has — pass None
+        # and the manager should find it anyway.
+        fetched = await manager.get(record.id, record.scope, memory_type=None)
+        assert fetched is not None
+        assert fetched.type == MemoryType.PROJECT
+
+    @pytest.mark.asyncio
+    async def test_list_all_scopes_returns_only_populated_scopes(
+        self, manager: PersistentMemoryManager
+    ) -> None:
+        """Scopes with no records should not appear in the survey."""
+        await manager.create(
+            _make_record(scope=MemoryScope.USER, type=MemoryType.USER)
+        )
+        scopes = await manager.list_all_scopes()
+        assert MemoryScope.USER in scopes
+        # Scopes we never wrote to should stay out of the result.
+        assert MemoryScope.TEAM not in scopes
+        assert MemoryScope.ASSISTANT not in scopes
+
+    @pytest.mark.asyncio
+    async def test_search_filter_by_type_restricts_namespace_scan(
+        self, manager: PersistentMemoryManager
+    ) -> None:
+        """``search(memory_type=...)`` only hits that type's namespace.
+
+        The search API takes a ``memory_type`` filter that narrows the
+        scan to one namespace. This test confirms that records of other
+        types aren't returned even though MockStore returns whatever is
+        in the namespace it's given.
+        """
+        await manager.create(
+            _make_record(title="user-typed", type=MemoryType.USER)
+        )
+        await manager.create(
+            _make_record(title="feedback-typed", type=MemoryType.FEEDBACK)
+        )
+        results = await manager.search(
+            "anything", MemoryScope.USER, memory_type=MemoryType.FEEDBACK
+        )
+        titles = {r.title for r in results}
+        assert titles == {"feedback-typed"}, (
+            f"search with memory_type=FEEDBACK should only return FEEDBACK"
+            f" records; got {titles}"
+        )
+
 
 # ===========================================================================
 # SessionNotebook tests (async)

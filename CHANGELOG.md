@@ -22,16 +22,50 @@ All notable changes to this project are documented here. This project adheres to
   and scripting helpers (`scripted_llm`, `tool_call_turn`, `answer`,
   `CapturingScriptedChatModel`, `assert_tool_invoked`,
   `last_ai_message`) for driving real compiled graphs with a scripted
-  `RecordedChatModel`. 45 scenarios across 17 files cover deferred
-  tools, memory tools (CRUD round-trip), skills, UI tools, every
-  built-in slash command, middleware ordering, plugin contributions
-  (section-only, tool-only, multi-plugin), stop-hook error paths,
-  recursion-limit behavior, builder smoke, and cross-cluster
-  condition/capability invariants that generalize the `deferred_tools`
-  bug class. See `TESTING_ROADMAP.md` and
-  `tests/e2e/FEATURE_INVENTORY.md`.
+  `RecordedChatModel`. **~87 scenarios across 30 files** now cover
+  deferred tools, every standard tool (memory CRUD, skills, UI,
+  async-task error paths, HITL approve_action pause/resume,
+  `retrieve_result` pagination), every slash command, every middleware
+  (including `QueuedInput`, `Pressure` microcompact under load,
+  `Extraction` positive-emit, `CompletionGuard` premature-completion
+  nudge, `PostRunBackstop` record shape, `RuntimeState` smoke),
+  plugin contributions (section-only / tool-only / multi-plugin /
+  empty-registry gating), stop-hook error paths, recursion-limit
+  behavior, all four builders (`build_deep_agent`,
+  `build_reference_deep_agent`, `build_basic_deep_agent`,
+  `build_coding_agent`), replay (recorder captures real runs, save/load
+  round-trip, ReplayAssertions mismatch detection, recording drives
+  a second graph), streaming ↔ ainvoke parity, FastAPI HTTP
+  round-trip, A2A Task envelope + Agent Card, supervisor keyword
+  routing with delegation record, CLI scaffolder import + smoke
+  invoke, and cross-cluster condition/capability invariants that
+  generalize the `deferred_tools` bug class. See `TESTING_ROADMAP.md`
+  and `tests/e2e/FEATURE_INVENTORY.md`.
 
 ### Fixed
+
+- **`approve_action` parameter `args` renamed to `action_args`.**
+  LangChain's `StructuredTool` reserves the name `args` on its
+  internal schema; a tool function with a literal `args` parameter
+  made LangChain mangle it to `v__args` at dispatch time, and the
+  actual call then failed with
+  `TypeError: approve_action() got an unexpected keyword argument 'v__args'`.
+  The interrupt payload still speaks
+  `{"action_request": {"args": ...}}` so the frontend / `/resume`
+  contract is unchanged — only the LLM-visible parameter name on the
+  tool signature changed. Surfaced by the HITL e2e tests in
+  `tests/e2e/test_tools_hitl_e2e.py`.
+
+- **`ToolErrorMiddleware` now re-raises `GraphInterrupt`.** The
+  middleware previously caught every exception and converted it into
+  a structured error `ToolMessage`, including LangGraph's
+  `GraphInterrupt` control-flow signal. That turned an HITL pause
+  into an error (the run continued as if the tool had failed, and
+  the user's `Command(resume=…)` payload never reached the paused
+  tool). The middleware now re-raises `GraphInterrupt` before its
+  general `except Exception:` branch, so `interrupt()` calls from
+  `approve_action` (and any future HITL tool) properly pause the
+  graph. Surfaced by the same HITL e2e tests.
 
 - **`ToolLoopGuardMiddleware` streak counter now survives real graph
   execution.** The guard previously stored per-run streak counts in a

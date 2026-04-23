@@ -17,6 +17,7 @@ from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSour
 )
 
 from langgraph_kit.graphs.basic_deep_agent import build_basic_deep_agent
+from langgraph_kit.graphs.coding_agent import build_coding_agent
 from tests.e2e.helpers import answer, last_ai_message, scripted_llm
 
 pytestmark = pytest.mark.e2e
@@ -54,3 +55,38 @@ async def test_build_basic_deep_agent_smoke(
     )
     final = last_ai_message(result)
     assert "basic-agent-ok" in str(final.content)
+
+
+@pytest.mark.asyncio
+async def test_build_coding_agent_smoke(
+    checkpointer: Any,
+    e2e_store: Any,
+    patched_build_llm: Any,
+) -> None:
+    """``build_coding_agent`` produces a working graph end-to-end.
+
+    Coding agent layers coding-profile prompt sections, a
+    ``GitContextProvider``, worktree tools, and a stricter verification
+    worker over the reference skeleton. Smoke: the scripted LLM reaches
+    the graph and its answer comes back unchanged.
+
+    ``build_coding_agent`` routes through ``build_deep_agent``, which
+    resolves ``build_llm`` from ``langgraph_kit.graphs._builder`` — so
+    the standard ``patched_build_llm`` fixture applies here (unlike
+    ``build_basic_deep_agent`` above).
+    """
+    scripted = scripted_llm([answer("coding-agent-ok")])
+    with patched_build_llm(scripted):
+        graph, _dispatcher = build_coding_agent(
+            checkpointer=checkpointer,
+            store=e2e_store,
+        )
+
+    result = await graph.ainvoke(
+        {"messages": [HumanMessage(content="look at the repo")]},
+        config={"configurable": {"thread_id": "coding-smoke"}},  # pyright: ignore[reportArgumentType]
+    )
+    final = last_ai_message(result)
+    assert "coding-agent-ok" in str(final.content), (
+        f"Coding agent didn't surface the scripted response; got {final.content!r}"
+    )

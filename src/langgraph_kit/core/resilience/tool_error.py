@@ -43,9 +43,25 @@ class ToolErrorMiddleware(_AgentMiddleware):  # type: ignore[misc]
         tool_name = request.tool_call.get("name", "unknown")
         tool_call_id = request.tool_call.get("id", "")
 
+        # ``GraphInterrupt`` is LangGraph's control-flow signal for HITL
+        # pauses — it MUST propagate past this middleware so the graph
+        # actually stops. Swallowing it converts an interrupt into an
+        # error ToolMessage, which (a) hides the pause from the caller,
+        # and (b) blocks the user's resume payload from ever reaching
+        # the paused tool. Imported lazily so importing this module
+        # doesn't require LangGraph to be on the path.
+        from langgraph.errors import (  # pyright: ignore[reportMissingImports]
+            GraphInterrupt,
+        )
+
         for attempt in range(1 + self._max_retries):
             try:
                 return await handler(request)
+            except GraphInterrupt:
+                # Not a tool failure — re-raise so LangGraph can pause
+                # the graph and surface the interrupt payload to the
+                # caller via graph.aget_state(...).
+                raise
             except Exception as exc:
                 error_type = type(exc).__name__
                 retryable = error_type in _RETRYABLE_TYPES
