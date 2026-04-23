@@ -55,8 +55,8 @@ class ResultPersistenceMiddleware(AgentMiddleware):  # type: ignore[misc]
             :16
         ]
 
+        namespace = ("tool_results",)
         try:
-            namespace = ("tool_results",)
             await store.aput(
                 namespace,
                 result_key,
@@ -67,20 +67,50 @@ class ResultPersistenceMiddleware(AgentMiddleware):  # type: ignore[misc]
                     "char_count": len(content),
                 },
             )
-
-            # Build preview + reference
-            preview = content[: self._preview_length]
-            replacement = (
-                f"{preview}\n\n"
-                f"[Full result persisted — {len(content):,} chars — "
-                f"ref: {result_key}]"
-            )
-
-            # Create new ToolMessage with replaced content
-            if hasattr(result, "model_copy"):
-                return result.model_copy(update={"content": replacement})
+        except Exception:
+            # Persistence is the pre-condition for replacing the inline
+            # content — if the store write failed, leaving the full
+            # content in the message is the *correct* fallback because
+            # the agent can't retrieve what was never persisted.
+            logger.exception("Failed to persist tool result, leaving inline")
             return result
 
+        # Build preview + reference
+        preview = content[: self._preview_length]
+        replacement = (
+            f"{preview}\n\n"
+            f"[Full result persisted — {len(content):,} chars — "
+            f"ref: {result_key}]"
+        )
+
+        # Create a replacement message with the same id (so ``add_messages``
+        # replaces in place). Prefer ``model_copy`` to preserve every other
+        # field; fall back to a fresh ToolMessage construction if the
+        # message class doesn't support it — never return the original
+        # large-content result, because the store already holds the canonical
+        # copy and the agent would otherwise double-account for the bytes.
+        if hasattr(result, "model_copy"):
+            return result.model_copy(update={"content": replacement})
+
+        try:
+            from langchain_core.messages import (
+                ToolMessage,  # pyright: ignore[reportMissingModuleSource]
+            )
+
+            return ToolMessage(
+                content=replacement,
+                tool_call_id=tool_call_id,
+                name=tool_name,
+                id=getattr(result, "id", None),
+            )
         except Exception:
-            logger.exception("Failed to persist tool result, leaving inline")
+            # Last-resort: if we can't produce a replacement, roll back
+            # the store write so we don't orphan bytes nothing can reach.
+            logger.exception(
+                "Could not build replacement ToolMessage; rolling back persistence"
+            )
+            try:
+                await store.adelete(namespace, result_key)
+            except Exception:
+                logger.exception("Rollback delete also failed for key %s", result_key)
             return result

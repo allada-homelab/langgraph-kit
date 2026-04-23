@@ -97,6 +97,78 @@ async def test_large_result_persisted_and_replaced(mock_store: Any) -> None:
     assert stored_val["tool_name"] == "read_file"
 
 
+@pytest.mark.asyncio
+async def test_large_result_without_model_copy_falls_back_to_fresh_toolmessage(
+    mock_store: Any,
+) -> None:
+    """If the result object has no ``model_copy`` the middleware must still
+    replace the inline content — not silently return the huge original.
+
+    Regression test for a bug where the ``hasattr`` guard fell through to
+    ``return result``: the store write succeeded but the unmodified large
+    content kept flowing to the agent, wasting context and orphaning the
+    persisted copy.
+    """
+    middleware = ResultPersistenceMiddleware(persist_threshold=4000, preview_length=50)
+
+    request = MagicMock()
+    request.tool_call = {"name": "read_file", "id": "call_no_copy"}
+    request.runtime.store = mock_store
+
+    # A bare object with .content but no model_copy (e.g. a plain dataclass
+    # a consumer might use instead of ToolMessage).
+    class Bare:
+        content = "y" * 6000
+        id = "orig-id"
+
+    handler = AsyncMock(return_value=Bare())
+    result = await middleware.awrap_tool_call(request, handler)
+
+    # Fallback constructed a fresh ToolMessage with the replacement.
+    assert "[Full result persisted" in result.content
+    assert len(result.content) < 500, (
+        "Replacement content must be SMALL — the whole point of persistence"
+    )
+    # Store still holds the canonical copy.
+    stored = mock_store._data.get(("tool_results",))
+    assert stored is not None
+    assert len(stored) == 1
+
+
+@pytest.mark.asyncio
+async def test_persist_failure_keeps_inline_and_does_not_orphan_store(
+    mock_store: Any,
+) -> None:
+    """If the store write itself fails the original result must flow through.
+
+    The agent can only retrieve what was actually persisted — returning a
+    preview that points at a missing store entry would be worse than
+    leaving the large content in-message.
+    """
+    middleware = ResultPersistenceMiddleware(persist_threshold=10)
+
+    # Patch the store to raise on aput.
+    async def _boom(*_a: Any, **_k: Any) -> None:
+        raise RuntimeError("store down")
+
+    mock_store.aput = _boom  # type: ignore[attr-defined]
+
+    request = MagicMock()
+    request.tool_call = {"name": "t", "id": "c"}
+    request.runtime.store = mock_store
+
+    result_msg = MagicMock()
+    result_msg.content = "large content that should persist"
+    result_msg.model_copy = lambda *, update: MagicMock(content=update["content"])
+
+    handler = AsyncMock(return_value=result_msg)
+    result = await middleware.awrap_tool_call(request, handler)
+
+    # Original content preserved — no dangling preview.
+    assert result is result_msg
+    assert result.content == "large content that should persist"
+
+
 # ---------------------------------------------------------------------------
 # 2. DeferredToolRegistry + build_tool_search
 # ---------------------------------------------------------------------------
