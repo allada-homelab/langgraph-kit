@@ -299,6 +299,41 @@ def _get_store(request: Request) -> Any:
         return store
 
 
+async def _verify_thread_owner(
+    store: Any,
+    thread_id: str,
+    current_user: Any,
+    *,
+    allow_unclaimed: bool = False,
+) -> None:
+    """Enforce that ``thread_id`` belongs to ``current_user``.
+
+    Raises HTTP 404 (not 403) on mismatch to avoid leaking thread existence
+    to outside users.
+
+    When ``allow_unclaimed`` is True, threads with no metadata (i.e. not yet
+    created in the ThreadManager index) pass the check — this is needed for
+    the stream/invoke endpoints where the first call creates the thread.
+    All other endpoints operate on existing threads only.
+    """
+    from langgraph_kit.core.threads import ThreadManager
+
+    mgr = ThreadManager(store)
+    meta = await mgr.get(thread_id)
+    if meta is None:
+        if allow_unclaimed:
+            return
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Thread not found",
+        )
+    if meta.user_id != str(current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Thread not found",
+        )
+
+
 def create_agent_router(*, get_current_user: Any) -> APIRouter:
     """Create a FastAPI router for agent endpoints.
 
@@ -348,6 +383,15 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
 
         graph = _get_graph(agent_id)
         tid = request.thread_id or str(uuid4())
+        store = _store_var.get(None) or getattr(http_request.app.state, "store", None)
+
+        # Ownership check: pre-existing threads must belong to current_user.
+        # Unclaimed thread_ids pass through to _ensure_thread below.
+        if store is not None and request.thread_id:
+            await _verify_thread_owner(
+                store, tid, current_user, allow_unclaimed=True
+            )
+
         input_data: dict[str, Any] = {"messages": _to_lc_messages(request.messages)}
         config = build_agent_run_config(
             agent_id=agent_id,
@@ -357,7 +401,6 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         )
         if request.checkpoint_id:
             config["configurable"]["checkpoint_id"] = request.checkpoint_id
-        store = _store_var.get(None) or getattr(http_request.app.state, "store", None)
 
         # Track thread metadata
         if store is not None:
@@ -383,6 +426,14 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         """Invoke the agent and return the full response."""
         graph = _get_graph(agent_id)
         tid = request.thread_id or str(uuid4())
+        store = _store_var.get(None)
+
+        # Ownership check: pre-existing threads must belong to current_user.
+        if store is not None and request.thread_id:
+            await _verify_thread_owner(
+                store, tid, current_user, allow_unclaimed=True
+            )
+
         config = build_agent_run_config(
             agent_id=agent_id,
             thread_id=tid,
@@ -392,7 +443,6 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         input_data: dict[str, Any] = {"messages": _to_lc_messages(request.messages)}
 
         # Track thread metadata
-        store = _store_var.get(None)
         if store is not None:
             first_msg = request.messages[-1].content if request.messages else None
             await _ensure_thread(store, tid, current_user, agent_id, first_msg)
@@ -420,11 +470,12 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         thread_id: str,
         request: QueueMessageRequest,
         http_request: Request,
-        _current_user: CurrentUser,  # type: ignore[valid-type]
+        current_user: CurrentUser,  # type: ignore[valid-type]
     ) -> QueueMessageResponse:
         """Enqueue a message to a thread."""
         _get_graph(agent_id)
         store = _get_store(http_request)
+        await _verify_thread_owner(store, thread_id, current_user)
 
         from langgraph_kit.core.orchestration.queue import (
             QueuedItem,
@@ -461,11 +512,12 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         agent_id: str,
         thread_id: str,
         http_request: Request,
-        _current_user: CurrentUser,  # type: ignore[valid-type]
+        current_user: CurrentUser,  # type: ignore[valid-type]
     ) -> QueueStatusResponse:
         """Check queue status for a thread."""
         _get_graph(agent_id)
         store = _get_store(http_request)
+        await _verify_thread_owner(store, thread_id, current_user)
 
         from langgraph_kit.core.orchestration.queue import (
             ThreadBusyTracker,
@@ -490,10 +542,13 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
     async def get_thread_messages(
         agent_id: str,
         thread_id: str,
-        _current_user: CurrentUser,  # type: ignore[valid-type]
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
     ) -> list[dict[str, str]]:
         """Return messages for a thread by reading the latest checkpoint."""
         graph = _get_graph(agent_id)
+        store = _get_store(http_request)
+        await _verify_thread_owner(store, thread_id, current_user)
         config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
 
         try:
@@ -530,10 +585,13 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
     async def get_thread_state(
         agent_id: str,
         thread_id: str,
-        _current_user: CurrentUser,  # type: ignore[valid-type]
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
     ) -> ThreadStateResponse:
         """Return thread state including any pending interrupts."""
         graph = _get_graph(agent_id)
+        store = _get_store(http_request)
+        await _verify_thread_owner(store, thread_id, current_user)
         config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
 
         try:
@@ -570,6 +628,7 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         thread_id: str,
         body: ResumeRequest,
         current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
     ) -> InvokeResponse:
         """Resume an interrupted thread with human responses."""
         from langgraph.types import (
@@ -577,6 +636,8 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         )
 
         graph = _get_graph(agent_id)
+        store = _get_store(http_request)
+        await _verify_thread_owner(store, thread_id, current_user)
         config = build_agent_run_config(
             agent_id=agent_id,
             thread_id=thread_id,
@@ -611,13 +672,15 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         )
 
         graph = _get_graph(agent_id)
+        store = _store_var.get(None) or getattr(http_request.app.state, "store", None)
+        if store is not None:
+            await _verify_thread_owner(store, thread_id, current_user)
         config = build_agent_run_config(
             agent_id=agent_id,
             thread_id=thread_id,
             current_user=current_user,
             endpoint="resume_stream",
         )
-        store = _store_var.get(None) or getattr(http_request.app.state, "store", None)
 
         responses = [r.model_dump(mode="json") for r in body.responses]
 
@@ -635,11 +698,14 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
     async def get_thread_history(
         agent_id: str,
         thread_id: str,
-        _current_user: CurrentUser,  # type: ignore[valid-type]
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
         limit: int = 50,
     ) -> list[CheckpointInfo]:
         """Return checkpoint history for branch tree construction."""
         graph = _get_graph(agent_id)
+        store = _get_store(http_request)
+        await _verify_thread_owner(store, thread_id, current_user)
         config: dict[str, Any] = {"configurable": {"thread_id": thread_id}}
 
         snapshots: list[CheckpointInfo] = []
@@ -677,10 +743,13 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         agent_id: str,
         thread_id: str,
         body: ForkRequest,
-        _current_user: CurrentUser,  # type: ignore[valid-type]
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
     ) -> ForkResponse:
         """Fork a conversation at a specific checkpoint."""
         graph = _get_graph(agent_id)
+        store = _get_store(http_request)
+        await _verify_thread_owner(store, thread_id, current_user)
         config: dict[str, Any] = {
             "configurable": {
                 "thread_id": thread_id,
