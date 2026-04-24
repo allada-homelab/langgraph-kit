@@ -44,15 +44,19 @@ class AgentConfig:
     trace_export_enabled: bool = False
 
     def __repr__(self) -> str:
-        """Mask secrets in repr to prevent accidental leakage in logs."""
+        """Mask secrets in repr to prevent accidental leakage in logs.
+
+        Only fields that are genuinely secret are masked. Langfuse public
+        keys are intentionally public (they identify the project to the
+        Langfuse API — they're not credentials), so leaving them readable
+        helps log triage. Short secrets (<=8 chars) are fully masked so
+        a 1-char secret ``"x"`` doesn't render as ``"x***"``.
+        """
         fields = []
         for f in dataclasses.fields(self):
             val = getattr(self, f.name)
-            if (
-                f.name in ("llm_api_key", "langfuse_secret_key", "langfuse_public_key")
-                and val
-            ):
-                val = val[:4] + "***"
+            if f.name in ("llm_api_key", "langfuse_secret_key") and val:
+                val = "****" if len(val) <= 8 else val[:4] + "..."
             fields.append(f"{f.name}={val!r}")
         return f"AgentConfig({', '.join(fields)})"
 
