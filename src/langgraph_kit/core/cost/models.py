@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import json
+import logging
+from pathlib import Path
 from typing import Literal
 
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 
 class TokenUsage(BaseModel):
@@ -78,15 +83,51 @@ COST_PER_MILLION: dict[str, tuple[float, float]] = {
 }
 
 
+def load_rates_from_json(path: Path | str) -> None:
+    """Replace the in-memory cost table with values loaded from a JSON file.
+
+    Lets consumers ship their own rates without patching the kit. File
+    format: ``{"model-name": [input_rate, output_rate], ...}`` where the
+    rates are USD per 1M tokens. Unknown keys are tolerated; values that
+    are not 2-element numeric lists are skipped with a warning.
+    """
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Rates file must contain a JSON object: {path!s}")
+    replacement: dict[str, tuple[float, float]] = {}
+    for key, value in data.items():  # type: ignore[misc]
+        if (
+            isinstance(value, (list, tuple))
+            and len(value) == 2  # pyright: ignore[reportUnknownArgumentType]
+            and all(isinstance(v, (int, float)) for v in value)  # pyright: ignore[reportUnknownVariableType]
+        ):
+            replacement[str(key)] = (float(value[0]), float(value[1]))
+        else:
+            logger.warning("Skipping malformed cost entry %r -> %r", key, value)
+    COST_PER_MILLION.clear()
+    COST_PER_MILLION.update(replacement)
+
+
 def estimate_cost(usage: TokenUsage) -> float:
-    """Estimate cost in USD for a token usage record."""
+    """Estimate cost in USD for a token usage record.
+
+    Matches model name against ``COST_PER_MILLION`` entries using:
+      1. Exact lowercase match.
+      2. Longest-prefix match — sorting keys by length descending so that
+         more-specific entries win ("claude-sonnet-4-6" beats
+         "claude-sonnet-4", "gpt-4o-mini" beats "gpt-4").
+
+    Returns ``0.0`` when no key matches (the caller can treat that as
+    "unknown model" and optionally log).
+    """
     model = usage.model.lower()
-    # Try exact match, then prefix match
+    # Exact match first.
     rates = COST_PER_MILLION.get(model)
     if rates is None:
-        for key, val in COST_PER_MILLION.items():
+        # Longest-prefix win: sort keys by length descending.
+        for key in sorted(COST_PER_MILLION.keys(), key=len, reverse=True):
             if model.startswith(key):
-                rates = val
+                rates = COST_PER_MILLION[key]
                 break
     if rates is None:
         return 0.0

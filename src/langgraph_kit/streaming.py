@@ -260,6 +260,36 @@ async def stream_agent_events(
                 total = budget_callback.get_total()
                 yield f"data: {json.dumps({'budget': {'tokens_used': total.total_tokens, 'input_tokens': total.input_tokens, 'output_tokens': total.output_tokens, 'estimated_cost_usd': round(total.estimated_cost_usd, 6)}})}\n\n"
 
+                # Persist accumulated usage into the BudgetManager so the
+                # state survives the stream. Without this the callback
+                # totals only ever flow to the SSE client — the Store
+                # never sees them, and check_budget reads a stale 0-token
+                # state on the next turn.
+                if store is not None and thread_id:
+                    try:
+                        from langgraph_kit._config import get_config
+                        from langgraph_kit.core.cost.budget import BudgetManager
+                        from langgraph_kit.core.cost.models import BudgetConfig
+
+                        app_cfg = get_config()
+                        if app_cfg.token_budget_per_thread > 0:
+                            manager = BudgetManager(
+                                store,
+                                BudgetConfig(
+                                    max_tokens_per_thread=app_cfg.token_budget_per_thread
+                                ),
+                            )
+                            user_id = (
+                                config.get("metadata", {}).get("user_id") or ""
+                            )
+                            await manager.record_usage(
+                                thread_id, total, user_id=user_id
+                            )
+                    except Exception:
+                        logger.debug(
+                            "Failed to persist budget usage", exc_info=True
+                        )
+
         # Emit an explicit error event before closing the stream so the
         # client can distinguish "backend failure" from "run completed".
         if stream_error is not None:
