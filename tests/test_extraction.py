@@ -2,20 +2,10 @@
 
 from __future__ import annotations
 
-import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-
-# Ensure langchain_core.messages is importable even without the real package.
-# The extractor does `from langchain_core.messages import HumanMessage` inside
-# its extract() method, so we stub the module if it's missing.
-if "langchain_core" not in sys.modules:
-    _lc = MagicMock()
-    sys.modules["langchain_core"] = _lc
-    sys.modules["langchain_core.messages"] = _lc.messages
-    _lc.messages.HumanMessage = MagicMock
 
 from langgraph_kit.core.memory.extraction import AutoMemoryExtractor
 from langgraph_kit.core.memory.extraction_middleware import (
