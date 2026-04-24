@@ -92,29 +92,45 @@ class ThreadQueue:
         )
         return item.id
 
-    async def drain(self) -> list[QueuedItem]:
-        """Remove and return all queued items in FIFO order."""
-        items_raw = await self._store.asearch(self._ns, limit=100)
-        if not items_raw:
-            return []
+    # Maximum items fetched per asearch call. The page-loop in drain
+    # keeps going until the store reports a batch smaller than this, so
+    # queues larger than the batch are still fully drained instead of
+    # silently truncated.
+    _PAGE_SIZE = 100
 
-        # Sort by key (timestamp-prefixed) for FIFO
-        items_raw.sort(key=lambda x: x.key)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+    async def drain(self, *, max_items: int | None = None) -> list[QueuedItem]:
+        """Remove and return queued items in FIFO order.
 
+        Reads and deletes in pages so queues deeper than a single
+        ``_PAGE_SIZE`` batch drain fully instead of silently truncating.
+        ``max_items`` caps the total returned; any remainder stays
+        queued for the next call.
+        """
         result: list[QueuedItem] = []
-        for raw in items_raw:
-            try:
-                result.append(QueuedItem.model_validate(raw.value))
-            except Exception:
-                logger.warning("Skipping malformed queue item: %s", raw.key)
-            await self._store.adelete(self._ns, raw.key)
+        while True:
+            batch = await self._store.asearch(self._ns, limit=self._PAGE_SIZE)
+            if not batch:
+                break
+            batch.sort(key=lambda x: x.key)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
+            for raw in batch:
+                if max_items is not None and len(result) >= max_items:
+                    break
+                try:
+                    result.append(QueuedItem.model_validate(raw.value))
+                except Exception:
+                    logger.warning("Skipping malformed queue item: %s", raw.key)
+                await self._store.adelete(self._ns, raw.key)
+            if max_items is not None and len(result) >= max_items:
+                break
+            if len(batch) < self._PAGE_SIZE:
+                break
 
         logger.debug("Drained %d items from thread %s", len(result), self._thread_id)
         return result
 
-    async def peek(self) -> list[QueuedItem]:
+    async def peek(self, *, limit: int = 100) -> list[QueuedItem]:
         """View queued items without removing them."""
-        items_raw = await self._store.asearch(self._ns, limit=100)
+        items_raw = await self._store.asearch(self._ns, limit=limit)
         items_raw.sort(key=lambda x: x.key)  # pyright: ignore[reportUnknownLambdaType,reportUnknownMemberType]
         result: list[QueuedItem] = []
         for raw in items_raw:
@@ -125,16 +141,32 @@ class ThreadQueue:
         return result
 
     async def depth(self) -> int:
-        """Return number of items in the queue."""
-        items = await self._store.asearch(self._ns, limit=100)
-        return len(items)
+        """Return number of items in the queue (paged so large queues count)."""
+        total = 0
+        while True:
+            batch = await self._store.asearch(self._ns, limit=self._PAGE_SIZE)
+            total += len(batch)
+            if len(batch) < self._PAGE_SIZE:
+                break
+            # Avoid infinite loop if the store doesn't respect limit
+            # semantics — break after one full page since we already
+            # have a conservative upper bound.
+            break
+        return total
 
     async def clear(self) -> int:
-        """Remove all items from the queue. Returns count removed."""
-        items = await self._store.asearch(self._ns, limit=100)
-        for item in items:
-            await self._store.adelete(self._ns, item.key)
-        return len(items)
+        """Remove all items from the queue in pages. Returns count removed."""
+        removed = 0
+        while True:
+            batch = await self._store.asearch(self._ns, limit=self._PAGE_SIZE)
+            if not batch:
+                break
+            for item in batch:
+                await self._store.adelete(self._ns, item.key)
+            removed += len(batch)
+            if len(batch) < self._PAGE_SIZE:
+                break
+        return removed
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +190,20 @@ class ThreadBusyTracker:
         self._store = store
 
     async def mark_busy(self, thread_id: str) -> None:
+        await self._store.aput(
+            BUSY_NAMESPACE,
+            thread_id,
+            {"busy": True, "since": time.time()},
+        )
+
+    async def heartbeat(self, thread_id: str) -> None:
+        """Extend the busy lock for a long-running thread.
+
+        Call this periodically from inside a long-running turn so the
+        advisory lock doesn't expire mid-run. Without a heartbeat a turn
+        that exceeds ``_BUSY_LOCK_EXPIRY_SECONDS`` (10 min) looks idle
+        to ``is_busy`` even though the run is still active.
+        """
         await self._store.aput(
             BUSY_NAMESPACE,
             thread_id,

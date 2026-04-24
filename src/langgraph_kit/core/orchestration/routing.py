@@ -88,30 +88,93 @@ class LLMRoutingStrategy:
                 response.content if hasattr(response, "content") else str(response)
             )
 
-            import json
-
-            # Try to parse JSON from the response
-            data = json.loads(content)
+            # Tolerant JSON extraction — the LLM sometimes prepends prose
+            # or wraps the object in a code fence. A bracket-balanced scan
+            # pulls the first top-level ``{...}`` out of the text; if
+            # nothing parses, we fall back to "no decision" rather than
+            # silently routing to the alphabetically-first agent.
+            data = _extract_json_object(content)
+            if data is None:
+                logger.debug(
+                    "LLM routing produced unparseable JSON; returning 'none'"
+                )
+                return RoutingDecision(
+                    target_agent_id="none",
+                    reasoning="LLM routing produced unparseable JSON",
+                    delegated_prompt=message,
+                )
             return RoutingDecision(
                 target_agent_id=data.get("target_agent_id", "none"),
                 reasoning=data.get("reasoning", ""),
                 delegated_prompt=data.get("delegated_prompt", message),
             )
         except Exception:
-            logger.debug(
-                "LLM routing failed, using first available agent", exc_info=True
-            )
-            if capabilities:
-                return RoutingDecision(
-                    target_agent_id=capabilities[0].agent_id,
-                    reasoning="Fallback: LLM routing failed",
-                    delegated_prompt=message,
-                )
+            logger.debug("LLM routing failed", exc_info=True)
             return RoutingDecision(
                 target_agent_id="none",
-                reasoning="No agents available",
+                reasoning="Fallback: LLM routing failed",
                 delegated_prompt=message,
             )
+
+
+def _extract_json_object(text: str) -> dict[str, Any] | None:
+    """Parse a JSON object from ``text``, tolerating prose and code fences.
+
+    Order of attempts: direct ``json.loads``, strip ```` ``` ```` /
+    ```` ```json ```` fences, then bracket-balanced scan for the first
+    top-level ``{...}`` substring. Returns ``None`` on total failure
+    (caller decides the fallback behaviour).
+    """
+    import json
+    import re as _re
+
+    candidates: list[str] = [text.strip()]
+    unfenced = _re.sub(r"^```(?:json)?\s*\n?|\n?```\s*$", "", text.strip(), flags=_re.MULTILINE)
+    if unfenced != text.strip():
+        candidates.append(unfenced)
+    scanned = _first_balanced_object(text)
+    if scanned:
+        candidates.append(scanned)
+
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed
+    return None
+
+
+def _first_balanced_object(text: str) -> str | None:
+    """Bracket-balanced scan for the first top-level ``{...}`` in ``text``."""
+    depth = 0
+    start = -1
+    in_str = False
+    escape = False
+    for i, ch in enumerate(text):
+        if in_str:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_str = False
+            continue
+        if ch == '"':
+            in_str = True
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth == 0:
+                continue
+            depth -= 1
+            if depth == 0 and start != -1:
+                return text[start : i + 1]
+    return None
 
 
 _STOPWORDS = frozenset(

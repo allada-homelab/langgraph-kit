@@ -10,6 +10,7 @@ from __future__ import annotations
 import contextvars
 import logging
 import time
+import uuid
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware as _AgentMiddleware
@@ -21,6 +22,12 @@ from langgraph_kit.core.resilience._message_text import aimessage_text
 logger = logging.getLogger(__name__)
 
 RUN_METADATA_NAMESPACE = ("run_metadata",)
+
+# Cap retained run records per thread. The namespace is flat (no
+# per-thread sub-namespace), so pruning walks the lot and keeps only
+# the newest N per thread_id. Without this the kit wrote unbounded
+# metadata into the Store — no TTL, no ceiling.
+_DEFAULT_MAX_RECORDS_PER_THREAD = 100
 
 # Per-request start time via ContextVar so concurrent invocations don't
 # overwrite each other's timestamps.
@@ -45,6 +52,14 @@ class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
     async def abefore_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
         _run_start_var.set(time.time())
         return None
+
+    def __init__(
+        self,
+        *,
+        max_records_per_thread: int = _DEFAULT_MAX_RECORDS_PER_THREAD,
+    ) -> None:
+        super().__init__()
+        self._max_per_thread = max_records_per_thread
 
     async def aafter_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:
         messages = state.get("messages", [])
@@ -71,13 +86,49 @@ class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
             try:
                 config = get_config()
                 thread_id = config.get("configurable", {}).get("thread_id", "unknown")
-                key = f"{thread_id}_{summary['completed_at']}"
+                summary["thread_id"] = thread_id
+                # Unique key: thread + microseconds + uuid avoids collisions
+                # when two runs finish in the same clock second. Earlier
+                # keys were `{thread}_{epoch_seconds}` which collided under
+                # busy traffic.
+                now_us = time.time()
+                key = f"{thread_id}_{now_us:.6f}_{uuid.uuid4().hex[:8]}"
                 await store.aput(RUN_METADATA_NAMESPACE, key, summary)
+                await _prune_thread_records(
+                    store, thread_id, self._max_per_thread
+                )
             except Exception:
                 logger.warning("Failed to persist run metadata", exc_info=True)
 
         _run_start_var.set(None)
         return None
+
+
+async def _prune_thread_records(
+    store: Any, thread_id: str, max_records: int
+) -> None:
+    """Keep only the ``max_records`` newest records for ``thread_id``.
+
+    The namespace is flat, so pruning walks all items up to a generous
+    cap and filters by the thread_id prefix on the key.
+    """
+    try:
+        items = await store.asearch(RUN_METADATA_NAMESPACE, limit=2000)
+    except Exception:
+        logger.debug("Failed to asearch for prune", exc_info=True)
+        return
+
+    owned = [i for i in items if i.key.startswith(f"{thread_id}_")]
+    if len(owned) <= max_records:
+        return
+
+    owned.sort(key=lambda i: i.key)  # lexical sort == time order per key shape
+    to_remove = owned[: len(owned) - max_records]
+    for item in to_remove:
+        try:
+            await store.adelete(RUN_METADATA_NAMESPACE, item.key)
+        except Exception:
+            logger.debug("Prune delete failed", exc_info=True)
 
 
 def _build_run_summary(messages: list[Any], duration: float) -> dict[str, Any]:
