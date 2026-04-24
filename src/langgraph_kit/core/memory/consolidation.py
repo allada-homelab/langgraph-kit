@@ -45,6 +45,11 @@ Respond with ONLY the JSON array.
 """
 
 
+# Only these fields may be written through the consolidator's update path.
+# Blocks the LLM from rewriting ids, scopes, or audit timestamps.
+_CONSOLIDATION_UPDATE_ALLOWED_FIELDS = {"title", "summary", "body", "type"}
+
+
 class ConsolidationResult:
     """Tracks what happened during a consolidation pass."""
 
@@ -179,10 +184,14 @@ class MemoryConsolidator:
                                 source_ids,
                             )
                             continue
-                        # Delete source records
-                        for sid in source_ids:
-                            await self._memory.delete(sid, scope)
-                        # Create merged record
+                        # Create the merged record FIRST, then delete the
+                        # sources. If the process crashes between steps,
+                        # the merged record already exists and the sources
+                        # become orphan duplicates that get_ 's self-heal
+                        # logic can tidy later. The reverse order (delete
+                        # first, create second) was a data-loss hazard —
+                        # a crash there would wipe the source data with no
+                        # merged record to show for it.
                         record = MemoryRecord(
                             title=merged_data.get("title", "Merged"),
                             type=mem_type,
@@ -192,6 +201,8 @@ class MemoryConsolidator:
                             source="consolidation_merge",
                         )
                         await self._memory.create(record)
+                        for sid in source_ids:
+                            await self._memory.delete(sid, scope)
                         result.merged += 1
                         logger.info(
                             "Consolidated: merged %s into %s", source_ids, record.id
@@ -201,7 +212,32 @@ class MemoryConsolidator:
                     record_id = action.get("id", "")
                     updates = action.get("updates", {})
                     if record_id and updates:
-                        updated = await self._memory.update(record_id, scope, updates)
+                        # Whitelist: block the LLM from rewriting ids,
+                        # scopes, or audit timestamps through this path.
+                        safe_updates = {
+                            k: v
+                            for k, v in updates.items()
+                            if k in _CONSOLIDATION_UPDATE_ALLOWED_FIELDS
+                        }
+                        # Type coercion (reject invalid strings) so an LLM
+                        # hallucination doesn't crash .update() or mis-type
+                        # the record.
+                        if "type" in safe_updates:
+                            coerced = coerce_memory_type(safe_updates["type"])
+                            if coerced is None:
+                                logger.warning(
+                                    "Consolidation update dropped invalid type=%r for id=%s",
+                                    safe_updates.get("type"),
+                                    record_id,
+                                )
+                                safe_updates.pop("type", None)
+                            else:
+                                safe_updates["type"] = coerced
+                        if not safe_updates:
+                            continue
+                        updated = await self._memory.update(
+                            record_id, scope, safe_updates
+                        )
                         if updated:
                             result.updated += 1
                             logger.info("Consolidated: updated %s", record_id)
