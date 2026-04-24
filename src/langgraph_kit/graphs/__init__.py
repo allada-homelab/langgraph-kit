@@ -14,12 +14,32 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT
+from langgraph_kit.core.graph_builder.backend import build_backend_factory
+from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
+from langgraph_kit.core.graph_builder.middleware import build_middleware_stack
+from langgraph_kit.core.graph_builder.tools import register_standard_tools
+from langgraph_kit.graphs._builder import (
+    DEFAULT_RECURSION_LIMIT,
+    bind_kit_defaults,
+    build_deep_agent,
+)
 from langgraph_kit.registry import AgentMetadata, register
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["DEFAULT_RECURSION_LIMIT", "register_all"]
+# Public re-exports for template-generated agents and out-of-tree consumers.
+# The CLI scaffolder imports these symbols; keeping an explicit __all__ here
+# gives us a stable surface even if the internal layout moves.
+__all__ = [
+    "DEFAULT_RECURSION_LIMIT",
+    "bind_kit_defaults",
+    "build_backend_factory",
+    "build_command_dispatcher",
+    "build_deep_agent",
+    "build_middleware_stack",
+    "register_all",
+    "register_standard_tools",
+]
 
 
 def register_all(

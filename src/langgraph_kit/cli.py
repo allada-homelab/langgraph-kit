@@ -3,7 +3,8 @@
 Usage::
 
     python -m langgraph_kit.cli new my-agent
-    python -m langgraph_kit.cli new my-agent --features memory,tools,commands
+    python -m langgraph_kit.cli new my-agent --output-dir ./agents
+    python -m langgraph_kit.cli new my-agent --force   # overwrite existing
     python -m langgraph_kit.cli list
 """
 
@@ -41,7 +42,7 @@ from langgraph_kit.core.prompt_assembly.sections import (
     SectionStability,
 )
 from langgraph_kit.core.tools.registry import ToolRegistry
-from langgraph_kit.graphs._builder import (
+from langgraph_kit.graphs import (
     build_backend_factory,
     build_command_dispatcher,
     build_middleware_stack,
@@ -172,8 +173,14 @@ def build_{{fn_name}}(
 '''
 
 
-def _generate_agent(agent_id: str, output_dir: Path | None = None) -> Path:
-    """Generate an agent file from template."""
+def _generate_agent(
+    agent_id: str, output_dir: Path | None = None, *, force: bool = False
+) -> Path:
+    """Generate an agent file from template.
+
+    Refuses to overwrite an existing file unless ``force=True`` — without
+    the guard, ``new my-agent`` run twice silently clobbers customization.
+    """
     fn_name = agent_id.replace("-", "_")
     agent_title = agent_id.replace("-", " ").title()
 
@@ -184,6 +191,11 @@ def _generate_agent(agent_id: str, output_dir: Path | None = None) -> Path:
 
     out_dir = output_dir or Path.cwd()
     out_file = out_dir / f"{fn_name}.py"
+    if out_file.exists() and not force:
+        raise FileExistsError(
+            f"{out_file} already exists. Re-run with --force to overwrite, "
+            f"or pick a different agent_id."
+        )
     out_file.write_text(content, encoding="utf-8")
     return out_file
 
@@ -206,6 +218,12 @@ def main() -> None:
     new_parser.add_argument(
         "--output-dir", "-o", type=Path, help="Output directory (default: cwd)"
     )
+    new_parser.add_argument(
+        "--force",
+        "-f",
+        action="store_true",
+        help="Overwrite an existing file",
+    )
 
     # list command
     sub.add_parser("list", help="List available agent templates")
@@ -213,7 +231,13 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.command == "new":
-        path = _generate_agent(args.agent_id, args.output_dir)
+        try:
+            path = _generate_agent(
+                args.agent_id, args.output_dir, force=args.force
+            )
+        except FileExistsError as exc:
+            sys.stderr.write(f"Error: {exc}\n")
+            sys.exit(1)
         _out(f"Generated agent: {path}")
         _out(
             dedent(f"""\
