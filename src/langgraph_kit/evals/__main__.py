@@ -11,8 +11,17 @@ from datetime import UTC, datetime
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
-# Available LLM-graded rubrics (must have a matching prompt file in metrics/prompts/)
-_LLM_RUBRICS = ["faithfulness", "helpfulness", "task_completion"]
+# Available LLM-graded rubrics (must have a matching prompt file in metrics/prompts/).
+# Keep in sync with the ``metrics/prompts/*.md`` files on disk — previously
+# only three of the five shipped rubrics were wired here, so ``safety``
+# and ``tool_efficiency`` never ran from the CLI.
+_LLM_RUBRICS = [
+    "faithfulness",
+    "helpfulness",
+    "safety",
+    "task_completion",
+    "tool_efficiency",
+]
 
 
 def _parse_args() -> argparse.Namespace:

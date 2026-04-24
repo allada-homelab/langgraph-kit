@@ -99,10 +99,13 @@ async def test_has_tool_calls_negative_when_metadata_empty() -> None:
 
 
 @pytest.mark.asyncio
-async def test_latency_missing_duration_returns_half_score() -> None:
+async def test_latency_missing_duration_returns_unscored_default() -> None:
+    """Missing-data fallback is now 1.0 with an explicit "not scored"
+    comment so the aggregate isn't biased downward by unavailable traces."""
     result = await LatencyMetric(sla_ms=1000).score(_trace(duration_ms=None))
-    assert result.value == 0.5
+    assert result.value == 1.0
     assert "not available" in (result.comment or "")
+    assert "not scored" in (result.comment or "")
 
 
 @pytest.mark.asyncio
@@ -160,9 +163,12 @@ async def test_error_free_detects_tool_errors_count() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_efficiency_no_data_returns_neutral() -> None:
+async def test_tool_efficiency_no_data_returns_unscored_default() -> None:
+    """Missing-data fallback is 1.0 + "not scored" comment (same rationale
+    as LatencyMetric) to avoid biasing aggregate means."""
     result = await ToolEfficiencyMetric().score(_trace(metadata={}))
-    assert result.value == 0.5
+    assert result.value == 1.0
+    assert "not scored" in (result.comment or "")
 
 
 @pytest.mark.asyncio
