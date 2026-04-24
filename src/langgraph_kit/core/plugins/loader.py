@@ -123,6 +123,16 @@ class PluginLoader:
             logger.info("Loaded plugin: %s (%s)", contribution.plugin_id, path.name)
             return contribution
 
-        except Exception:
-            logger.exception("Failed to load plugin: %s", path.name)
+        except Exception as exc:
+            # Surface the concrete exception type and message so operators
+            # can tell a missing-dependency ImportError apart from a
+            # signature-mismatch TypeError without having to spelunk the
+            # full traceback log.
+            logger.warning(
+                "Failed to load plugin %s: %s: %s",
+                path.name,
+                type(exc).__name__,
+                exc,
+            )
+            logger.debug("Plugin load traceback for %s", path.name, exc_info=True)
             return None

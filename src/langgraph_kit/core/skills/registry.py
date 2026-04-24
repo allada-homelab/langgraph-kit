@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from pydantic import ValidationError
 
 from langgraph_kit.core.skills.models import SkillMetadata
 
@@ -40,13 +41,18 @@ def _parse_skill_md(path: Path) -> SkillMetadata | None:
         return None
 
     meta_typed: dict[str, Any] = {str(k): v for k, v in meta.items()}  # pyright: ignore[reportUnknownArgumentType,reportUnknownVariableType]
-    return SkillMetadata(
-        name=str(meta_typed["name"]),
-        description=str(meta_typed.get("description", "")),
-        path=str(path),
-        tags=meta_typed.get("tags", []),
-        allowed_tools=meta_typed.get("allowed-tools", []),
-    )
+    try:
+        return SkillMetadata(
+            name=str(meta_typed["name"]),
+            description=str(meta_typed.get("description", "")),
+            path=str(path),
+            tags=meta_typed.get("tags", []),
+        )
+    except ValidationError:
+        # One malformed skill used to crash the whole scan — skip and
+        # keep loading the rest instead.
+        logger.warning("Invalid skill metadata in %s", path, exc_info=True)
+        return None
 
 
 def _get_body(path: Path) -> str:
@@ -89,7 +95,10 @@ class SkillRegistry:
     # -- Lookup --
 
     def get(self, name: str) -> SkillMetadata | None:
-        return self._skills.get(name)
+        # Case-insensitive lookup — SkillMetadata lowercases the name at
+        # construction, so matching the same way here avoids silent
+        # mismatches on callers that pass the original-case query.
+        return self._skills.get(name.lower())
 
     def list_all(self) -> list[SkillMetadata]:
         return list(self._skills.values())

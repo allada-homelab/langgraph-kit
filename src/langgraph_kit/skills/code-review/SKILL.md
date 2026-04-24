@@ -4,7 +4,6 @@ description: |
   Use when reviewing code changes, PRs, or diffs. Provides a structured
   review workflow with severity levels. Do NOT use for writing new code.
 tags: [review, quality, pr]
-allowed-tools: [read_file, glob, grep]
 ---
 
 # Code Review Skill
