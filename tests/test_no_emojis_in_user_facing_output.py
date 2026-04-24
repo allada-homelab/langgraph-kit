@@ -86,7 +86,6 @@ async def test_list_async_tasks_is_emoji_free() -> None:
 def test_trace_to_mermaid_flowchart_is_emoji_free() -> None:
     trace = TraceRecord(
         trace_id="t1",
-        name="root",
         started_at="2026-04-24T00:00:00Z",
         ended_at="2026-04-24T00:00:01Z",
         duration_ms=1000.0,
@@ -119,7 +118,6 @@ def test_trace_to_mermaid_flowchart_is_emoji_free() -> None:
 def test_trace_to_mermaid_sequence_is_emoji_free() -> None:
     trace = TraceRecord(
         trace_id="t2",
-        name="root",
         started_at="2026-04-24T00:00:00Z",
         ended_at="2026-04-24T00:00:01Z",
         duration_ms=1000.0,

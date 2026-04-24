@@ -11,7 +11,11 @@ from langchain_core.messages import HumanMessage
 if TYPE_CHECKING:
     from pathlib import Path
 
-from langgraph_kit.replay.models import ConversationRecording, LLMInteraction
+from langgraph_kit.replay.models import (
+    ConversationRecording,
+    LLMInteraction,
+    ToolInteraction,
+)
 from langgraph_kit.replay.player import (
     RecordedChatModel,
     ReplayMismatchError,
@@ -23,18 +27,19 @@ if TYPE_CHECKING:
 
 
 def _one_interaction_recording() -> ConversationRecording:
+    interactions: list[LLMInteraction | ToolInteraction] = [
+        LLMInteraction(
+            sequence_num=0,
+            kind="llm",
+            input_messages=[{"role": "user", "content": "hi"}],
+            output_message={"content": "hello"},
+            model="m",
+        )
+    ]
     return ConversationRecording(
         agent_id="a",
         thread_id="t",
-        interactions=[
-            LLMInteraction(
-                sequence_num=0,
-                kind="llm",
-                input_messages=[{"role": "user", "content": "hi"}],
-                output_message={"content": "hello"},
-                model_name="m",
-            )
-        ],
+        interactions=interactions,
         user_messages=[],
     )
 

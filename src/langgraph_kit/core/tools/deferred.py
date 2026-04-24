@@ -236,7 +236,7 @@ def build_call_deferred_tool(deferred: DeferredToolRegistry) -> Any:
                 except json.JSONDecodeError as exc:
                     return (
                         f"Error: arguments for '{tool_id}' must be a dict or JSON "
-                        f"object, got unparseable string: {exc}"
+                        f"object, got unparsable string: {exc}"
                     )
             else:
                 return (

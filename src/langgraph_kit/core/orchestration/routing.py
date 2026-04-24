@@ -95,10 +95,10 @@ class LLMRoutingStrategy:
             # silently routing to the alphabetically-first agent.
             data = _extract_json_object(content)
             if data is None:
-                logger.debug("LLM routing produced unparseable JSON; returning 'none'")
+                logger.debug("LLM routing produced unparsable JSON; returning 'none'")
                 return RoutingDecision(
                     target_agent_id="none",
-                    reasoning="LLM routing produced unparseable JSON",
+                    reasoning="LLM routing produced unparsable JSON",
                     delegated_prompt=message,
                 )
             return RoutingDecision(
