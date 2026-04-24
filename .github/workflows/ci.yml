@@ -31,3 +31,15 @@ jobs:
         run: |
           uv run coverage run -m pytest
           uv run coverage report
+
+  ci-success:
+    name: CI Success
+    if: always()
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any required job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: Success
+        run: echo "All required jobs passed"
