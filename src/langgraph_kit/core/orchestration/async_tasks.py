@@ -301,14 +301,8 @@ def build_async_task_tools(
 
         lines = [f"Found {len(tasks)} task(s):\n"]
         for t in tasks:
-            status_icon = {
-                AsyncTaskStatus.RUNNING: "⏳",
-                AsyncTaskStatus.SUCCESS: "✅",
-                AsyncTaskStatus.ERROR: "❌",
-                AsyncTaskStatus.CANCELLED: "🚫",
-            }.get(t.status, "?")
             lines.append(
-                f"- {status_icon} [{t.status.value}] {t.description} "
+                f"- [{t.status.value.upper()}] {t.description} "
                 + f"(id: {t.task_id}, worker: {t.agent_name})"
             )
         return "\n".join(lines)

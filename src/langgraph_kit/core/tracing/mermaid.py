@@ -80,10 +80,13 @@ def _flowchart_span(
     node_id = f"n{idx}"
     name = _safe_name(span.name)
     duration = f"<br/>{span.duration_ms:.0f}ms" if span.duration_ms else ""
-    kind_icon = {"llm": "🤖", "tool": "🔧", "chain": "⛓️", "node": "📦"}.get(
-        span.kind, ""
-    )
-    lines.append(f'    {node_id}["{kind_icon} {name}{duration}"]')
+    kind_tag = {
+        "llm": "LLM",
+        "tool": "TOOL",
+        "chain": "CHAIN",
+        "node": "NODE",
+    }.get(span.kind, span.kind.upper() if span.kind else "SPAN")
+    lines.append(f'    {node_id}["{kind_tag}: {name}{duration}"]')
     node_ids.append(node_id)
 
 
