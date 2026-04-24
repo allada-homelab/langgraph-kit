@@ -60,9 +60,15 @@ def test_recorded_model_fuzzy_default_still_reserves() -> None:
     assert any("hello" in gen.text for gen in result.generations)
 
 
-def test_runner_uses_llm_kwarg_name(tmp_path: Path) -> None:
+async def test_runner_uses_llm_kwarg_name(tmp_path: Path) -> None:
     """ReplayRunner's ``llm_kwarg`` should control which name the mock
-    LLM is passed through to graph_builder."""
+    LLM is passed through to graph_builder.
+
+    Written as ``async def`` (not sync-with-asyncio.run) so pytest-asyncio
+    manages the event loop — a nested ``asyncio.run`` inside a sync test
+    forces pytest-asyncio's policy-swap fixture path, which leaks
+    socketpairs from ``_make_self_pipe`` in Python 3.13.
+    """
     rec = _one_interaction_recording()
     fixture = tmp_path / "rec.json"
     fixture.write_text(json.dumps(rec.model_dump(mode="json")), encoding="utf-8")
@@ -70,7 +76,6 @@ def test_runner_uses_llm_kwarg_name(tmp_path: Path) -> None:
     captured: dict[str, Any] = {}
 
     def _builder(_ckpt: Any, _store: Any, **kwargs: Any) -> Any:
-        # Record which kwarg the runner used.
         captured.update(kwargs)
 
         class _Graph:
@@ -82,17 +87,14 @@ def test_runner_uses_llm_kwarg_name(tmp_path: Path) -> None:
     runner = ReplayRunner(
         recording_path=fixture,
         graph_builder=_builder,
-        llm_kwarg="model",  # non-default
+        llm_kwarg="model",
     )
-
-    import asyncio
-
-    asyncio.run(runner.run())
+    await runner.run()
     assert "model" in captured, f"Expected ``model=`` kwarg; got {captured!r}"
     assert "llm" not in captured
 
 
-def test_runner_defaults_to_llm_kwarg(tmp_path: Path) -> None:
+async def test_runner_defaults_to_llm_kwarg(tmp_path: Path) -> None:
     rec = _one_interaction_recording()
     fixture = tmp_path / "rec.json"
     fixture.write_text(json.dumps(rec.model_dump(mode="json")), encoding="utf-8")
@@ -109,8 +111,5 @@ def test_runner_defaults_to_llm_kwarg(tmp_path: Path) -> None:
         return _Graph()
 
     runner = ReplayRunner(recording_path=fixture, graph_builder=_builder)
-
-    import asyncio
-
-    asyncio.run(runner.run())
+    await runner.run()
     assert "llm" in captured
