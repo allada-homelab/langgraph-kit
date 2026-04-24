@@ -36,6 +36,12 @@ class EmptyTurnMiddleware(_AgentMiddleware):  # type: ignore[misc]
         self._nudge_count = 0
         self._max_nudges = max_nudges
 
+    async def abefore_agent(self, state: Any, runtime: Any) -> None:  # noqa: ARG002
+        """Reset per-run nudge counter so the ``max_nudges`` cap is per-run
+        rather than lifetime-of-instance. Without this, a reused middleware
+        instance accumulates nudges across invocations and stops guarding."""
+        self._nudge_count = 0
+
     async def aafter_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
         messages = state.get("messages", [])
         if not messages:
