@@ -388,9 +388,7 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
         # Ownership check: pre-existing threads must belong to current_user.
         # Unclaimed thread_ids pass through to _ensure_thread below.
         if store is not None and request.thread_id:
-            await _verify_thread_owner(
-                store, tid, current_user, allow_unclaimed=True
-            )
+            await _verify_thread_owner(store, tid, current_user, allow_unclaimed=True)
 
         input_data: dict[str, Any] = {"messages": _to_lc_messages(request.messages)}
         config = build_agent_run_config(
@@ -430,9 +428,7 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
 
         # Ownership check: pre-existing threads must belong to current_user.
         if store is not None and request.thread_id:
-            await _verify_thread_owner(
-                store, tid, current_user, allow_unclaimed=True
-            )
+            await _verify_thread_owner(store, tid, current_user, allow_unclaimed=True)
 
         config = build_agent_run_config(
             agent_id=agent_id,

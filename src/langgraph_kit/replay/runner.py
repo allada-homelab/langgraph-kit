@@ -76,9 +76,7 @@ class ReplayRunner:
         )
 
         recording = self.original
-        mock_llm = RecordedChatModel(
-            recording=recording, fuzzy_match=self.fuzzy_match
-        )
+        mock_llm = RecordedChatModel(recording=recording, fuzzy_match=self.fuzzy_match)
 
         # Build graph with the mock LLM. ``llm_kwarg`` defaults to "llm"
         # but can be set to e.g. "model" for builders that use that name.

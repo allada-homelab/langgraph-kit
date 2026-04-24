@@ -38,6 +38,7 @@ def _coerce_memory_scope(value: Any) -> MemoryScope | None:
     except ValueError:
         return None
 
+
 _EXTRACTION_PROMPT = """You are a memory extraction worker. Your ONLY job is to identify durable, future-useful facts from the recent conversation that should be saved to long-term memory.
 
 Today's date: {today}
@@ -198,9 +199,7 @@ class AutoMemoryExtractor:
                 # recognise; otherwise fall back to the caller's scope. The
                 # prompt instructs the model to pick a scope, so ignoring
                 # it wholesale (as the prior code did) was a contract gap.
-                effective_scope = (
-                    _coerce_memory_scope(candidate.get("scope")) or scope
-                )
+                effective_scope = _coerce_memory_scope(candidate.get("scope")) or scope
 
                 if action == "delete":
                     record_id = candidate.get("id", "")

@@ -113,9 +113,7 @@ async def test_status_counts_every_memory_scope() -> None:
 
             return _Strat()
 
-    handle = build_status_command(
-        pressure_monitor=_Monitor(), memory_mgr=mgr
-    )
+    handle = build_status_command(pressure_monitor=_Monitor(), memory_mgr=mgr)
     result = await handle("", {"messages": []})
     # Total memory count should reflect all three seeded scopes.
     assert "3 total" in result.output, (

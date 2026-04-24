@@ -94,9 +94,7 @@ class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
                 now_us = time.time()
                 key = f"{thread_id}_{now_us:.6f}_{uuid.uuid4().hex[:8]}"
                 await store.aput(RUN_METADATA_NAMESPACE, key, summary)
-                await _prune_thread_records(
-                    store, thread_id, self._max_per_thread
-                )
+                await _prune_thread_records(store, thread_id, self._max_per_thread)
             except Exception:
                 logger.warning("Failed to persist run metadata", exc_info=True)
 
@@ -104,9 +102,7 @@ class PostRunBackstopMiddleware(_AgentMiddleware):  # type: ignore[misc]
         return None
 
 
-async def _prune_thread_records(
-    store: Any, thread_id: str, max_records: int
-) -> None:
+async def _prune_thread_records(store: Any, thread_id: str, max_records: int) -> None:
     """Keep only the ``max_records`` newest records for ``thread_id``.
 
     The namespace is flat, so pruning walks all items up to a generous

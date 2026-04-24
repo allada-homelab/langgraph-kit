@@ -232,9 +232,7 @@ def main() -> None:
 
     if args.command == "new":
         try:
-            path = _generate_agent(
-                args.agent_id, args.output_dir, force=args.force
-            )
+            path = _generate_agent(args.agent_id, args.output_dir, force=args.force)
         except FileExistsError as exc:
             sys.stderr.write(f"Error: {exc}\n")
             sys.exit(1)

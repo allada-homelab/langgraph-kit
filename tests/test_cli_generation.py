@@ -35,8 +35,15 @@ def test_generate_agent_overwrites_with_force(tmp_path: Path) -> None:
 def test_cli_new_exits_nonzero_on_conflict_without_force(tmp_path: Path) -> None:
     # First invocation succeeds.
     result = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "langgraph_kit.cli", "new", "conf-agent",
-         "--output-dir", str(tmp_path)],
+        [
+            sys.executable,
+            "-m",
+            "langgraph_kit.cli",
+            "new",
+            "conf-agent",
+            "--output-dir",
+            str(tmp_path),
+        ],
         check=False,
         capture_output=True,
         text=True,
@@ -45,8 +52,15 @@ def test_cli_new_exits_nonzero_on_conflict_without_force(tmp_path: Path) -> None
 
     # Second invocation without --force must fail.
     result = subprocess.run(  # noqa: S603
-        [sys.executable, "-m", "langgraph_kit.cli", "new", "conf-agent",
-         "--output-dir", str(tmp_path)],
+        [
+            sys.executable,
+            "-m",
+            "langgraph_kit.cli",
+            "new",
+            "conf-agent",
+            "--output-dir",
+            str(tmp_path),
+        ],
         check=False,
         capture_output=True,
         text=True,

@@ -247,9 +247,10 @@ def build_status_command(
             scope_counts.append((scope.value, len(records)))
             total_memories += len(records)
 
-        memory_line = ", ".join(
-            f"{name}={count}" for name, count in scope_counts if count
-        ) or "none"
+        memory_line = (
+            ", ".join(f"{name}={count}" for name, count in scope_counts if count)
+            or "none"
+        )
 
         lines = [
             "**Agent Status Dashboard:**\n",

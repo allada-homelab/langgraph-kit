@@ -55,9 +55,9 @@ async def test_completion_guard_fires_on_second_run_after_first_exhausted() -> N
 
     # Build a state that looks premature: completion phrase + no tool calls +
     # enough messages to clear the warm-up threshold.
-    messages: list[Any] = [
-        HumanMessage(content=f"request {i}") for i in range(5)
-    ] + [AIMessage(content="I'm done.")]
+    messages: list[Any] = [HumanMessage(content=f"request {i}") for i in range(5)] + [
+        AIMessage(content="I'm done.")
+    ]
     state = {"messages": messages}
 
     result = await mw.aafter_model(state=state, runtime=runtime)

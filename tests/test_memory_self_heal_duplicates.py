@@ -71,9 +71,7 @@ async def test_get_returns_newest_when_duplicate_in_two_type_namespaces() -> Non
     )
 
     # Orphan is cleaned up opportunistically.
-    stale_item = await store.aget(
-        ("memory", scope.value, old.type.value), record_id
-    )
+    stale_item = await store.aget(("memory", scope.value, old.type.value), record_id)
     assert stale_item is None, (
         "Stale duplicate in the old namespace should be deleted on read."
     )

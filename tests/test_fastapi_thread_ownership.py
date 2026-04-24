@@ -73,9 +73,7 @@ async def test_verify_owner_allows_unclaimed_when_flag_set() -> None:
     store = MockStore()
 
     # Should not raise.
-    await _verify_thread_owner(
-        store, "t-unknown", _User("alice"), allow_unclaimed=True
-    )
+    await _verify_thread_owner(store, "t-unknown", _User("alice"), allow_unclaimed=True)
 
 
 @pytest.mark.asyncio

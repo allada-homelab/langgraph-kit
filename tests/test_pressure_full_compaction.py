@@ -158,9 +158,7 @@ async def test_full_compaction_replacement_survives_add_messages_reducer() -> No
     middleware = PressureMiddleware(monitor, llm=llm, compaction_tail_size=3)
 
     # Need ids on messages for add_messages; use smaller pressure sample.
-    messages = [
-        _HumanMessage(content="x" * 3000, id=f"m{i}") for i in range(150)
-    ]
+    messages = [_HumanMessage(content="x" * 3000, id=f"m{i}") for i in range(150)]
     state = {"messages": messages}
 
     result = await middleware.abefore_agent(state, MagicMock())

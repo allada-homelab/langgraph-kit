@@ -74,9 +74,7 @@ async def test_stream_persists_budget_usage(monkeypatch: Any) -> None:
         pass
 
     # BudgetManager should now see the persisted state.
-    manager = BudgetManager(
-        store, BudgetConfig(max_tokens_per_thread=10_000)
-    )
+    manager = BudgetManager(store, BudgetConfig(max_tokens_per_thread=10_000))
     state = await manager.load_state("tid-budget")
     assert state.total_input_tokens == 500
     assert state.total_output_tokens == 200

@@ -29,9 +29,7 @@ def test_extract_json_object_parses_plain_json() -> None:
 
 
 def test_extract_json_object_tolerates_fence() -> None:
-    out = _extract_json_object(
-        '```json\n{"target_agent_id": "y"}\n```'
-    )
+    out = _extract_json_object('```json\n{"target_agent_id": "y"}\n```')
     assert out == {"target_agent_id": "y"}
 
 

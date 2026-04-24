@@ -889,7 +889,10 @@ class TestSupervisorRouter:
 
     @pytest.mark.asyncio
     async def test_llm_routing_fallback_on_error(self) -> None:
-        """Setup: LLM that fails. Run: route. Analyze: graceful fallback to first agent."""
+        """Setup: LLM that fails. Run: route. Analyze: returns ``none`` so
+        the supervisor handles the no-decision case explicitly rather than
+        silently routing to ``capabilities[0]`` (the old behaviour made
+        agent ordering load-bearing)."""
         from langgraph_kit.core.orchestration.routing import (
             AgentCapability,
             LLMRoutingStrategy,
@@ -905,7 +908,7 @@ class TestSupervisorRouter:
         router = LLMRoutingStrategy(mock_llm)
         decision = await router.route("Hello", caps)
 
-        assert decision.target_agent_id == "fallback"
+        assert decision.target_agent_id == "none"
         assert "fallback" in decision.reasoning.lower()
 
     @pytest.mark.asyncio

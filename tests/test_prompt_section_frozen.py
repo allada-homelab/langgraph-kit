@@ -34,12 +34,8 @@ def test_cannot_mutate_cache_key_after_construction() -> None:
 
 
 def test_cache_key_is_derived_from_content() -> None:
-    a = PromptSection(
-        id="s1", content="alpha", stability=SectionStability.STABLE
-    )
-    b = PromptSection(
-        id="s1", content="beta", stability=SectionStability.STABLE
-    )
+    a = PromptSection(id="s1", content="alpha", stability=SectionStability.STABLE)
+    b = PromptSection(id="s1", content="beta", stability=SectionStability.STABLE)
     assert a.cache_key != b.cache_key
 
 

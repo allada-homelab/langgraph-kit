@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 import pytest
 from langchain_core.messages import HumanMessage
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from langgraph_kit.replay.models import ConversationRecording, LLMInteraction
 from langgraph_kit.replay.player import (
@@ -63,9 +65,7 @@ def test_runner_uses_llm_kwarg_name(tmp_path: Path) -> None:
     LLM is passed through to graph_builder."""
     rec = _one_interaction_recording()
     fixture = tmp_path / "rec.json"
-    fixture.write_text(
-        json.dumps(rec.model_dump(mode="json")), encoding="utf-8"
-    )
+    fixture.write_text(json.dumps(rec.model_dump(mode="json")), encoding="utf-8")
 
     captured: dict[str, Any] = {}
 
@@ -95,9 +95,7 @@ def test_runner_uses_llm_kwarg_name(tmp_path: Path) -> None:
 def test_runner_defaults_to_llm_kwarg(tmp_path: Path) -> None:
     rec = _one_interaction_recording()
     fixture = tmp_path / "rec.json"
-    fixture.write_text(
-        json.dumps(rec.model_dump(mode="json")), encoding="utf-8"
-    )
+    fixture.write_text(json.dumps(rec.model_dump(mode="json")), encoding="utf-8")
 
     captured: dict[str, Any] = {}
 

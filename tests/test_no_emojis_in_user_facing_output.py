@@ -71,9 +71,7 @@ async def test_list_async_tasks_is_emoji_free() -> None:
         )
 
     # Exercise the CLI-facing tool directly.
-    tools: list[Any] = build_async_task_tools(
-        manager=manager, available_graphs={}
-    )
+    tools: list[Any] = build_async_task_tools(manager=manager, available_graphs={})
     # Resolve by __name__ — tools are plain async functions here.
     list_tool = None
     for t in tools:

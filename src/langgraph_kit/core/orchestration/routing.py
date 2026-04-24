@@ -95,9 +95,7 @@ class LLMRoutingStrategy:
             # silently routing to the alphabetically-first agent.
             data = _extract_json_object(content)
             if data is None:
-                logger.debug(
-                    "LLM routing produced unparseable JSON; returning 'none'"
-                )
+                logger.debug("LLM routing produced unparseable JSON; returning 'none'")
                 return RoutingDecision(
                     target_agent_id="none",
                     reasoning="LLM routing produced unparseable JSON",
@@ -129,7 +127,9 @@ def _extract_json_object(text: str) -> dict[str, Any] | None:
     import re as _re
 
     candidates: list[str] = [text.strip()]
-    unfenced = _re.sub(r"^```(?:json)?\s*\n?|\n?```\s*$", "", text.strip(), flags=_re.MULTILINE)
+    unfenced = _re.sub(
+        r"^```(?:json)?\s*\n?|\n?```\s*$", "", text.strip(), flags=_re.MULTILINE
+    )
     if unfenced != text.strip():
         candidates.append(unfenced)
     scanned = _first_balanced_object(text)

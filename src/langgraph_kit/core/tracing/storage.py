@@ -93,9 +93,7 @@ class TraceStore:
             items = await self._store.asearch(("traces", thread_id), limit=500)
             # Only count full-trace keys for the cap — summaries are
             # companion rows.
-            trace_items = [
-                i for i in items if not i.key.endswith(_SUMMARY_SUFFIX)
-            ]
+            trace_items = [i for i in items if not i.key.endswith(_SUMMARY_SUFFIX)]
             if len(trace_items) <= self._max_per_thread:
                 return
 

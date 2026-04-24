@@ -28,7 +28,11 @@ class _RaisingGraph:
         self, input_data: Any, config: Any = None, version: str = "v2"
     ) -> Any:
         # Produce one event, then raise.
-        yield {"event": "on_chat_model_stream", "data": {"chunk": _Chunk("hi")}, "tags": ()}
+        yield {
+            "event": "on_chat_model_stream",
+            "data": {"chunk": _Chunk("hi")},
+            "tags": (),
+        }
         raise RuntimeError("upstream boom")
 
     async def aget_state(self, config: Any) -> Any:
@@ -53,12 +57,8 @@ async def test_stream_emits_error_event_and_done_on_failure() -> None:
         frames.append(frame)
 
     # Expect an error frame AND a DONE frame, in that order.
-    error_idx = next(
-        (i for i, f in enumerate(frames) if '"error"' in f), None
-    )
-    done_idx = next(
-        (i for i, f in enumerate(frames) if "[DONE]" in f), None
-    )
+    error_idx = next((i for i, f in enumerate(frames) if '"error"' in f), None)
+    done_idx = next((i for i, f in enumerate(frames) if "[DONE]" in f), None)
     assert error_idx is not None, f"No error frame in {frames!r}"
     assert done_idx is not None, f"No [DONE] frame in {frames!r}"
     assert error_idx < done_idx, "error must precede [DONE]"

@@ -279,16 +279,12 @@ async def stream_agent_events(
                                     max_tokens_per_thread=app_cfg.token_budget_per_thread
                                 ),
                             )
-                            user_id = (
-                                config.get("metadata", {}).get("user_id") or ""
-                            )
+                            user_id = config.get("metadata", {}).get("user_id") or ""
                             await manager.record_usage(
                                 thread_id, total, user_id=user_id
                             )
                     except Exception:
-                        logger.debug(
-                            "Failed to persist budget usage", exc_info=True
-                        )
+                        logger.debug("Failed to persist budget usage", exc_info=True)
 
         # Emit an explicit error event before closing the stream so the
         # client can distinguish "backend failure" from "run completed".

@@ -80,9 +80,7 @@ class LatencyMetric(EvalMetric):
             # 1.0 (benefit-of-the-doubt) + an explicit comment makes the
             # "no data" traces easy to filter out in reports without
             # pulling the aggregate toward 0.5.
-            return EvalResult(
-                value=1.0, comment="Duration not available — not scored"
-            )
+            return EvalResult(value=1.0, comment="Duration not available — not scored")
 
         if trace.duration_ms <= self.sla_ms:
             score = 1.0

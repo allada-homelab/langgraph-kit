@@ -14,7 +14,11 @@ from .conftest import MockStore
 
 
 def _span(
-    *, span_id: str, name: str = "n", kind: str = "chain", children: list[Any] | None = None
+    *,
+    span_id: str,
+    name: str = "n",
+    kind: str = "chain",
+    children: list[Any] | None = None,
 ) -> TraceSpan:
     return TraceSpan(
         span_id=span_id,
@@ -117,9 +121,7 @@ async def test_list_traces_reads_materialized_summaries(
         calls["n"] += 1
         return real_validate(*args, **kwargs)
 
-    monkeypatch.setattr(
-        storage_mod.TraceRecord, "model_validate", counting_validate
-    )
+    monkeypatch.setattr(storage_mod.TraceRecord, "model_validate", counting_validate)
 
     summaries = await tstore.list_traces("tid")
     assert len(summaries) == 3

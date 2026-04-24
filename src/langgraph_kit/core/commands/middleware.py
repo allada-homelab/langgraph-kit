@@ -86,9 +86,7 @@ class CommandMiddleware(_AgentMiddleware):  # type: ignore[misc]
             return {
                 "messages": [
                     *compacted,
-                    AIMessage(
-                        content=result.output, additional_kwargs=marker_kwargs
-                    ),
+                    AIMessage(content=result.output, additional_kwargs=marker_kwargs),
                 ],
                 "jump_to": "end",
             }

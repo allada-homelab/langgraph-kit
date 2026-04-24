@@ -3,13 +3,16 @@
 from __future__ import annotations
 
 import logging
-from pathlib import Path
+from typing import TYPE_CHECKING
 
-import pytest
+import pytest  # noqa: TC002 — used at runtime via pytest.LogCaptureFixture type
 
 from langgraph_kit.core.plugins.loader import PluginLoader
 from langgraph_kit.core.skills.models import SkillMetadata
 from langgraph_kit.core.skills.registry import SkillRegistry
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _write_skill(dir_: Path, name: str, frontmatter: str) -> None:
