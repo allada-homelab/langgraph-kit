@@ -104,53 +104,6 @@ async def test_list_worktrees_error_path() -> None:
 
 
 @pytest.mark.asyncio
-async def test_enter_worktree_locates_branch_in_porcelain_output() -> None:
-    tools: list[Any] = build_worktree_tools()
-    enter = next(t for t in tools if t.__name__ == "enter_worktree")
-
-    porcelain = (
-        "worktree /repo\n"
-        "branch refs/heads/main\n"
-        "\n"
-        "worktree /other\n"
-        "branch refs/heads/target\n"
-    )
-    with patch.object(
-        worktree_mod, "_run_git", new=AsyncMock(return_value=(0, porcelain, ""))
-    ):
-        result = await enter("target")
-
-    assert "/other" in result
-    assert "branch: target" in result
-
-
-@pytest.mark.asyncio
-async def test_enter_worktree_branch_not_found() -> None:
-    tools: list[Any] = build_worktree_tools()
-    enter = next(t for t in tools if t.__name__ == "enter_worktree")
-
-    porcelain = "worktree /repo\nbranch refs/heads/main\n"
-    with patch.object(
-        worktree_mod, "_run_git", new=AsyncMock(return_value=(0, porcelain, ""))
-    ):
-        result = await enter("nowhere")
-
-    assert "not found" in result
-    assert "create_worktree" in result
-
-
-@pytest.mark.asyncio
-async def test_enter_worktree_git_error_surfaces() -> None:
-    tools: list[Any] = build_worktree_tools()
-    enter = next(t for t in tools if t.__name__ == "enter_worktree")
-
-    with patch.object(
-        worktree_mod, "_run_git", new=AsyncMock(return_value=(1, "", "bad"))
-    ):
-        assert "could not list worktrees" in (await enter("any")).lower()
-
-
-@pytest.mark.asyncio
 async def test_exit_worktree_happy_path() -> None:
     tools: list[Any] = build_worktree_tools()
     exitw = next(t for t in tools if t.__name__ == "exit_worktree")
@@ -165,28 +118,47 @@ async def test_exit_worktree_happy_path() -> None:
 
 
 @pytest.mark.asyncio
-async def test_exit_worktree_falls_back_to_force_remove() -> None:
+async def test_exit_worktree_requires_force_for_dirty_trees() -> None:
+    """Dirty-tree removal now requires ``force=True`` — default refuses."""
     tools: list[Any] = build_worktree_tools()
     exitw = next(t for t in tools if t.__name__ == "exit_worktree")
 
-    # First call fails (uncommitted changes), forced call succeeds.
     call_log: list[tuple[str, ...]] = []
 
     async def fake_run_git(*args: str, cwd: str | None = None) -> Any:
         _ = cwd
         call_log.append(args)
-        if "--force" in args:
-            return (0, "", "")
-        return (1, "", "contains uncommitted changes")
+        return (1, "", "contains modified or untracked files")
 
     with patch.object(worktree_mod, "_run_git", new=fake_run_git):
         result = await exitw("dirty")
 
-    assert "forced" in result.lower()
-    assert len(call_log) == 2, (
-        f"Expected two git calls (initial + --force retry); got {call_log}"
+    assert "Error removing worktree" in result
+    assert "force=True" in result, (
+        f"Should hint that force is required; got: {result!r}"
     )
-    assert "--force" in call_log[1]
+    # Exactly one call — no silent retry.
+    assert len(call_log) == 1
+    assert "--force" not in call_log[0]
+
+
+@pytest.mark.asyncio
+async def test_exit_worktree_passes_force_flag_when_set() -> None:
+    tools: list[Any] = build_worktree_tools()
+    exitw = next(t for t in tools if t.__name__ == "exit_worktree")
+
+    call_log: list[tuple[str, ...]] = []
+
+    async def fake_run_git(*args: str, cwd: str | None = None) -> Any:
+        _ = cwd
+        call_log.append(args)
+        return (0, "", "")
+
+    with patch.object(worktree_mod, "_run_git", new=fake_run_git):
+        result = await exitw("dirty", force=True)
+
+    assert "forced" in result.lower()
+    assert "--force" in call_log[0]
 
 
 @pytest.mark.asyncio
@@ -200,7 +172,7 @@ async def test_exit_worktree_force_remove_also_fails() -> None:
         return (1, "", "permanent error")
 
     with patch.object(worktree_mod, "_run_git", new=always_fail):
-        result = await exitw("dead")
+        result = await exitw("dead", force=True)
 
     assert "Error removing worktree" in result
     assert "permanent error" in result

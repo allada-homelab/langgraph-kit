@@ -71,10 +71,14 @@ def build_artifact_tool() -> Any:
         tables, or mermaid diagrams.
 
         Args:
-            artifact_type: One of "code", "markdown", "table", "diagram", "json"
+            artifact_type: One of "code", "markdown", "table", "diagram",
+                "json", "diff", "html". Note: "html" is rendered by the
+                frontend — sanitise untrusted input before passing it.
             title: Short title for the artifact panel header
-            content: The artifact body (code, markdown text, JSON string, mermaid markup)
-            language: Programming language for code artifacts (e.g. "python", "typescript")
+            content: The artifact body (code, markdown, JSON string,
+                mermaid markup, unified diff, HTML)
+            language: Programming language for code artifacts (e.g.
+                "python", "typescript")
         """
         try:
             art_type = ArtifactType(artifact_type.lower())

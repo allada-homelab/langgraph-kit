@@ -21,7 +21,7 @@ import json
 import logging
 from typing import Any
 
-from langgraph_kit.core.tools.capability import ToolCapability
+from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +37,18 @@ class DeferredToolRegistry:
     by :func:`register_search_tool`.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, allow_destructive: bool = False) -> None:
         super().__init__()
         self._tools: dict[str, ToolCapability] = {}
+        self._allow_destructive = allow_destructive
+
+    @property
+    def allow_destructive(self) -> bool:
+        """When False, ``call_deferred_tool`` refuses to invoke DESTRUCTIVE
+        capabilities. Defaults to False so catalog authors can safely
+        register risky tools without immediately exposing them through
+        the auto-dispatch path."""
+        return self._allow_destructive
 
     def __len__(self) -> int:
         return len(self._tools)
@@ -205,6 +214,16 @@ def build_call_deferred_tool(deferred: DeferredToolRegistry) -> Any:
                 f"Error: deferred tool '{tool_id}' not found. "
                 f"Use tool_search to discover tools. "
                 f"First 10 available ids: {available}"
+            )
+
+        # Risk gate: block destructive deferred tools unless the registry
+        # was explicitly built with allow_destructive=True. Discovery via
+        # tool_search still surfaces the tool; dispatch refuses.
+        if cap.risk == ToolRisk.DESTRUCTIVE and not deferred.allow_destructive:
+            return (
+                f"Error: '{tool_id}' is marked destructive and cannot be "
+                f"invoked through call_deferred_tool. The operator must "
+                f"opt in via DeferredToolRegistry(allow_destructive=True)."
             )
 
         if not isinstance(args, dict):

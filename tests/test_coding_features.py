@@ -174,9 +174,9 @@ async def test_git_context_provider_handles_no_git() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_build_worktree_tools_returns_four() -> None:
+def test_build_worktree_tools_returns_three() -> None:
     tools = build_worktree_tools()
-    assert len(tools) == 4
+    assert len(tools) == 3
 
 
 def test_worktree_tools_are_callable() -> None:
@@ -190,8 +190,9 @@ def test_worktree_tools_have_names() -> None:
     names = [getattr(t, "__name__", None) for t in tools]
     assert "create_worktree" in names
     assert "list_worktrees" in names
-    assert "enter_worktree" in names
     assert "exit_worktree" in names
+    # ``enter_worktree`` was removed — it was a stub with no cwd plumbing.
+    assert "enter_worktree" not in names
 
 
 def test_worktree_guidance_section_is_stable() -> None:

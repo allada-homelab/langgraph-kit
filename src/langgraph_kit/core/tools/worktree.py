@@ -149,51 +149,7 @@ def build_worktree_tools(repo_path: str | None = None) -> list[Any]:
 
         return f"Active worktrees ({len(entries)}):\n" + "\n".join(entries)
 
-    async def enter_worktree(branch_name: str) -> str:
-        """Switch the working directory context to an existing worktree.
-
-        This changes the effective working directory for subsequent git
-        operations to the specified worktree.
-
-        Args:
-            branch_name: The branch name of the worktree to enter.
-        """
-        # Verify the worktree exists
-        rc, stdout, _ = await _run_git("worktree", "list", "--porcelain", cwd=repo_path)
-        if rc != 0:
-            return "Error: could not list worktrees."
-
-        target_path: str | None = None
-        current_path: str | None = None
-        current_branch: str | None = None
-        for line in stdout.splitlines():
-            if line.startswith("worktree "):
-                current_path = line[9:]
-            elif line.startswith("branch "):
-                branch = line[7:]
-                if branch.startswith("refs/heads/"):
-                    branch = branch[len("refs/heads/") :]
-                current_branch = branch
-            elif not line:
-                if current_branch == branch_name:
-                    target_path = current_path
-                current_path = None
-                current_branch = None
-        # Check last entry
-        if current_branch == branch_name:
-            target_path = current_path
-
-        if target_path is None:
-            return (
-                f"Worktree for branch '{branch_name}' not found. "
-                f"Create it first with create_worktree."
-            )
-        return (
-            f"Entered worktree at: {target_path} (branch: {branch_name})\n"
-            f"Subsequent file operations should target this directory."
-        )
-
-    async def exit_worktree(branch_name: str) -> str:
+    async def exit_worktree(branch_name: str, force: bool = False) -> str:
         """Remove a git worktree and clean up its directory.
 
         This removes the worktree and its associated branch tracking.
@@ -201,33 +157,33 @@ def build_worktree_tools(repo_path: str | None = None) -> list[Any]:
 
         Args:
             branch_name: The branch name of the worktree to remove.
+            force: When True, pass ``--force`` to git worktree remove.
+                Destructive: uncommitted changes in the worktree are lost.
+                Off by default so the tool refuses to delete dirty trees
+                silently.
         """
-        rc, _, stderr = await _run_git(
-            "worktree",
-            "remove",
-            f"../{branch_name}",
-            cwd=repo_path,
-        )
-        if rc != 0:
-            # Force removal discards uncommitted changes — warn the caller
-            logger.warning(
-                "Worktree removal failed (%s), retrying with --force. "
-                "Uncommitted changes in the worktree will be lost.",
-                stderr.strip(),
-            )
-            dir_name = branch_name.replace("/", "-")
-            rc2, _, stderr2 = await _run_git(
-                "worktree",
-                "remove",
-                "--force",
-                f"../{dir_name}",
-                cwd=repo_path,
-            )
-            if rc2 != 0:
-                return f"Error removing worktree: {stderr2 or stderr}"
-            return f"Worktree removed (forced): ../{dir_name}"
-
+        git_args: list[str] = ["worktree", "remove"]
+        if force:
+            git_args.append("--force")
         dir_name = branch_name.replace("/", "-")
-        return f"Worktree removed: ../{dir_name}"
+        git_args.append(f"../{dir_name}")
 
-    return [create_worktree, list_worktrees, enter_worktree, exit_worktree]
+        rc, _, stderr = await _run_git(*git_args, cwd=repo_path)
+        if rc != 0:
+            hint = ""
+            if not force and "contains modified" in stderr.lower():
+                hint = (
+                    " (uncommitted changes present — re-invoke with force=True "
+                    "to discard them)"
+                )
+            return f"Error removing worktree: {stderr}{hint}"
+        prefix = "Worktree removed (forced)" if force else "Worktree removed"
+        return f"{prefix}: ../{dir_name}"
+
+    # ``enter_worktree`` was a read-only stub: it returned a path string
+    # with no way for downstream tools to honour the "new cwd". Rather
+    # than keep a misleading tool, rely on ``list_worktrees`` +
+    # ``create_worktree`` for the discovery/creation story and delete the
+    # stub. If a future cwd-plumbing story lands, this tool can come back.
+
+    return [create_worktree, list_worktrees, exit_worktree]
