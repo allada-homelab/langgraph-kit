@@ -160,6 +160,27 @@ def create_app_lifespan(
 
                 yield
         finally:
+            # Graceful shutdown: drain in-flight async sub-agent tasks while
+            # Store + Langfuse + checkpointer are still alive. Uvicorn has
+            # already stopped accepting new HTTP requests by the time the
+            # lifespan shutdown phase runs (SIGTERM/SIGINT -> lifespan exit),
+            # so we only need to wait on work that outlives a single request.
+            from langgraph_kit.core.orchestration.async_tasks import (
+                drain_background_tasks,
+            )
+
+            cfg = get_config()
+            if cfg.shutdown_timeout_seconds >= 0:
+                drained, cancelled = await drain_background_tasks(
+                    cfg.shutdown_timeout_seconds
+                )
+                if drained or cancelled:
+                    logger.info(
+                        "shutdown drain: %d async task(s) completed, %d cancelled",
+                        drained,
+                        cancelled,
+                    )
+
             if mcp_mgr is not None:
                 await mcp_mgr.close()
             shutdown_langfuse()

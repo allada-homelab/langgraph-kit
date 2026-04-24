@@ -53,6 +53,14 @@ class AsyncTask(BaseModel):
 _NAMESPACE_PREFIX = "async_tasks"
 
 
+# Module-level registry of every live background task created by any
+# AsyncTaskManager, used for graceful shutdown. We track at the task level
+# rather than the manager level because managers are constructed per request
+# and there is no single app-level owner to hold references to them.
+# Tasks auto-remove from this set when they finish (done_callback in start()).
+_background_tasks: set[asyncio.Task[Any]] = set()
+
+
 class AsyncTaskManager:
     """Manages background tasks with persistence via LangGraph Store.
 
@@ -128,6 +136,8 @@ class AsyncTaskManager:
             self._run_graph(task.task_id, graph, input_data, sub_config)
         )
         self._running_asyncio_tasks[task.task_id] = asyncio_task
+        _background_tasks.add(asyncio_task)
+        asyncio_task.add_done_callback(_background_tasks.discard)
         return task
 
     async def _run_graph(
@@ -152,6 +162,22 @@ class AsyncTaskManager:
                 task.status = AsyncTaskStatus.SUCCESS
                 task.result = content
                 await self._persist(task)
+        except asyncio.CancelledError:
+            # Graceful-shutdown drain (or explicit cancel via cancel()) landed
+            # on the running task. Persist CANCELLED so a later reader sees the
+            # real terminal state instead of a stuck "running" record, then
+            # re-raise so asyncio treats the task as cancelled.
+            try:
+                task = await self._load(task_id)
+                if task and not task.is_terminal():
+                    task.status = AsyncTaskStatus.CANCELLED
+                    task.result = task.result or "Cancelled."
+                    await self._persist(task)
+            except Exception:
+                # Store may already be tearing down during shutdown — don't
+                # block cancellation on a persistence failure.
+                logger.exception("Failed to persist cancellation for task %s", task_id)
+            raise
         except Exception as exc:
             logger.exception("Async task %s failed", task_id)
             task = await self._load(task_id)
@@ -197,6 +223,52 @@ class AsyncTaskManager:
         task.result = "Cancelled by user."
         await self._persist(task)
         return task
+
+
+# ---------------------------------------------------------------------------
+# Graceful shutdown
+# ---------------------------------------------------------------------------
+
+
+async def drain_background_tasks(timeout: float) -> tuple[int, int]:
+    """Wait for every tracked async-sub-agent task to finish, then cancel the rest.
+
+    Called during FastAPI lifespan teardown so in-flight background tasks
+    get a bounded window to complete before the Store / checkpointer /
+    Langfuse exporter go away. Cancelled tasks update their Store records
+    via :meth:`AsyncTaskManager._run_graph`'s CancelledError handler.
+
+    Parameters
+    ----------
+    timeout:
+        Seconds to wait for clean completion. Tasks still running after
+        this elapses are cancelled. ``timeout <= 0`` cancels immediately.
+
+    Returns
+    -------
+    ``(drained, cancelled)``: counts of tasks that finished cleanly vs
+    those that had to be cancelled.
+    """
+    tasks = list(_background_tasks)
+    if not tasks:
+        return (0, 0)
+
+    # Always give at least a small window so freshly-created tasks enter
+    # their try block before we cancel. Without this, asyncio cancels a
+    # not-yet-scheduled task before its CancelledError handler runs, which
+    # leaves the Store record stuck in RUNNING. 10 ms is negligible during
+    # shutdown and guarantees the handler fires.
+    effective_timeout = max(timeout, 0.01)
+    done, pending = await asyncio.wait(tasks, timeout=effective_timeout)
+
+    if pending:
+        for t in pending:
+            t.cancel()
+        # Let cancellation propagate. return_exceptions prevents a spurious
+        # re-raise of CancelledError from the gather itself.
+        await asyncio.gather(*pending, return_exceptions=True)
+
+    return (len(done), len(pending))
 
 
 # ---------------------------------------------------------------------------
