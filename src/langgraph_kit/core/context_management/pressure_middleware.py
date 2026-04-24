@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import io
 import logging
 from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
 from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
     HumanMessage,
+    RemoveMessage,
     SystemMessage,
 )
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
 from langgraph_kit.core.context_management.compaction import (
     CompactionMode,
@@ -27,11 +30,24 @@ from langgraph_kit.core.internal_tags import (
 
 logger = logging.getLogger(__name__)
 
+# Switch to chunked (hierarchical) summarization when the rendered head would
+# exceed this many characters. Keeps peak memory bounded to roughly one chunk
+# plus the (small) list of per-chunk summaries — instead of holding the whole
+# transcript in memory while the LLM call is pending. Default is high enough
+# that a typical 128k-token window stays on the single-shot path; only outsized
+# contexts (1M-token windows, unbounded tool outputs) pay for chunking.
+_CHUNK_RENDER_THRESHOLD = 500_000
+_CHUNK_MESSAGES = 40
+
 
 class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
     """Deepagents middleware that checks context pressure before each agent turn.
 
     Returns state updates with compacted messages instead of mutating in place.
+    Replacement is done via ``RemoveMessage(REMOVE_ALL_MESSAGES)`` so the intent
+    is explicit to the reducer: if the state channel does NOT use ``add_messages``
+    (or a compatible reducer), langgraph will surface a loud error instead of
+    silently turning replacement into an append.
     """
 
     def __init__(
@@ -40,11 +56,17 @@ class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
         *,
         llm: Any | None = None,
         compaction_tail_size: int = 6,
+        partial_keep_size: int = 20,
+        chunk_render_threshold: int = _CHUNK_RENDER_THRESHOLD,
+        chunk_messages: int = _CHUNK_MESSAGES,
     ) -> None:
         super().__init__()
         self._monitor = monitor
         self._llm = llm
         self._tail_size = compaction_tail_size
+        self._partial_keep_size = partial_keep_size
+        self._chunk_render_threshold = chunk_render_threshold
+        self._chunk_messages = chunk_messages
         self._compaction_prompts = CompactionPromptPack()
 
     async def abefore_agent(self, state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
@@ -72,6 +94,11 @@ class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
             if compacted is not None:
                 return {"messages": compacted}
 
+        if strategy == MitigationStrategy.PARTIAL_COMPACTION:
+            compacted = await self._partial_compaction(messages)
+            if compacted is not None:
+                return {"messages": compacted}
+
         if strategy == MitigationStrategy.FULL_COMPACTION:
             compacted = await self._full_compaction(messages)
             if compacted is not None:
@@ -88,6 +115,10 @@ class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
         Returns the new message list, or None if compaction was skipped or failed
         (in which case the monitor's failure counter is incremented so repeated
         failures eventually escalate to STOP via the circuit breaker).
+
+        For very large conversations the head is summarized chunk-by-chunk
+        (map-reduce) so we never hold the entire rendered transcript in memory
+        alongside the LLM request.
         """
         if self._llm is None:
             logger.warning(
@@ -99,39 +130,22 @@ class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
             # Nothing to compact down to.
             return None
 
-        prompt = self._compaction_prompts.build_prompt(CompactionMode.FULL)
-        compaction_input = [
-            SystemMessage(content=prompt),
-            HumanMessage(content=_render_conversation(messages)),
-        ]
+        head = messages[: -self._tail_size]
+        tail = list(messages[-self._tail_size :])
 
-        # Tag the call so consumers streaming via astream_events can filter
-        # the compactor's chat_model events out of the user-facing transcript
-        # — see langgraph_kit.core.internal_tags for rationale.
-        try:
-            response = await self._llm.ainvoke(
-                compaction_input,
-                config=internal_llm_config(
-                    CONTEXT_COMPACTION_TAG, run_name="context_compaction"
-                ),
-            )
-        except Exception:
-            logger.warning("FULL_COMPACTION LLM call failed", exc_info=True)
-            self._monitor.record_compaction_failure()
-            return None
-
-        raw: str = _extract_text(response)
-        result: CompactionResult | None = self._compaction_prompts.parse_output(
-            raw, mode=CompactionMode.FULL
-        )
+        result = await self._summarize_head(head, mode=CompactionMode.FULL)
         if result is None:
-            logger.warning("FULL_COMPACTION LLM output did not contain a valid summary")
-            self._monitor.record_compaction_failure()
             return None
 
         summary_text = _format_summary(result)
-        tail = messages[-self._tail_size :]
-        new_messages: list[Any] = [SystemMessage(content=summary_text), *tail]
+        # RemoveMessage(REMOVE_ALL_MESSAGES) tells add_messages to drop everything
+        # before the marker and keep everything after it. If the consumer uses a
+        # non-standard reducer, this surfaces loudly instead of silently appending.
+        new_messages: list[Any] = [
+            RemoveMessage(id=REMOVE_ALL_MESSAGES),
+            SystemMessage(content=summary_text),
+            *tail,
+        ]
 
         self._monitor.record_compaction_success()
         logger.info(
@@ -140,6 +154,155 @@ class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
             len(tail),
         )
         return new_messages
+
+    async def _partial_compaction(self, messages: list[Any]) -> list[Any] | None:
+        """Summarize the older head of the conversation, keeping a larger tail.
+
+        Cheaper than FULL_COMPACTION because it preserves more recent context
+        verbatim. Useful at moderate pressure before things go critical.
+        """
+        if self._llm is None:
+            logger.warning(
+                "PARTIAL_COMPACTION selected but no LLM configured on PressureMiddleware"
+            )
+            return None
+
+        if len(messages) <= self._partial_keep_size + 2:
+            # Not enough head to bother summarizing.
+            return None
+
+        head = messages[: -self._partial_keep_size]
+        tail = list(messages[-self._partial_keep_size :])
+
+        result = await self._summarize_head(head, mode=CompactionMode.PARTIAL)
+        if result is None:
+            return None
+
+        summary_text = _format_summary(result)
+        new_messages: list[Any] = [
+            RemoveMessage(id=REMOVE_ALL_MESSAGES),
+            SystemMessage(content=summary_text),
+            *tail,
+        ]
+
+        self._monitor.record_compaction_success()
+        logger.info(
+            "PARTIAL_COMPACTION replaced %d head messages with summary + %d-msg tail",
+            len(head),
+            len(tail),
+        )
+        return new_messages
+
+    async def _summarize_head(
+        self, head: list[Any], *, mode: CompactionMode
+    ) -> CompactionResult | None:
+        """Summarize a list of messages, using chunked map-reduce for very large heads.
+
+        Returns the parsed CompactionResult, or None if the LLM call or parse
+        failed — callers should treat None as a failure and let the monitor's
+        circuit breaker track it. Callers must have already verified that
+        ``self._llm`` is not None.
+        """
+        if self._llm is None:
+            raise RuntimeError("_summarize_* helpers require self._llm to be set")
+        # Decide chunked vs. direct by estimating rendered size. Cheap — avoids
+        # building the full rendered string twice.
+        approx_chars = _approx_render_chars(head)
+        if approx_chars <= self._chunk_render_threshold:
+            return await self._summarize_direct(head, mode=mode)
+        return await self._summarize_chunked(head, final_mode=mode)
+
+    async def _summarize_direct(
+        self, messages: list[Any], *, mode: CompactionMode
+    ) -> CompactionResult | None:
+        """Render the whole list at once and summarize in a single LLM call."""
+        if self._llm is None:
+            raise RuntimeError("_summarize_* helpers require self._llm to be set")
+        prompt = self._compaction_prompts.build_prompt(mode)
+        rendered = _render_conversation(messages)
+        compaction_input = [
+            SystemMessage(content=prompt),
+            HumanMessage(content=rendered),
+        ]
+
+        try:
+            response = await self._llm.ainvoke(
+                compaction_input,
+                config=internal_llm_config(
+                    CONTEXT_COMPACTION_TAG, run_name="context_compaction"
+                ),
+            )
+        except Exception:
+            logger.warning("Compaction LLM call failed", exc_info=True)
+            self._monitor.record_compaction_failure()
+            return None
+
+        raw: str = _extract_text(response)
+        result = self._compaction_prompts.parse_output(raw, mode=mode)
+        if result is None:
+            logger.warning("Compaction LLM output did not contain a valid summary")
+            self._monitor.record_compaction_failure()
+            return None
+        return result
+
+    async def _summarize_chunked(
+        self, messages: list[Any], *, final_mode: CompactionMode
+    ) -> CompactionResult | None:
+        """Map-reduce summarization for very large heads.
+
+        Phase 1 (map): split messages into chunks of ``_chunk_messages`` and
+        summarize each chunk with PARTIAL prompt.
+        Phase 2 (reduce): combine the per-chunk summaries into a single final
+        summary with ``final_mode`` prompt. The per-chunk summaries are small,
+        so the reduce step doesn't reintroduce the memory pressure.
+        """
+        if self._llm is None:
+            raise RuntimeError("_summarize_* helpers require self._llm to be set")
+        chunk_size = max(1, self._chunk_messages)
+        chunks = [
+            messages[i : i + chunk_size] for i in range(0, len(messages), chunk_size)
+        ]
+
+        chunk_summaries: list[CompactionResult] = []
+        for idx, chunk in enumerate(chunks):
+            logger.debug(
+                "Chunked compaction: summarizing chunk %d/%d (%d msgs)",
+                idx + 1,
+                len(chunks),
+                len(chunk),
+            )
+            piece = await self._summarize_direct(chunk, mode=CompactionMode.PARTIAL)
+            if piece is None:
+                return None  # failure already recorded by _summarize_direct
+            chunk_summaries.append(piece)
+
+        # Phase 2: feed the per-chunk summaries back into an LLM call as text.
+        combined_text = _render_chunk_summaries(chunk_summaries)
+        prompt = self._compaction_prompts.build_prompt(final_mode)
+        try:
+            response = await self._llm.ainvoke(
+                [
+                    SystemMessage(content=prompt),
+                    HumanMessage(content=combined_text),
+                ],
+                config=internal_llm_config(
+                    CONTEXT_COMPACTION_TAG, run_name="context_compaction"
+                ),
+            )
+        except Exception:
+            logger.warning("Chunked compaction reduce step failed", exc_info=True)
+            self._monitor.record_compaction_failure()
+            return None
+
+        raw: str = _extract_text(response)
+        result = self._compaction_prompts.parse_output(raw, mode=final_mode)
+        if result is None:
+            logger.warning(
+                "Chunked compaction reduce step did not produce a valid summary"
+            )
+            self._monitor.record_compaction_failure()
+            return None
+        return result
 
     @staticmethod
     def _microcompact(messages: list[Any]) -> list[Any] | None:
@@ -180,21 +343,58 @@ class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
 
 
 def _render_conversation(messages: list[Any]) -> str:
-    """Serialize messages into a plain-text transcript for the compactor."""
-    lines: list[str] = []
-    for msg in messages:
+    """Serialize messages into a plain-text transcript for the compactor.
+
+    Uses an incremental StringIO buffer so we never hold both the list of
+    per-line strings AND the final joined string in memory at the same time.
+    """
+    buf = io.StringIO()
+    for i, msg in enumerate(messages):
+        if i > 0:
+            buf.write("\n\n")
         role = getattr(msg, "type", "unknown")
         content = getattr(msg, "content", "")
         if isinstance(content, list):
-            parts: list[str] = []
+            flat_parts: list[str] = []
             for part in content:  # pyright: ignore[reportUnknownVariableType]
                 if isinstance(part, dict):
-                    parts.append(str(part.get("text", "")))  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+                    flat_parts.append(str(part.get("text", "")))  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
                 else:
-                    parts.append(str(part))
-            content = "\n".join(parts)
-        lines.append(f"[{role}] {content}")
-    return "\n\n".join(lines)
+                    flat_parts.append(str(part))
+            content = "\n".join(flat_parts)
+        buf.write(f"[{role}] {content}")
+    return buf.getvalue()
+
+
+def _approx_render_chars(messages: list[Any]) -> int:
+    """Cheap upper bound on the rendered transcript size, without rendering.
+
+    Sums raw content lengths; ignores the small per-message role prefix. Used
+    to decide between direct and chunked summarization.
+    """
+    total = 0
+    for msg in messages:
+        content = getattr(msg, "content", "")
+        if isinstance(content, str):
+            total += len(content)
+        elif isinstance(content, list):
+            for part in content:  # pyright: ignore[reportUnknownVariableType]
+                if isinstance(part, dict):
+                    total += len(str(part.get("text", "")))  # pyright: ignore[reportUnknownMemberType,reportUnknownArgumentType]
+                else:
+                    total += len(str(part))
+    return total
+
+
+def _render_chunk_summaries(results: list[CompactionResult]) -> str:
+    """Render per-chunk summaries as input for the reduce step."""
+    buf = io.StringIO()
+    for i, r in enumerate(results):
+        if i > 0:
+            buf.write("\n\n")
+        buf.write(f"## Chunk {i + 1} summary\n")
+        buf.write(_format_summary(r))
+    return buf.getvalue()
 
 
 def _extract_text(response: Any) -> str:
