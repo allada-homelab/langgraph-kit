@@ -71,13 +71,20 @@ class ToolRegistry:
         *,
         profile: str | None = None,
         worker_type: str | None = None,
+        tags: set[str] | None = None,
         max_risk: ToolRisk | None = None,
     ) -> list[Any]:
-        """Filter then compile tools to callable list."""
+        """Filter then compile tools to callable list.
+
+        All four filter dimensions are honoured, matching ``.filter()``.
+        """
         return [
             cap.fn
             for cap in self.filter(
-                profile=profile, worker_type=worker_type, max_risk=max_risk
+                profile=profile,
+                worker_type=worker_type,
+                tags=tags,
+                max_risk=max_risk,
             )
         ]
 
@@ -86,8 +93,9 @@ class ToolRegistry:
         *,
         profile: str | None = None,
         worker_type: str | None = None,
+        tags: set[str] | None = None,
     ) -> str:
-        caps = self.filter(profile=profile, worker_type=worker_type)
+        caps = self.filter(profile=profile, worker_type=worker_type, tags=tags)
         fragments: list[str] = []
         for cap in caps:
             if cap.prompt_guidance is not None:

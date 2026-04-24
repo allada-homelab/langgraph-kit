@@ -89,10 +89,12 @@ class AsyncTaskManager:
         return AsyncTask.model_validate(item.value)
 
     async def list_tasks(
-        self, status_filter: AsyncTaskStatus | None = None
+        self,
+        status_filter: AsyncTaskStatus | None = None,
+        limit: int = 100,
     ) -> list[AsyncTask]:
         """List all tracked tasks, optionally filtered by status."""
-        items = await self._store.asearch(self._namespace(), limit=100)
+        items = await self._store.asearch(self._namespace(), limit=limit)
         tasks = [AsyncTask.model_validate(item.value) for item in items]
         if status_filter is not None:
             tasks = [t for t in tasks if t.status == status_filter]
@@ -150,24 +152,33 @@ class AsyncTaskManager:
                 task.status = AsyncTaskStatus.SUCCESS
                 task.result = content
                 await self._persist(task)
-        except Exception:
+        except Exception as exc:
             logger.exception("Async task %s failed", task_id)
             task = await self._load(task_id)
             if task and not task.is_terminal():
                 task.status = AsyncTaskStatus.ERROR
-                task.result = "Task failed — check logs for details."
+                # Surface the exception type + message so check_async_task
+                # returns something actionable instead of a generic
+                # "check logs" string that the agent can't investigate.
+                import traceback
+
+                exc_line = traceback.format_exception_only(type(exc), exc)[-1].strip()
+                task.result = f"Task failed: {exc_line}"
                 await self._persist(task)
         finally:
             self._running_asyncio_tasks.pop(task_id, None)
 
     async def check(self, task_id: str) -> AsyncTask | None:
-        """Check the current status of a task."""
-        task = await self._load(task_id)
-        if task is None:
-            return None
-        task.last_checked_at = datetime.now(UTC).isoformat()
-        await self._persist(task)
-        return task
+        """Check the current status of a task.
+
+        Pure read — does not modify the stored record. Earlier versions
+        stamped ``last_checked_at`` and re-persisted, which meant every
+        check raced every other check for the same task (lost-update
+        hazard) and burned Store writes on idle observations. If
+        "when was this last polled" telemetry is useful, log it
+        out-of-band rather than mutating persisted state on read.
+        """
+        return await self._load(task_id)
 
     async def cancel(self, task_id: str) -> AsyncTask | None:
         """Cancel a running task."""
@@ -227,14 +238,32 @@ def build_async_task_tools(
         )
 
         input_data = {"messages": [HumanMessage(content=description)]}
-        config: dict[str, Any] = {}
+
+        # Inherit tracing/callbacks/metadata/tags from the caller's config
+        # so background tasks show up in Langfuse as children of the parent
+        # run instead of disappearing into an untraced orphan. The
+        # sub-agent still gets its own thread_id (manager.start assigns
+        # one); we keep everything else.
+        try:
+            from langgraph.config import (  # pyright: ignore[reportMissingModuleSource]
+                get_config as _lg_get_config,
+            )
+
+            parent_config = dict(_lg_get_config())
+        except Exception:
+            parent_config = {}
+        inherited = {
+            k: v
+            for k, v in parent_config.items()
+            if k in {"callbacks", "tags", "metadata", "run_name", "recursion_limit"}
+        }
 
         task = await manager.start(
             agent_name=worker_type,
             description=description,
             graph=graph,
             input_data=input_data,
-            config=config,
+            config=inherited,
         )
         return (
             f"Background task started.\n"
@@ -281,11 +310,12 @@ def build_async_task_tools(
             f"Task '{task_id}' is already {task.status.value} and cannot be cancelled."
         )
 
-    async def list_async_tasks(status_filter: str = "") -> str:
+    async def list_async_tasks(status_filter: str = "", limit: int = 100) -> str:
         """List all background tasks, optionally filtered by status.
 
         Args:
             status_filter: Optional filter — "running", "success", "error", "cancelled", or "" for all
+            limit: Maximum number of tasks to return (default 100)
         """
         filt = None
         if status_filter:
@@ -294,21 +324,15 @@ def build_async_task_tools(
             except ValueError:
                 return f"Invalid status filter '{status_filter}'. Use: running, success, error, cancelled"
 
-        tasks = await manager.list_tasks(status_filter=filt)
+        tasks = await manager.list_tasks(status_filter=filt, limit=limit)
         if not tasks:
             label = f" with status '{status_filter}'" if status_filter else ""
             return f"No background tasks found{label}."
 
         lines = [f"Found {len(tasks)} task(s):\n"]
         for t in tasks:
-            status_icon = {
-                AsyncTaskStatus.RUNNING: "⏳",
-                AsyncTaskStatus.SUCCESS: "✅",
-                AsyncTaskStatus.ERROR: "❌",
-                AsyncTaskStatus.CANCELLED: "🚫",
-            }.get(t.status, "?")
             lines.append(
-                f"- {status_icon} [{t.status.value}] {t.description} "
+                f"- [{t.status.value.upper()}] {t.description} "
                 + f"(id: {t.task_id}, worker: {t.agent_name})"
             )
         return "\n".join(lines)

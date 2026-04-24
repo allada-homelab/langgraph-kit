@@ -1,5 +1,21 @@
 """Plugin loader — discovers and loads plugins from a directory.
 
+.. warning::
+    **This module executes arbitrary Python code from disk.** Every file
+    in the plugin directory is imported via ``spec_from_file_location`` +
+    ``exec_module``; the file's top-level body runs with this process's
+    privileges. Consequences:
+
+    * The plugin directory MUST be trusted. Do not point ``load_from_directory``
+      at a user-uploads folder or a path that any web user can write to.
+    * If the plugin directory path comes from configuration, the operator
+      is responsible for controlling who can edit that configuration.
+    * The loader does not sandbox imports, restrict syscalls, or validate
+      plugin contents before execution.
+
+    Intended use: bundled first-party plugins and vetted third-party plugins
+    distributed alongside the application.
+
 Each plugin is a Python module (``.py`` file) or package (directory with
 ``__init__.py``) that exports a ``contribute()`` function::
 
@@ -27,7 +43,13 @@ logger = logging.getLogger(__name__)
 
 
 class PluginLoader:
-    """Discovers and loads plugins from a directory into a PluginRegistry."""
+    """Discovers and loads plugins from a directory into a PluginRegistry.
+
+    .. warning::
+        See the module docstring for the security model: loading is
+        equivalent to ``import``-ing the file, so the plugin directory
+        must be trusted.
+    """
 
     def __init__(self, registry: PluginRegistry | None = None) -> None:
         super().__init__()
@@ -101,6 +123,16 @@ class PluginLoader:
             logger.info("Loaded plugin: %s (%s)", contribution.plugin_id, path.name)
             return contribution
 
-        except Exception:
-            logger.exception("Failed to load plugin: %s", path.name)
+        except Exception as exc:
+            # Surface the concrete exception type and message so operators
+            # can tell a missing-dependency ImportError apart from a
+            # signature-mismatch TypeError without having to spelunk the
+            # full traceback log.
+            logger.warning(
+                "Failed to load plugin %s: %s: %s",
+                path.name,
+                type(exc).__name__,
+                exc,
+            )
+            logger.debug("Plugin load traceback for %s", path.name, exc_info=True)
             return None

@@ -5,7 +5,6 @@ description: |
   Provides a structured research workflow with source tracking. Do NOT use
   for simple single-file lookups.
 tags: [research, investigation, analysis]
-allowed-tools: [read_file, glob, grep, web_search]
 ---
 
 # Research Skill

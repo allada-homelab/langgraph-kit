@@ -64,6 +64,29 @@ All notable changes to this project are documented here. This project adheres to
   generalize the `deferred_tools` bug class. See `TESTING_ROADMAP.md`
   and `tests/e2e/FEATURE_INVENTORY.md`.
 
+### Security
+
+- **`retrieve_result` now scopes persisted tool results per-thread.**
+  `ResultPersistenceMiddleware` used to write large tool outputs under a
+  flat `("tool_results",)` namespace, and `retrieve_result` looked them
+  up there too — any agent that learned a ref hash could read any other
+  thread's stored content. Both sides now use `("tool_results",
+  thread_id)`, so refs are unreachable outside the thread that wrote
+  them. Pre-existing refs written by earlier versions are unreadable
+  after upgrade; re-running the workflow regenerates them.
+
+- **FastAPI execution endpoints now verify thread ownership.** `stream`,
+  `invoke`, `resume`, `resume/stream`, `fork`, `queue` (POST+GET),
+  `messages`, `state`, and `history` previously accepted any
+  authenticated user's request for any `thread_id`. A new
+  `_verify_thread_owner` helper loads the `ThreadMetadata` record via
+  `ThreadManager` and returns 404 on owner mismatch (matching the
+  behaviour of the metadata endpoints, which already checked). 404 (not
+  403) avoids leaking thread existence to probing users. The
+  stream/invoke paths allow requests with an unclaimed `thread_id`
+  through to `_ensure_thread`, which then claims ownership for the
+  caller.
+
 ### Fixed
 
 - **`a2a.py` `Request` import moved to module scope.** FastAPI's

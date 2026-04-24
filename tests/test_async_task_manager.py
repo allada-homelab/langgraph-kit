@@ -85,10 +85,10 @@ async def test_start_persists_running_task_and_returns_immediately(
     assert task.status == AsyncTaskStatus.RUNNING
 
     # A ``check`` before the gate opens sees the task as still running.
+    # (check() is a pure read now — no last_checked_at stamp.)
     checked = await manager.check(task.task_id)
     assert checked is not None
     assert checked.status == AsyncTaskStatus.RUNNING
-    assert checked.last_checked_at is not None
 
     # Release the gate and let the background task complete.
     gate.set()

@@ -15,19 +15,35 @@ class TestAgentConfigRepr:
     def test_repr_masks_api_key(self) -> None:
         config = AgentConfig(llm_api_key="sk-secret1234567890")
         r = repr(config)
-        assert "sk-s***" in r
+        # Long secrets show 4-char prefix + ellipsis, not a plain ``***``.
+        assert "sk-s..." in r
         assert "sk-secret1234567890" not in r
 
-    def test_repr_masks_langfuse_keys(self) -> None:
-        config = AgentConfig(
-            langfuse_public_key="pk-pub123",
-            langfuse_secret_key="sk-sec456",
-        )
+    def test_repr_masks_langfuse_secret_key(self) -> None:
+        config = AgentConfig(langfuse_secret_key="sk-sec12345678")
         r = repr(config)
-        assert "pk-p***" in r
-        assert "sk-s***" in r
-        assert "pk-pub123" not in r
-        assert "sk-sec456" not in r
+        assert "sk-s..." in r
+        assert "sk-sec12345678" not in r
+
+    def test_repr_does_not_mask_langfuse_public_key(self) -> None:
+        """Public keys are public by design — masking them only confuses log triage."""
+        config = AgentConfig(langfuse_public_key="pk-pub12345678")
+        r = repr(config)
+        assert "pk-pub12345678" in r
+
+    def test_repr_fully_masks_short_secrets(self) -> None:
+        """A 1-char secret rendered as ``val[:4] + '...'`` would leak it.
+        For values <=8 chars we mask with a fixed ``****`` sentinel."""
+        config = AgentConfig(llm_api_key="x")
+        r = repr(config)
+        assert "llm_api_key='****'" in r
+        assert "'x'" not in r
+
+    def test_repr_fully_masks_8_char_boundary(self) -> None:
+        config = AgentConfig(llm_api_key="12345678")
+        r = repr(config)
+        assert "llm_api_key='****'" in r
+        assert "12345678" not in r
 
     def test_repr_shows_empty_keys_unmasked(self) -> None:
         config = AgentConfig()

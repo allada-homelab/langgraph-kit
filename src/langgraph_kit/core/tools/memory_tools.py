@@ -125,6 +125,8 @@ def build_memory_tools(memory_manager: PersistentMemoryManager) -> list[Any]:
         scope: str,
         body: str,
         summary: str | None = None,
+        memory_type: str | None = None,
+        title: str | None = None,
     ) -> str:
         """Update an existing memory record.
 
@@ -133,6 +135,8 @@ def build_memory_tools(memory_manager: PersistentMemoryManager) -> list[Any]:
             scope: The scope where the memory lives (user, assistant, project, team)
             body: New body content
             summary: Optional new summary
+            memory_type: Optional new type — re-classify a mis-typed record.
+            title: Optional new title.
         """
         try:
             ms = MemoryScope(scope)
@@ -142,6 +146,16 @@ def build_memory_tools(memory_manager: PersistentMemoryManager) -> list[Any]:
         updates: dict[str, Any] = {"body": body}
         if summary is not None:
             updates["summary"] = summary
+        if title is not None:
+            updates["title"] = title
+        if memory_type is not None:
+            try:
+                updates["type"] = MemoryType(memory_type)
+            except ValueError:
+                return (
+                    f"Error: invalid memory_type '{memory_type}'. "
+                    f"Valid: {[t.value for t in MemoryType]}."
+                )
 
         result = await memory_manager.update(memory_id, ms, updates)
         if result is None:

@@ -172,12 +172,24 @@ def test_invoke_endpoint_returns_404_for_unknown_agent(
     assert response.status_code == 404, response.text
 
 
-def test_queue_enqueue_then_status_round_trip(
+@pytest.mark.asyncio
+async def test_queue_enqueue_then_status_round_trip(
     fastapi_app: FastAPI,
     registered_agent: str,
+    e2e_store: Any,
 ) -> None:
     """``POST /queue`` then ``GET /queue`` reports the queued item + depth."""
     from fastapi.testclient import TestClient
+
+    # Thread-ownership check requires a pre-existing ThreadManager record —
+    # a real client would create this by hitting /stream or /invoke first.
+    await _seed_thread_metadata(
+        e2e_store,
+        thread_id="queue-thread-1",
+        user_id="test-user",
+        agent_id=registered_agent,
+        title="queue round trip",
+    )
 
     client = TestClient(fastapi_app)
     enqueue_resp = client.post(
@@ -204,12 +216,22 @@ def test_queue_enqueue_then_status_round_trip(
     ), f"Queued item should appear in peek list; got {status_body!r}"
 
 
-def test_thread_messages_endpoint_returns_empty_for_new_thread(
+@pytest.mark.asyncio
+async def test_thread_messages_endpoint_returns_empty_for_new_thread(
     fastapi_app: FastAPI,
     registered_agent: str,
+    e2e_store: Any,
 ) -> None:
-    """A never-invoked thread has no messages — endpoint returns ``[]``."""
+    """A claimed-but-unused thread has no messages — endpoint returns ``[]``."""
     from fastapi.testclient import TestClient
+
+    await _seed_thread_metadata(
+        e2e_store,
+        thread_id="empty-thread",
+        user_id="test-user",
+        agent_id=registered_agent,
+        title="empty",
+    )
 
     client = TestClient(fastapi_app)
     response = client.get(f"/agents/{registered_agent}/threads/empty-thread/messages")
@@ -217,12 +239,22 @@ def test_thread_messages_endpoint_returns_empty_for_new_thread(
     assert response.json() == []
 
 
-def test_thread_state_endpoint_reports_idle_for_unused_thread(
+@pytest.mark.asyncio
+async def test_thread_state_endpoint_reports_idle_for_unused_thread(
     fastapi_app: FastAPI,
     registered_agent: str,
+    e2e_store: Any,
 ) -> None:
     """``GET /state`` returns status=idle + empty interrupts for a fresh thread."""
     from fastapi.testclient import TestClient
+
+    await _seed_thread_metadata(
+        e2e_store,
+        thread_id="fresh-thread",
+        user_id="test-user",
+        agent_id=registered_agent,
+        title="fresh",
+    )
 
     client = TestClient(fastapi_app)
     response = client.get(f"/agents/{registered_agent}/threads/fresh-thread/state")
@@ -430,12 +462,22 @@ async def test_delete_thread_removes_the_record(
     assert get_resp.status_code == 404
 
 
-def test_thread_history_endpoint_returns_empty_list_for_unused_thread(
+@pytest.mark.asyncio
+async def test_thread_history_endpoint_returns_empty_list_for_unused_thread(
     fastapi_app: FastAPI,
     registered_agent: str,
+    e2e_store: Any,
 ) -> None:
     """``GET /history`` returns an empty list for a thread with no checkpoints."""
     from fastapi.testclient import TestClient
+
+    await _seed_thread_metadata(
+        e2e_store,
+        thread_id="no-history",
+        user_id="test-user",
+        agent_id=registered_agent,
+        title="no-history",
+    )
 
     client = TestClient(fastapi_app)
     response = client.get(f"/agents/{registered_agent}/threads/no-history/history")

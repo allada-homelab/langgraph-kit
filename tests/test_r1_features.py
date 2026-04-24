@@ -76,6 +76,8 @@ async def test_large_result_persisted_and_replaced(mock_store: Any) -> None:
     request = MagicMock()
     request.tool_call = {"name": "read_file", "id": "call_2"}
     request.runtime.store = mock_store
+    # Thread-scoped namespace requires a thread_id on the runtime config.
+    request.runtime.config = {"configurable": {"thread_id": "tid-A"}}
 
     large_content = "x" * 5000
     result_msg = MagicMock()
@@ -88,8 +90,8 @@ async def test_large_result_persisted_and_replaced(mock_store: Any) -> None:
     assert "[Full result persisted" in result.content
     assert "5,000 chars" in result.content
 
-    # Verify the store received the data
-    stored = mock_store._data.get(("tool_results",))
+    # Verify the store received the data under the per-thread namespace.
+    stored = mock_store._data.get(("tool_results", "tid-A"))
     assert stored is not None
     assert len(stored) == 1
     stored_val = next(iter(stored.values()))
@@ -114,6 +116,7 @@ async def test_large_result_without_model_copy_falls_back_to_fresh_toolmessage(
     request = MagicMock()
     request.tool_call = {"name": "read_file", "id": "call_no_copy"}
     request.runtime.store = mock_store
+    request.runtime.config = {"configurable": {"thread_id": "tid-B"}}
 
     # A bare object with .content but no model_copy (e.g. a plain dataclass
     # a consumer might use instead of ToolMessage).
@@ -129,8 +132,8 @@ async def test_large_result_without_model_copy_falls_back_to_fresh_toolmessage(
     assert len(result.content) < 500, (
         "Replacement content must be SMALL — the whole point of persistence"
     )
-    # Store still holds the canonical copy.
-    stored = mock_store._data.get(("tool_results",))
+    # Store still holds the canonical copy under the per-thread namespace.
+    stored = mock_store._data.get(("tool_results", "tid-B"))
     assert stored is not None
     assert len(stored) == 1
 

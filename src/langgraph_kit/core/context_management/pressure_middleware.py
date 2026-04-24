@@ -306,40 +306,62 @@ class PressureMiddleware(AgentMiddleware):  # type: ignore[misc]
 
     @staticmethod
     def _microcompact(messages: list[Any]) -> list[Any] | None:
-        """Build a new message list with old large tool outputs truncated.
+        """Thin alias — delegates to the module-level :func:`microcompact`."""
+        return microcompact(messages)
 
-        Returns None if no changes were made.
-        """
-        if len(messages) <= 10:
-            return None
 
-        compact_boundary = len(messages) - 10
-        # Check copy method once on first message (all messages share the same base class)
-        use_model_copy = hasattr(messages[0], "model_copy")
-        changed = False
-        new_messages: list[Any] = []
+# Module-level thresholds mirror what builtins previously used. Sharing a
+# single implementation removes the drift hazard of having two copies
+# with slightly different constants.
+MICROCOMPACT_RECENT_WINDOW = 10
+MICROCOMPACT_CONTENT_THRESHOLD = 2000
+MICROCOMPACT_PREVIEW_CHARS = 200
 
-        for i, msg in enumerate(messages):
-            if i < compact_boundary:
-                content = getattr(msg, "content", "")
-                msg_type = getattr(msg, "type", "unknown")
-                if (
-                    isinstance(content, str)
-                    and len(content) > 2000
-                    and msg_type in ("tool", "function")
-                ):
-                    truncated = (
-                        content[:200]
-                        + f"\n...[truncated — original was {len(content):,} chars]"
-                    )
-                    if use_model_copy:
-                        msg = msg.model_copy(update={"content": truncated})
-                    else:
-                        msg = msg.copy(update={"content": truncated})
-                    changed = True
-            new_messages.append(msg)
 
-        return new_messages if changed else None
+def microcompact(
+    messages: list[Any],
+    *,
+    recent_window: int = MICROCOMPACT_RECENT_WINDOW,
+    content_threshold: int = MICROCOMPACT_CONTENT_THRESHOLD,
+    preview_chars: int = MICROCOMPACT_PREVIEW_CHARS,
+) -> list[Any] | None:
+    """Truncate large tool outputs outside the recent message window.
+
+    Returns a new message list with truncations applied, or ``None`` when
+    no changes were needed. Both ``PressureMiddleware`` and the
+    ``/compact`` command call this — keeping the logic in one place
+    prevents the two call sites from drifting apart.
+    """
+    if len(messages) <= recent_window:
+        return None
+
+    compact_boundary = len(messages) - recent_window
+    use_model_copy = hasattr(messages[0], "model_copy")
+    changed = False
+    new_messages: list[Any] = []
+
+    for i, msg in enumerate(messages):
+        if i < compact_boundary:
+            content = getattr(msg, "content", "")
+            msg_type = getattr(msg, "type", "unknown")
+            if (
+                isinstance(content, str)
+                and len(content) > content_threshold
+                and msg_type in ("tool", "function")
+            ):
+                truncated = (
+                    content[:preview_chars]
+                    + f"\n...[truncated — original was {len(content):,} chars]"
+                )
+                msg = (
+                    msg.model_copy(update={"content": truncated})
+                    if use_model_copy
+                    else msg.copy(update={"content": truncated})
+                )
+                changed = True
+        new_messages.append(msg)
+
+    return new_messages if changed else None
 
 
 def _render_conversation(messages: list[Any]) -> str:

@@ -34,7 +34,6 @@ class TraceCallbackHandler(AsyncCallbackHandler):
         self._start_mono = time.monotonic()
         self._open_spans: dict[str, TraceSpan] = {}  # run_id -> span
         self._span_start_times: dict[str, float] = {}  # run_id -> monotonic time
-        self._parent_map: dict[str, str] = {}  # run_id -> parent_run_id
         self._root_spans: list[TraceSpan] = []
 
     async def on_chain_start(
@@ -189,8 +188,6 @@ class TraceCallbackHandler(AsyncCallbackHandler):
         )
         self._open_spans[run_id] = span
         self._span_start_times[run_id] = time.monotonic()
-        if parent_run_id:
-            self._parent_map[run_id] = parent_run_id
 
         # Attach to parent or root
         if parent_run_id and parent_run_id in self._open_spans:

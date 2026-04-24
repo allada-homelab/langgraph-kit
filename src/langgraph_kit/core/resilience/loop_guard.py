@@ -60,6 +60,15 @@ DEFAULT_LOOP_THRESHOLD = 5
 # to catch regressions of this class.
 _streaks: dict[Any, dict[str, int]] = {}
 
+# Soft ceiling on the number of thread_id entries kept in ``_streaks``.
+# Normally ``aafter_agent`` clears the entry at the end of every run, but
+# a run that raises out without finishing (e.g. graph-level exception,
+# asyncio.CancelledError) can leave its entry behind. Without a cap,
+# long-lived processes under crashy traffic accumulate keys forever.
+# 1000 is generous: each entry is at most a small dict of ``{tool_name: int}``
+# counters, so the steady-state footprint is tiny even at the ceiling.
+_STREAKS_SOFT_CAP = 1000
+
 
 _MISSING_THREAD_ID = "__loop_guard_no_thread_id__"
 
@@ -99,6 +108,15 @@ def _thread_id_from_request(request: Any) -> Any:
 
 
 def _streak_bump(key: Any, name: str) -> int:
+    # FIFO eviction when the dict is about to grow past the cap. Dict
+    # preserves insertion order (Python 3.7+), so ``next(iter(...))``
+    # returns the oldest entry — typically a crashed run's leftover.
+    if key not in _streaks and len(_streaks) >= _STREAKS_SOFT_CAP:
+        try:
+            oldest = next(iter(_streaks))
+            del _streaks[oldest]
+        except StopIteration:  # pragma: no cover — _streaks non-empty by check
+            pass
     counters = _streaks.setdefault(key, {})
     counters[name] = counters.get(name, 0) + 1
     return counters[name]

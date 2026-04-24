@@ -12,8 +12,10 @@ from langgraph_kit.core.commands.dispatch import (
     CommandHandler,
     CommandResult,
 )
+from langgraph_kit.core.context_management.pressure_middleware import microcompact
 
-# Compaction thresholds
+# Compaction thresholds — delegates to the shared ``microcompact`` helper
+# so these stay aligned with PressureMiddleware's in-loop microcompaction.
 _COMPACT_RECENT_WINDOW = 10  # messages to skip (keep recent context intact)
 _COMPACT_CONTENT_THRESHOLD = 2000  # chars — truncate tool outputs larger than this
 _COMPACT_PREVIEW_CHARS = 200  # chars to keep from truncated content
@@ -127,39 +129,18 @@ def build_compact_command(pressure_monitor: PressureMonitor) -> CommandHandler:
 
 
 def _microcompact(messages: list[Any]) -> list[Any] | None:
-    """Truncate large tool outputs outside the recent 10-message window.
+    """Thin alias to the shared ``microcompact`` helper.
 
-    Returns ``None`` if no changes were made.
+    Kept for internal callers that imported the private name; the
+    canonical implementation now lives in
+    ``core.context_management.pressure_middleware``.
     """
-    if len(messages) <= _COMPACT_RECENT_WINDOW:
-        return None
-
-    compact_boundary = len(messages) - _COMPACT_RECENT_WINDOW
-    use_model_copy = hasattr(messages[0], "model_copy")
-    changed = False
-    new_messages: list[Any] = []
-
-    for i, msg in enumerate(messages):
-        if i < compact_boundary:
-            content = getattr(msg, "content", "")
-            msg_type = getattr(msg, "type", "unknown")
-            if (
-                isinstance(content, str)
-                and len(content) > _COMPACT_CONTENT_THRESHOLD
-                and msg_type in ("tool", "function")
-            ):
-                truncated = (
-                    content[:_COMPACT_PREVIEW_CHARS]
-                    + f"\n...[truncated — original was {len(content):,} chars]"
-                )
-                if use_model_copy:
-                    msg = msg.model_copy(update={"content": truncated})
-                else:
-                    msg = msg.copy(update={"content": truncated})
-                changed = True
-        new_messages.append(msg)
-
-    return new_messages if changed else None
+    return microcompact(
+        messages,
+        recent_window=_COMPACT_RECENT_WINDOW,
+        content_threshold=_COMPACT_CONTENT_THRESHOLD,
+        preview_chars=_COMPACT_PREVIEW_CHARS,
+    )
 
 
 def build_context_command(pressure_monitor: PressureMonitor) -> CommandHandler:
@@ -256,15 +237,27 @@ def build_status_command(
         signals = pressure_monitor.assess(messages)
         strategy = pressure_monitor.choose_mitigation(signals)
 
-        # Memory count
-        user_memories = await memory_mgr.list_by_scope(MemoryScope.USER, limit=100)
+        # Per-scope memory counts — earlier versions only counted the
+        # ``user`` scope, which undercounted assistants and project teams
+        # that stored most of their memory elsewhere.
+        scope_counts: list[tuple[str, int]] = []
+        total_memories = 0
+        for scope in MemoryScope:
+            records = await memory_mgr.list_by_scope(scope, limit=100)
+            scope_counts.append((scope.value, len(records)))
+            total_memories += len(records)
+
+        memory_line = (
+            ", ".join(f"{name}={count}" for name, count in scope_counts if count)
+            or "none"
+        )
 
         lines = [
             "**Agent Status Dashboard:**\n",
             f"**Context:** {signals.estimated_tokens:,} tokens"
             f" ({signals.pressure_pct:.0%} of {signals.window_limit:,})",
             f"**Messages:** {len(messages)}",
-            f"**Memories:** {len(user_memories)} user record(s)",
+            f"**Memories:** {total_memories} total ({memory_line})",
             f"**Large outputs:** {signals.large_tool_outputs}",
         ]
         if strategy.value != "none":

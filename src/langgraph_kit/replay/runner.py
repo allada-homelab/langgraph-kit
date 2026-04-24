@@ -36,6 +36,8 @@ class ReplayRunner:
         tool_overrides: dict[str, Callable[..., Any]] | None = None,
         checkpointer: Any = None,
         store: Any = None,
+        llm_kwarg: str = "llm",
+        fuzzy_match: bool = True,
     ) -> None:
         super().__init__()
         self.recording_path = recording_path
@@ -43,6 +45,15 @@ class ReplayRunner:
         self.tool_overrides = tool_overrides or {}
         self.checkpointer = checkpointer
         self.store = store
+        # Name of the graph_builder kwarg that accepts the mock LLM. Most
+        # builders take ``llm=`` but some upstream APIs use ``model=`` —
+        # configurable so callers don't have to wrap their builder just to
+        # rename a keyword.
+        self.llm_kwarg = llm_kwarg
+        # Passed through to RecordedChatModel. Set False in CI runs to
+        # fail loudly on prompt drift instead of re-serving stale
+        # interactions via the fuzzy-content fallback.
+        self.fuzzy_match = fuzzy_match
         self._original: ConversationRecording | None = None
 
     @property
@@ -65,13 +76,14 @@ class ReplayRunner:
         )
 
         recording = self.original
-        mock_llm = RecordedChatModel(recording=recording)
+        mock_llm = RecordedChatModel(recording=recording, fuzzy_match=self.fuzzy_match)
 
-        # Build graph with the mock LLM
+        # Build graph with the mock LLM. ``llm_kwarg`` defaults to "llm"
+        # but can be set to e.g. "model" for builders that use that name.
         graph = self.graph_builder(
             self.checkpointer,
             self.store,
-            llm=mock_llm,
+            **{self.llm_kwarg: mock_llm},
         )
 
         # Set up recorder to capture the replay

@@ -30,9 +30,12 @@ class BudgetManager:
     async def load_state(self, thread_id: str) -> BudgetState:
         """Load the budget state for a thread, or return a fresh one."""
         try:
-            items = await self._store.asearch(("budget", thread_id), limit=1)
-            if items:
-                return BudgetState.model_validate(items[0].value)
+            # Direct aget — the prior ``asearch(..., limit=1)`` made the
+            # retrieval fragile to anything else landing in the namespace
+            # and added a Store scan where a single key lookup would do.
+            item = await self._store.aget(("budget", thread_id), "state")
+            if item is not None:
+                return BudgetState.model_validate(item.value)
         except Exception:
             logger.warning(
                 "Failed to load budget state for %s", thread_id, exc_info=True

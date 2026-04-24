@@ -22,10 +22,12 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 # Some models (notably Qwen via OpenAI-compatible APIs) leak the tool_calls
-# list into text content — e.g. a trailing "[]" or "```json\n[]\n```" at the
-# end of the response.  We buffer the tail of the stream and strip these
-# artifacts before sending to the client.
-_TRAILING_ARTIFACT_RE = re.compile(r"\s*(?:```(?:json)?\s*)?\[\s*\]\s*(?:```\s*)?$")
+# list into text content — as a trailing ```json\n[]\n``` (code-fenced).
+# We buffer the tail of the stream and strip that specific shape.
+# A *bare* trailing ``[]`` is NOT stripped because it's ambiguous — a
+# legitimate response like "the function returned `[]`" would otherwise
+# lose its payload. Only the fenced form is treated as a tool-call leak.
+_TRAILING_ARTIFACT_RE = re.compile(r"\s*```(?:json)?\s*\[\s*\]\s*```\s*$")
 _BUFFER_SIZE = 30  # characters — enough for "```json\n[]\n```"
 _MAX_TOOL_OUTPUT_SSE = 3000  # truncate tool outputs longer than this in the SSE stream
 
@@ -86,6 +88,7 @@ async def stream_agent_events(
         await tracker.mark_busy(thread_id)
 
     started_text = False
+    stream_error: Exception | None = None
 
     try:
         # Accumulate text so we can detect trailing artifacts from models
@@ -110,9 +113,19 @@ async def stream_agent_events(
         else:
             effective_config = config
 
-        async for event in graph.astream_events(
-            input_data, config=effective_config, version="v2"
-        ):
+        try:
+            event_iter = graph.astream_events(
+                input_data, config=effective_config, version="v2"
+            )
+        except Exception as exc:  # pragma: no cover — construction-time failure
+            logger.exception("astream_events construction raised")
+            stream_error = exc
+            event_iter = _empty_aiter()
+
+        async for event in _guarded_events(event_iter):
+            if isinstance(event, _StreamError):
+                stream_error = event.exc
+                break
             # Drop events from kit-internal LLM calls (memory extraction,
             # consolidation, context compaction, routing). Without this
             # filter, their tokens and tool-call metadata leak into the
@@ -194,14 +207,25 @@ async def stream_agent_events(
             state = await graph.aget_state(config)
 
             # If no LLM tokens were streamed, the last message may be a
-            # command result injected by middleware.  Emit it as a dedicated
-            # event so the frontend can render it as a status banner.
+            # command result injected by middleware. Gate the emission on
+            # the ``COMMAND_RESULT_MARKER`` sentinel that CommandMiddleware
+            # attaches to AIMessages it creates — otherwise a silent
+            # tool-only run would get its last AIMessage mis-reported
+            # here as a command result.
             if not started_text and state and state.values:
                 msgs = state.values.get("messages", [])
                 if msgs:
+                    from langgraph_kit.core.commands.middleware import (
+                        COMMAND_RESULT_MARKER,
+                    )
+
                     last = msgs[-1]
-                    if getattr(last, "type", "") == "ai" and getattr(
-                        last, "content", ""
+                    additional = getattr(last, "additional_kwargs", None) or {}
+                    is_command = bool(additional.get(COMMAND_RESULT_MARKER))
+                    if (
+                        is_command
+                        and getattr(last, "type", "") == "ai"
+                        and getattr(last, "content", "")
                     ):
                         yield f"data: {json.dumps({'command_result': {'output': last.content}})}\n\n"
 
@@ -236,8 +260,71 @@ async def stream_agent_events(
                 total = budget_callback.get_total()
                 yield f"data: {json.dumps({'budget': {'tokens_used': total.total_tokens, 'input_tokens': total.input_tokens, 'output_tokens': total.output_tokens, 'estimated_cost_usd': round(total.estimated_cost_usd, 6)}})}\n\n"
 
+                # Persist accumulated usage into the BudgetManager so the
+                # state survives the stream. Without this the callback
+                # totals only ever flow to the SSE client — the Store
+                # never sees them, and check_budget reads a stale 0-token
+                # state on the next turn.
+                if store is not None and thread_id:
+                    try:
+                        from langgraph_kit._config import get_config
+                        from langgraph_kit.core.cost.budget import BudgetManager
+                        from langgraph_kit.core.cost.models import BudgetConfig
+
+                        app_cfg = get_config()
+                        if app_cfg.token_budget_per_thread > 0:
+                            manager = BudgetManager(
+                                store,
+                                BudgetConfig(
+                                    max_tokens_per_thread=app_cfg.token_budget_per_thread
+                                ),
+                            )
+                            user_id = config.get("metadata", {}).get("user_id") or ""
+                            await manager.record_usage(
+                                thread_id, total, user_id=user_id
+                            )
+                    except Exception:
+                        logger.debug("Failed to persist budget usage", exc_info=True)
+
+        # Emit an explicit error event before closing the stream so the
+        # client can distinguish "backend failure" from "run completed".
+        if stream_error is not None:
+            message = _format_stream_error(stream_error)
+            yield f"data: {json.dumps({'error': {'message': message}})}\n\n"
+
         yield "data: [DONE]\n\n"
     finally:
         if tracker and thread_id:
             await tracker.mark_idle(thread_id)
         flush_langfuse()
+
+
+class _StreamError:
+    """Sentinel yielded by ``_guarded_events`` when iteration raises."""
+
+    __slots__ = ("exc",)
+
+    def __init__(self, exc: Exception) -> None:
+        self.exc = exc
+
+
+async def _guarded_events(iterator: Any) -> AsyncGenerator[Any]:
+    """Forward events from ``iterator``; on exception, yield ``_StreamError``."""
+    try:
+        async for event in iterator:
+            yield event
+    except Exception as exc:
+        logger.exception("astream_events iteration raised")
+        yield _StreamError(exc)
+
+
+async def _empty_aiter() -> AsyncGenerator[Any]:
+    if False:
+        yield None  # pragma: no cover
+    return
+
+
+def _format_stream_error(exc: Exception) -> str:
+    """Short user-safe error message (exception type + first line)."""
+    first_line = str(exc).splitlines()[0] if str(exc) else ""
+    return f"{type(exc).__name__}: {first_line}" if first_line else type(exc).__name__

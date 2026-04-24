@@ -1,15 +1,15 @@
 """Cluster A edges — ``retrieve_result`` round-trip through a real graph.
 
 ``ResultPersistenceMiddleware`` offloads large tool outputs to
-``("tool_results",)`` and replaces the inline ToolMessage with a preview +
-reference key. ``retrieve_result(result_ref=KEY)`` is how the LLM pulls the
-full content back on demand. Until now the persist side was covered
-(``test_middleware_stack_e2e.py``) but the retrieve side was not.
+``("tool_results", thread_id)`` and replaces the inline ToolMessage with a
+preview + reference key. ``retrieve_result(result_ref=KEY)`` is how the LLM
+pulls the full content back on demand. Until now the persist side was
+covered (``test_middleware_stack_e2e.py``) but the retrieve side was not.
 
 The scripted LLM can't know the runtime-generated ref key in advance, so
-this test pre-populates ``("tool_results", "known_key")`` directly on the
-store and scripts the LLM to call ``retrieve_result(result_ref="known_key")``.
-That isolates the retrieval side of the contract from the hashing side.
+this test pre-populates the per-thread namespace directly on the store and
+scripts the LLM to call ``retrieve_result(result_ref="known_key")``. That
+isolates the retrieval side of the contract from the hashing side.
 """
 
 from __future__ import annotations
@@ -39,10 +39,10 @@ async def test_retrieve_result_returns_full_persisted_content(
     patched_build_llm: Any,
 ) -> None:
     """LLM calls retrieve_result with a known ref → ToolMessage carries the full content."""
-    # Pre-populate the persistence namespace with a known record.
+    # Pre-populate the persistence namespace (per-thread) with a known record.
     full_content = "LONG-CONTENT-MARKER " + ("x" * 8000)
     await e2e_store.aput(
-        ("tool_results",),
+        ("tool_results", "retrieve-1"),
         "known_key",
         {
             "content": full_content,
@@ -130,7 +130,7 @@ async def test_retrieve_result_honors_offset_and_limit(
     # then C's. Offset=1000 limit=1000 should return only B's plus header.
     full_content = ("A" * 1000) + ("B" * 1000) + ("C" * 1000)
     await e2e_store.aput(
-        ("tool_results",),
+        ("tool_results", "retrieve-paged"),
         "paged",
         {
             "content": full_content,

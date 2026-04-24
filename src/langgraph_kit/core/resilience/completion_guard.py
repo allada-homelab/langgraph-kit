@@ -55,6 +55,12 @@ class CompletionGuardMiddleware(_AgentMiddleware):  # type: ignore[misc]
         self._min_tool_calls = min_tool_calls
         self._challenges_issued = 0
 
+    async def abefore_agent(self, state: Any, runtime: Any) -> None:  # noqa: ARG002
+        """Reset per-run counters. Without this, the ``_MAX_CHALLENGES`` cap
+        drains across runs on a reused middleware instance — after the second
+        run's second challenge the guard silently disables itself forever."""
+        self._challenges_issued = 0
+
     async def aafter_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:  # noqa: ARG002
         if self._challenges_issued >= _MAX_CHALLENGES:
             return None

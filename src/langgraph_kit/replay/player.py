@@ -46,6 +46,11 @@ class RecordedChatModel(BaseChatModel):
     """
 
     recording: ConversationRecording
+    # When False, disable the fuzzy-content-matching fallback and raise
+    # ReplayMismatchError as soon as the recorded sequence is exhausted
+    # or an input doesn't line up. Safer for CI assertions but harder on
+    # minor prompt edits. Leave True for human-friendly reproduction.
+    fuzzy_match: bool = True
     _call_index: int = 0
 
     model_config: ClassVar[dict[str, Any]] = {"arbitrary_types_allowed": True}
@@ -70,13 +75,17 @@ class RecordedChatModel(BaseChatModel):
             self._call_index += 1
             return _interaction_to_result(interaction)
 
-        # Fallback: fuzzy match on last message content
         last_content = _extract_content(messages[-1]) if messages else ""
-        for interaction in llm_interactions:
-            if interaction.input_messages and _fuzzy_match(
-                last_content, interaction.input_messages
-            ):
-                return _interaction_to_result(interaction)
+
+        # Fallback: fuzzy match on last message content. Opt-in so strict
+        # CI replays can fail fast on prompt drift instead of silently
+        # re-serving an already-consumed interaction.
+        if self.fuzzy_match:
+            for interaction in llm_interactions:
+                if interaction.input_messages and _fuzzy_match(
+                    last_content, interaction.input_messages
+                ):
+                    return _interaction_to_result(interaction)
 
         msg = (
             f"No recorded response for call #{self._call_index + 1}. "

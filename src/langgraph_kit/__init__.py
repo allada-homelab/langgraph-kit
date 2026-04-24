@@ -21,6 +21,8 @@ from langgraph_kit._config import (
     configure_from_settings,
     get_config,
 )
+from langgraph_kit.core.coordinator import COORDINATOR_SECTIONS, CoordinatorMode
+from langgraph_kit.core.memory.session import SessionNotebook
 from langgraph_kit.llm import build_llm
 from langgraph_kit.models import ChatMessage, InvokeRequest, InvokeResponse
 from langgraph_kit.observability import UserInfo, build_agent_run_config
@@ -37,11 +39,14 @@ from langgraph_kit.registry import (
 from langgraph_kit.streaming import stream_agent_events
 
 __all__ = [
+    "COORDINATOR_SECTIONS",
     "AgentConfig",
     "AgentMetadata",
     "ChatMessage",
+    "CoordinatorMode",
     "InvokeRequest",
     "InvokeResponse",
+    "SessionNotebook",
     "UserInfo",
     "build_agent_run_config",
     "build_llm",

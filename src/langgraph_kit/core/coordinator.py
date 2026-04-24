@@ -1,4 +1,15 @@
-"""Coordinator mode — supervisor profile emphasizing orchestration over direct execution."""
+"""Coordinator mode — supervisor profile emphasizing orchestration over direct execution.
+
+.. note::
+    This module is **not wired into any shipped graph**. It defines
+    reusable prompt sections and a tool-surface narrowing helper for
+    callers that want to build a coordinator/delegation profile
+    themselves. See ``CoordinatorMode.get_conditions()`` for the
+    condition keys that must be passed into
+    ``SectionRegistry.get_active`` for the sections to appear. If the
+    kit later adds a shipped coordinator agent this note should be
+    removed.
+"""
 
 from __future__ import annotations
 
@@ -26,7 +37,7 @@ COORDINATOR_SECTIONS = [
             "You should NOT do direct implementation work yourself. "
             "Delegate implementation, research, and verification to workers."
         ),
-        stability=SectionStability.STABLE,
+        stability=SectionStability.CONDITIONAL,
         priority=95,
         condition="coordinator",
     ),
@@ -40,7 +51,7 @@ COORDINATOR_SECTIONS = [
             "- Use parallel workers for independent tasks\n"
             "- After receiving results, synthesize before delegating follow-up"
         ),
-        stability=SectionStability.STABLE,
+        stability=SectionStability.CONDITIONAL,
         priority=90,
         condition="coordinator",
     ),
@@ -55,7 +66,7 @@ COORDINATOR_SECTIONS = [
             "4. Only then decide whether more work is needed\n\n"
             "Do NOT relay worker output verbatim. Add value through integration."
         ),
-        stability=SectionStability.STABLE,
+        stability=SectionStability.CONDITIONAL,
         priority=85,
         condition="coordinator",
     ),

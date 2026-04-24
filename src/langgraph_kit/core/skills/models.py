@@ -6,13 +6,19 @@ from pydantic import BaseModel, field_validator
 
 
 class SkillMetadata(BaseModel):
-    """Metadata for a discoverable skill, parsed from SKILL.md frontmatter."""
+    """Metadata for a discoverable skill, parsed from SKILL.md frontmatter.
+
+    ``allowed_tools`` was removed: the field was never enforced — nothing
+    in the kit gated tool access by skill — and its presence misled
+    callers into thinking the kit would restrict tool use. If per-skill
+    tool restrictions are added back later, they should pair with a
+    middleware that actually enforces them.
+    """
 
     name: str
     description: str
     path: str  # filesystem path to SKILL.md
     tags: list[str] = []
-    allowed_tools: list[str] = []
 
     @field_validator("name")
     @classmethod

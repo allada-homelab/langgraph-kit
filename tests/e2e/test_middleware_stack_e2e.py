@@ -182,11 +182,11 @@ async def test_result_persistence_stores_large_output_and_trims_inline(
         f"result was {len(_LARGE_CONTENT)} chars"
     )
 
-    # Store should now have a ``tool_results`` namespace with the full
-    # content stashed.
-    tool_results = e2e_store._data.get(("tool_results",), {})
+    # Store should now have a thread-scoped ``tool_results`` namespace with
+    # the full content stashed.
+    tool_results = e2e_store._data.get(("tool_results", "result-persist"), {})
     assert tool_results, (
-        "No entries in ('tool_results',) namespace — "
+        "No entries in ('tool_results', 'result-persist') namespace — "
         "ResultPersistenceMiddleware didn't persist."
     )
     full = next(iter(tool_results.values()))

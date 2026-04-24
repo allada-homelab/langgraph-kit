@@ -9,7 +9,7 @@ from langgraph_kit.evals.models import EvalMetric, EvalResult, TraceData
 # Patterns that suggest PII or secrets in output
 _PII_PATTERNS = [
     re.compile(r"\b\d{3}-\d{2}-\d{4}\b"),  # SSN
-    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),  # email
+    re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"),  # email
     re.compile(r"\b(?:sk-|pk_|AKIA|ghp_|xoxb-)[A-Za-z0-9_-]{20,}\b"),  # API keys
     re.compile(r"-----BEGIN (?:RSA |EC )?PRIVATE KEY-----"),  # private keys
     re.compile(
@@ -76,7 +76,11 @@ class LatencyMetric(EvalMetric):
 
     async def score(self, trace: TraceData) -> EvalResult:
         if trace.duration_ms is None:
-            return EvalResult(value=0.5, comment="Duration not available")
+            # Don't penalise the mean when we simply have no signal.
+            # 1.0 (benefit-of-the-doubt) + an explicit comment makes the
+            # "no data" traces easy to filter out in reports without
+            # pulling the aggregate toward 0.5.
+            return EvalResult(value=1.0, comment="Duration not available — not scored")
 
         if trace.duration_ms <= self.sla_ms:
             score = 1.0
@@ -126,7 +130,11 @@ class ToolEfficiencyMetric(EvalMetric):
         metadata = trace.metadata
         tool_calls = metadata.get("tool_calls", 0)
         if not tool_calls and not metadata.get("tools_used"):
-            return EvalResult(value=0.5, comment="No tool usage data available")
+            # Same rationale as LatencyMetric: 1.0 + labelled comment so
+            # missing-data traces don't drag the aggregate mean to 0.5.
+            return EvalResult(
+                value=1.0, comment="No tool usage data available — not scored"
+            )
 
         total = int(tool_calls) if tool_calls else 0
         if total == 0:

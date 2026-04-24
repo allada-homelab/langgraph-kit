@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -10,6 +11,8 @@ from langgraph_kit.core.memory.models import (
     MemoryScope,
     MemoryType,
 )
+
+logger = logging.getLogger(__name__)
 
 _ALL_MEMORY_TYPES: list[MemoryType] = list(MemoryType)
 
@@ -50,18 +53,48 @@ class PersistentMemoryManager:
         scope: MemoryScope,
         memory_type: MemoryType | None = None,
     ) -> MemoryRecord | None:
-        """Retrieve a record by id.
+        """Retrieve a record by id, self-healing duplicate-namespace state.
 
-        If memory_type is given, looks up directly (1 round-trip).
-        Otherwise searches across all type namespaces (up to 4 round-trips).
+        If memory_type is given, looks up directly (1 round-trip). Otherwise
+        searches across all type namespaces. When a record ID exists under
+        more than one type namespace — which can happen if an earlier
+        ``update()`` across type changes crashed between the write-new and
+        delete-old steps — the most-recently-updated record wins and the
+        stale copies are deleted opportunistically so subsequent reads are
+        consistent.
         """
         types = [memory_type] if memory_type is not None else _ALL_MEMORY_TYPES
+        hits: list[tuple[tuple[str, ...], MemoryRecord]] = []
         for mt in types:
             ns = self._namespace(scope, mt)
             item = await self._store.aget(ns, record_id)
             if item is not None:
-                return MemoryRecord.from_store_value(item.value)
-        return None
+                hits.append((ns, MemoryRecord.from_store_value(item.value)))
+
+        if not hits:
+            return None
+        if len(hits) == 1:
+            return hits[0][1]
+
+        # Duplicate — reconcile. Pick the newest by updated_at; drop the
+        # rest to prevent the inconsistency from propagating.
+        hits.sort(key=lambda pair: pair[1].updated_at, reverse=True)
+        newest_ns, newest = hits[0]
+        for stale_ns, stale in hits[1:]:
+            logger.warning(
+                "Cleaning up orphan memory record %s in namespace %r (winner in %r)",
+                record_id,
+                stale_ns,
+                newest_ns,
+            )
+            try:
+                await self._store.adelete(stale_ns, record_id)
+            except Exception:
+                logger.exception(
+                    "Failed to delete orphan memory %s at %r", record_id, stale_ns
+                )
+            _ = stale  # silence unused-tracking
+        return newest
 
     async def update(
         self,

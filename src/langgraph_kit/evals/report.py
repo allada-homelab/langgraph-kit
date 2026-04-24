@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from langgraph_kit.evals.models import EvalReport
+from langgraph_kit.evals.runner import DEFAULT_PASS_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def _out(text: str) -> None:
 def print_console_report(
     report: EvalReport,
     *,
-    pass_threshold: float = 0.8,
+    pass_threshold: float = DEFAULT_PASS_THRESHOLD,
     warn_threshold: float = 0.5,
 ) -> None:
     """Print a human-readable summary to stdout."""

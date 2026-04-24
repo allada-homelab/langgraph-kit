@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -158,19 +159,25 @@ async def test_full_compaction_replacement_survives_add_messages_reducer() -> No
     middleware = PressureMiddleware(monitor, llm=llm, compaction_tail_size=3)
 
     # Need ids on messages for add_messages; use smaller pressure sample.
-    messages = [
-        _HumanMessage(content="x" * 3000, id=f"m{i}") for i in range(150)
-    ]
+    messages = [_HumanMessage(content="x" * 3000, id=f"m{i}") for i in range(150)]
     state = {"messages": messages}
 
     result = await middleware.abefore_agent(state, MagicMock())
     assert result is not None
 
-    merged = add_messages(messages, result["messages"])
+    # ``add_messages`` is typed as ``Messages | Callable[..., Messages]``
+    # because it doubles as a reducer-factory. When called with both args
+    # it always returns the merged list, but basedpyright can't narrow the
+    # union from a single call site — suppress at the seam so the
+    # assertions read naturally.
+    merged: list[Any] = add_messages(  # pyright: ignore[reportAssignmentType]
+        messages,  # pyright: ignore[reportArgumentType]
+        result["messages"],
+    )
     # After merging, expect only the summary + tail (3) = 4 messages. If the
     # old messages had leaked through, len(merged) would still be ~150.
     assert len(merged) == 4
-    assert "Conversation Summary" in merged[0].content
+    assert "Conversation Summary" in str(merged[0].content)
     assert merged[1:] == messages[-3:]
 
 
