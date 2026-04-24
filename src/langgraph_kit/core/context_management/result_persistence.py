@@ -8,6 +8,8 @@ from typing import Any
 
 from langchain.agents.middleware.types import AgentMiddleware
 
+from langgraph_kit.core.tools.result_retrieval import tool_results_namespace
+
 logger = logging.getLogger(__name__)
 
 # Results smaller than this stay inline (no persistence needed)
@@ -21,9 +23,11 @@ class ResultPersistenceMiddleware(AgentMiddleware):  # type: ignore[misc]
     """Persists large tool results to Store, replaces with compact preview + reference.
 
     When a tool returns a result larger than `persist_threshold` chars:
-    1. Persists the full result to Store under namespace ("tool_results",)
+    1. Persists the full result to Store under ("tool_results", thread_id)
     2. Replaces the inline result with a preview + retrieval reference
     3. The agent can later retrieve the full result using the retrieve tool
+
+    Namespacing by thread_id prevents cross-thread reads of persisted refs.
     """
 
     def __init__(
@@ -55,7 +59,19 @@ class ResultPersistenceMiddleware(AgentMiddleware):  # type: ignore[misc]
             :16
         ]
 
-        namespace = ("tool_results",)
+        # Scope results by thread_id so cross-thread reads are impossible.
+        runtime = getattr(request, "runtime", None)
+        cfg = getattr(runtime, "config", {}) or {}
+        thread_id = (cfg.get("configurable") or {}).get("thread_id")
+        if not thread_id:
+            # Without a thread_id the namespace would collide across threads;
+            # leave the content inline rather than writing to a shared bucket.
+            logger.warning(
+                "ResultPersistenceMiddleware skipped: no thread_id in runtime config"
+            )
+            return result
+
+        namespace = tool_results_namespace(thread_id)
         try:
             await store.aput(
                 namespace,
