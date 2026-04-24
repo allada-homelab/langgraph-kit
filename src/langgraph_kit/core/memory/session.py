@@ -1,4 +1,14 @@
-"""Thread-local session notebook for maintaining continuity within a conversation."""
+"""Thread-local session notebook for maintaining continuity within a conversation.
+
+.. note::
+    ``SessionNotebook`` is not wired into any shipped middleware or
+    graph — it's a building block for callers that want per-thread
+    structured notes. ``CompactionPromptPack.build_prompt`` accepts a
+    pre-rendered notebook string but nothing in the kit currently
+    populates it. If you want notebook-assisted compaction, instantiate
+    ``SessionNotebook`` yourself, read/update it inside your own
+    middleware, and pass the rendered body to the compactor.
+"""
 
 from __future__ import annotations
 

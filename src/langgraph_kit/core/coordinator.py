@@ -1,4 +1,12 @@
-"""Coordinator mode — supervisor profile emphasizing orchestration over direct execution."""
+"""Coordinator mode — supervisor profile emphasizing orchestration over direct execution.
+
+.. note::
+    This module is **not wired into any shipped graph**. It defines
+    reusable prompt sections and a tool-surface narrowing helper for
+    callers that want to build a coordinator/delegation profile
+    themselves. If the kit later adds a shipped coordinator agent this
+    note should be removed.
+"""
 
 from __future__ import annotations
 
