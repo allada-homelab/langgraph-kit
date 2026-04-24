@@ -16,6 +16,12 @@ from langgraph_kit.core.commands.dispatch import CommandDispatcher
 
 logger = logging.getLogger(__name__)
 
+# Marker that the streaming layer (``streaming.py``) reads to decide
+# whether to emit a ``command_result`` SSE event. Without this marker,
+# any run that ended silently (e.g. tool-only deterministic pipelines)
+# would get its last AIMessage mis-reported as a command result.
+COMMAND_RESULT_MARKER = "_lgkit_command_result"
+
 
 class CommandMiddleware(_AgentMiddleware):  # type: ignore[misc]
     """Intercepts user messages starting with ``/`` and routes them to the CommandDispatcher.
@@ -74,14 +80,22 @@ class CommandMiddleware(_AgentMiddleware):  # type: ignore[misc]
             AIMessage,  # pyright: ignore[reportMissingModuleSource]
         )
 
+        marker_kwargs = {COMMAND_RESULT_MARKER: True}
         compacted: list[Any] | None = result.metadata.get("compacted_messages")
         if compacted is not None:
             return {
-                "messages": [*compacted, AIMessage(content=result.output)],
+                "messages": [
+                    *compacted,
+                    AIMessage(
+                        content=result.output, additional_kwargs=marker_kwargs
+                    ),
+                ],
                 "jump_to": "end",
             }
 
         return {
-            "messages": [AIMessage(content=result.output)],
+            "messages": [
+                AIMessage(content=result.output, additional_kwargs=marker_kwargs)
+            ],
             "jump_to": "end",
         }
