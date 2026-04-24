@@ -164,3 +164,8 @@ fail_under = 55
 
 [tool.coverage.html]
 show_contexts = true
+
+[tool.codespell]
+# False-positives from test assertions that use partial-string matches
+# (e.g. `"sav" in content` to match both "save" and "saved").
+ignore-words-list = "sav,memor"
