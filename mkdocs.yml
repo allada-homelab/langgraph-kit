@@ -85,6 +85,7 @@ nav:
     - Empty turn: resilience/empty-turn.md
     - Tool error: resilience/tool-error.md
     - Post-run: resilience/post-run.md
+    - Graceful shutdown: resilience/graceful-shutdown.md
   - HITL:
     - Overview: hitl/overview.md
     - Models: hitl/models.md

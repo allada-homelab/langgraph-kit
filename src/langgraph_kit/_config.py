@@ -43,6 +43,11 @@ class AgentConfig:
     # Execution trace export
     trace_export_enabled: bool = False
 
+    # Graceful shutdown: max seconds to wait for in-flight async sub-agent
+    # tasks before cancelling them during FastAPI lifespan teardown.
+    # Set to 0 to skip draining (cancel immediately).
+    shutdown_timeout_seconds: float = 30.0
+
     def __repr__(self) -> str:
         """Mask secrets in repr to prevent accidental leakage in logs.
 
