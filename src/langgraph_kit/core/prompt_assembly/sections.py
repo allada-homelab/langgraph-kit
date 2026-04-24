@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import hashlib
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
 
 class SectionStability(StrEnum):
@@ -19,7 +19,16 @@ class SectionStability(StrEnum):
 
 
 class PromptSection(BaseModel):
-    """A single prompt section with stability metadata."""
+    """A single prompt section with stability metadata.
+
+    Immutable by design: the ``cache_key`` is a content hash computed at
+    construction, so allowing post-construction mutation of ``content``
+    would leave the cache key stale and silently serve old content from
+    the section cache (Area 2c in the review). To edit a section, build
+    a new one with the new content.
+    """
+
+    model_config = ConfigDict(frozen=True)
 
     id: str
     content: str
@@ -28,12 +37,18 @@ class PromptSection(BaseModel):
     condition: str | None = None
     cache_key: str | None = None
 
-    @model_validator(mode="after")
-    def _auto_cache_key(self) -> PromptSection:
-        if self.cache_key is None:
-            content_hash = hashlib.sha256(self.content.encode()).hexdigest()[:16]
-            self.cache_key = f"{self.id}:{content_hash}"
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def _auto_cache_key(cls, data: Any) -> Any:
+        if not isinstance(data, dict):
+            return data
+        if data.get("cache_key") is None:
+            content = data.get("content", "")
+            if not isinstance(content, str):
+                return data
+            content_hash = hashlib.sha256(content.encode()).hexdigest()[:16]
+            data["cache_key"] = f"{data.get('id', '')}:{content_hash}"
+        return data
 
 
 class SectionRegistry:
