@@ -99,10 +99,13 @@ class CommandDispatcher:
             return await handler(args, ctx)
         except Exception:
             logger.exception("Command handler failed: /%s", name)
+            # ``metadata["error"]`` used to be set here but nothing read
+            # it — the middleware only inspected ``output`` and
+            # ``handled``. Drop the dead flag; the error prose already
+            # conveys the failure state to the user.
             return CommandResult(
                 output=f"Error executing /{name}. Check logs for details.",
                 handled=True,
-                metadata={"error": True},
             )
 
     def list_commands(self) -> list[CommandInfo]:
