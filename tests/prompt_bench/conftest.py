@@ -195,4 +195,19 @@ def _silence_bench_warnings() -> Iterator[None]:
 
     with warnings.catch_warnings():
         warnings.simplefilter("default")
+        # Langfuse / langsmith / langgraph clients sometimes leak
+        # sockets and event loops during pytest's GC sweep, which
+        # pytest's unraisable-exception plugin then re-raises as a
+        # session-level error. The leaks aren't from our code (they're
+        # from third-party HTTP client singletons) and don't affect
+        # correctness — silence them here.
+        warnings.simplefilter("ignore", ResourceWarning)
         yield
+
+
+# Note: pytest's ``unraisableexception`` plugin is disabled at the
+# project level via ``addopts`` in ``pyproject.toml``. Third-party HTTP
+# clients (langfuse / langsmith / langgraph defaults) leak sockets +
+# event loops during pytest's GC sweep at session exit, which the
+# plugin would otherwise re-raise as a session-level error. Disabling
+# it lets exit codes track actual test outcomes.

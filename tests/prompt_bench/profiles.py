@@ -18,10 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from langgraph_kit.core.prompt_assembly.sections import PromptSection
-from tests.prompt_bench.variants import (
-    PromptOverlay,
-    patch_middleware_prompts,
-)
+from tests.prompt_bench.variants import PromptOverlay
 
 
 @dataclass(frozen=True)
@@ -151,35 +148,45 @@ def install_default_builders() -> None:
 
 
 def _build_reference_deep_agent(overlay: PromptOverlay, deps: Any) -> Any:
+    """Build the reference deep agent with section-overlay applied.
+
+    Note: middleware overlays (e.g. ``_EXTRACTION_PROMPT``) are NOT
+    applied here — the caller (``live_runner.run_one``) keeps
+    ``patch_middleware_prompts`` active across both build and invoke,
+    since middleware constants are read each turn.
+    """
     from langgraph_kit.core.orchestration.workers import GENERAL_WORKERS
     from langgraph_kit.graphs._builder import build_deep_agent
 
     sections = apply_overlay_to_sections("reference_deep_agent", overlay)
     checkpointer, store = deps
-    with patch_middleware_prompts(overlay):
-        return build_deep_agent(
-            agent_name="reference-deep-agent",
-            core_sections=sections,
-            subagents=GENERAL_WORKERS,
-            checkpointer=checkpointer,
-            store=store,
-        )
+    return build_deep_agent(
+        agent_name="reference-deep-agent",
+        core_sections=sections,
+        subagents=GENERAL_WORKERS,
+        checkpointer=checkpointer,
+        store=store,
+    )
 
 
 def _build_coding_agent(overlay: PromptOverlay, deps: Any) -> Any:
+    """Build the coding agent with section-overlay applied.
+
+    See ``_build_reference_deep_agent`` for the middleware-patch
+    responsibility split.
+    """
     from langgraph_kit.core.orchestration.workers import CODING_WORKERS
     from langgraph_kit.graphs._builder import build_deep_agent
 
     sections = apply_overlay_to_sections("coding_agent", overlay)
     checkpointer, store = deps
-    with patch_middleware_prompts(overlay):
-        return build_deep_agent(
-            agent_name="coding-agent",
-            core_sections=sections,
-            subagents=CODING_WORKERS,
-            checkpointer=checkpointer,
-            store=store,
-        )
+    return build_deep_agent(
+        agent_name="coding-agent",
+        core_sections=sections,
+        subagents=CODING_WORKERS,
+        checkpointer=checkpointer,
+        store=store,
+    )
 
 
 def _require_profile(name: str) -> ProfileSpec:
