@@ -260,6 +260,15 @@ async def _cmd_signal_check(target: str, samples_override: int | None) -> int:
         sys.stderr.write(f"Unknown target {target!r}\n")
         return EXIT_USAGE
 
+    if not _real_llm_enabled():
+        sys.stderr.write(
+            "signal-check requires a real LLM. Set both PROMPT_BENCH_LLM=real "
+            f"and {_API_KEY_ENV}=<key> before running.\n"
+            f"Current: PROMPT_BENCH_LLM={os.environ.get(_LLM_MODE_ENV, '<unset>')!r}, "
+            f"{_API_KEY_ENV}={'set' if os.environ.get(_API_KEY_ENV) else '<unset>'}\n"
+        )
+        return EXIT_USAGE
+
     target_meta = TARGETS[target]
     variants = discover_variants(ROOT, target)
     for required in ("baseline", "deliberately_broken"):

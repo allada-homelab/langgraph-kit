@@ -39,23 +39,22 @@ jobs:
       - name: Discover targets
         run: uv run python -m tests.prompt_bench.run list-targets
 
-      # Phase 0 ships the harness modules + scenarios + diff API but
-      # defers live signal-check (baseline-vs-baseline + baseline-vs-
-      # deliberately-broken) to Phase 1, which wires the run.py CLI to
-      # the profile builders. The placeholder step below lights up once
-      # the CLI's `signal-check` exits 0 instead of 3.
-      - name: Signal validation (Phase 1+)
+      # Phase 0.5 wired live signal-check end-to-end. The step runs only
+      # when ``target`` is dispatched (the daily cron path skips it to
+      # avoid burning credits on every harness check). Failure surfaces
+      # as a workflow warning + the auto-issue step below.
+      - name: Signal validation
         if: ${{ inputs.target != '' }}
         env:
           AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
           PROMPT_BENCH_LLM: real
         run: |
           set -euo pipefail
-          if uv run python -m tests.prompt_bench.run signal-check --target "${{ inputs.target }}"; then
-            echo "Signal-check passed."
-          else
-            echo "::warning::signal-check exited non-zero; Phase 0 surfaces this command but does not yet wire end-to-end execution."
+          if [ -z "${AGENT_LLM_API_KEY}" ]; then
+            echo "::error::AGENT_LLM_API_KEY secret is not set on this repo. Configure it before dispatching signal-check."
+            exit 1
           fi
+          uv run python -m tests.prompt_bench.run signal-check --target "${{ inputs.target }}"
 
       - name: Open issue on failure
         if: failure()
