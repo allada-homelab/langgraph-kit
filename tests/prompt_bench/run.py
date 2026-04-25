@@ -336,9 +336,6 @@ async def _cmd_signal_check(target: str, samples_override: int | None) -> int:
     panel = _build_pairwise_panel()
     floor = await compute_diff(base_a, base_b, panel)
     ceiling_diff = await compute_diff(base_a, broken, panel)
-    ceiling_baseline_win_rate = (
-        floor.total_decided  # placeholder — see below
-    )
     # ``compute_diff`` reports ``overall_win_rate`` as the *variant* win rate.
     # For the ceiling check we want the *baseline* win rate (i.e. how often
     # baseline beat the broken variant).
@@ -347,6 +344,15 @@ async def _cmd_signal_check(target: str, samples_override: int | None) -> int:
         if ceiling_diff.total_decided
         else 0.0
     )
+    # Tie-rate matters: when prompts are identical (the floor case),
+    # judges *should* call most pairs "tie". A 0% variant-win rate
+    # paired with a high tie rate is healthy; the same 0% paired with
+    # all base_wins would be position bias. The non-tie split tells
+    # them apart.
+    floor_non_tie = floor.total_variant_wins + floor.total_base_wins
+    floor_non_tie_variant_share = (
+        floor.total_variant_wins / floor_non_tie if floor_non_tie else 0.5
+    )
 
     sys.stdout.write("\n=== Floor (baseline vs baseline) ===\n")
     sys.stdout.write(
@@ -354,7 +360,23 @@ async def _cmd_signal_check(target: str, samples_override: int | None) -> int:
         f"agreement={floor.overall_judge_agreement:.3f} "
         f"({floor.total_decided}/{floor.total_pairs} decided)\n"
     )
-    floor_ok = SIGNAL_FLOOR_LOW <= floor.overall_win_rate <= SIGNAL_FLOOR_HIGH
+    sys.stdout.write(
+        f"  breakdown: ties={floor.total_ties} "
+        f"base_wins={floor.total_base_wins} variant_wins={floor.total_variant_wins} "
+        f"undecided={floor.total_pairs - floor.total_decided}\n"
+    )
+    sys.stdout.write(
+        f"  non-tie variant share: {floor_non_tie_variant_share:.3f} "
+        f"({floor.total_variant_wins}/{floor_non_tie}) — "
+        f"want close to 0.5 for unbiased judges\n"
+    )
+    # Floor passes when either the legacy band holds *or* the non-tie
+    # split is unbiased (both checks tolerate the all-ties case where
+    # ``floor_non_tie == 0`` falls back to 0.5).
+    floor_ok = (
+        SIGNAL_FLOOR_LOW <= floor.overall_win_rate <= SIGNAL_FLOOR_HIGH
+        or SIGNAL_FLOOR_LOW <= floor_non_tie_variant_share <= SIGNAL_FLOOR_HIGH
+    )
     sys.stdout.write(
         f"  floor: {'OK' if floor_ok else 'FAIL'} (band [{SIGNAL_FLOOR_LOW}, {SIGNAL_FLOOR_HIGH}])\n"
     )
@@ -364,6 +386,11 @@ async def _cmd_signal_check(target: str, samples_override: int | None) -> int:
         f"baseline_win_rate={ceiling_baseline_win_rate:.3f} "
         f"agreement={ceiling_diff.overall_judge_agreement:.3f} "
         f"({ceiling_diff.total_decided}/{ceiling_diff.total_pairs} decided)\n"
+    )
+    sys.stdout.write(
+        f"  breakdown: base_wins={ceiling_diff.total_base_wins} "
+        f"ties={ceiling_diff.total_ties} variant_wins={ceiling_diff.total_variant_wins} "
+        f"undecided={ceiling_diff.total_pairs - ceiling_diff.total_decided}\n"
     )
     ceiling_ok = ceiling_baseline_win_rate >= SIGNAL_CEILING_MIN
     sys.stdout.write(
