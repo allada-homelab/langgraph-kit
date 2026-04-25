@@ -40,6 +40,11 @@ docs-serve:
 testapp:
     bash scripts/setup-testapp.sh
 
+# Examples — runs every examples/*.py through the hermetic smoke driver.
+# Set RUN_NETWORK=1 to also exercise REQUIRES_NETWORK examples.
+examples-smoke:
+    uv run python -m examples.run_all
+
 # Release
 build:
     uv build

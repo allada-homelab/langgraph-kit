@@ -26,6 +26,15 @@ plugins:
             separate_signature: true
             merge_init_into_class: true
 
+markdown_extensions:
+  # ``--8<-- "examples/<name>.py"`` includes the runnable example file
+  # verbatim. Pulls from the examples/ directory at the repo root so
+  # docs and smoke-test runner share one source of truth.
+  - pymdownx.snippets:
+      base_path:
+        - .
+      check_paths: true
+
 nav:
   - Home: index.md
   - Getting started:
@@ -114,6 +123,9 @@ nav:
   - Integrations:
     - FastAPI: integrations/fastapi.md
   - Evals: evals/overview.md
+  - Examples:
+    - Overview: examples/index.md
+    - Memory — save & recall: examples/memory_save_recall.md
   - CLI: cli/reference.md
   - API reference:
     - Public API: api-reference/public-api.md

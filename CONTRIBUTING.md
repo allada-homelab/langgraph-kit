@@ -61,6 +61,30 @@ over a regression.
 - Test one subsystem per module. Class-based grouping (`TestX`) is the
   convention already used across `tests/`.
 
+## Adding an example
+
+Examples live in [`examples/`](examples/) at the repo root and double as
+the docs site's runnable code samples. Each is a standalone Python file
+that runs hermetically (no API keys) by default.
+
+Quick start:
+
+1. Pick a feature without a demo — see the table in
+   [`examples/README.md`](examples/README.md) and the open Phase 2 / 3
+   sub-issues of [#61](https://github.com/allada-homelab/langgraph-kit/issues/61).
+2. Create `examples/<name>.py` using the template in `examples/README.md`.
+3. Persist any state through `tmp_workspace()` from
+   [`examples/_lib.py`](examples/_lib.py) — never `~` or repo root.
+4. If the example needs network or a real LLM, declare
+   `REQUIRES_NETWORK = True` at module top so the per-PR smoke job
+   skips it (the nightly workflow picks it up).
+5. Run `just examples-smoke` to confirm it stays green; CI runs the
+   same command on every PR.
+
+The hermetic substrate is `langgraph_kit.replay.RecordedChatModel`,
+which is also what the e2e suite uses — patterns that work in
+`tests/e2e/` work for an example.
+
 ## Releasing
 
 Releases are tag-driven via PyPI Trusted Publishing (no manual API tokens).
