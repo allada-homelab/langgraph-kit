@@ -48,7 +48,7 @@ examples-smoke:
 # Prompt-bench — internal prompt-optimization harness under tests/prompt_bench/.
 # Hermetic by default. Set PROMPT_BENCH_LLM=real and AGENT_LLM_API_KEY for live runs.
 prompt-bench-test:
-    uv run pytest tests/prompt_bench -v
+    uv run pytest tests/prompt_bench -v -p no:unraisableexception
 
 prompt-bench-targets:
     uv run python -m tests.prompt_bench.run list-targets
