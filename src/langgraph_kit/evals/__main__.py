@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 import sys
 from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -65,10 +68,51 @@ def _parse_args() -> argparse.Namespace:
         action="store_true",
         help="Skip model-graded metrics (rule-based only)",
     )
+    # --- CI integration flags (issue #14) ---
+    parser.add_argument(
+        "--fail-under",
+        type=float,
+        default=None,
+        help=(
+            "Exit non-zero when the overall pass rate (mean across "
+            "metrics that report one) is below this threshold. "
+            "Range: 0.0 to 1.0."
+        ),
+    )
+    parser.add_argument(
+        "--baseline",
+        type=Path,
+        default=None,
+        help=(
+            "Path to a previous --ci-json output to compare against. "
+            "Exits non-zero when this run's pass_rate drops by more "
+            "than --baseline-tolerance vs the baseline's pass_rate."
+        ),
+    )
+    parser.add_argument(
+        "--baseline-tolerance",
+        type=float,
+        default=0.0,
+        help=(
+            "Allowed pass_rate drop vs the baseline before failing "
+            "(default: 0.0 = any regression fails)."
+        ),
+    )
+    parser.add_argument(
+        "--ci-json",
+        type=Path,
+        default=None,
+        help=(
+            "Write a slim, schema-versioned JSON report to this path. "
+            "Suitable for CI artifact upload and as input to a future "
+            "--baseline run. Distinct from --report-file which writes "
+            "the full EvalReport."
+        ),
+    )
     return parser.parse_args()
 
 
-async def _main() -> None:
+async def _main() -> int:
     args = _parse_args()
 
     # --- Initialize Langfuse ---
@@ -76,7 +120,7 @@ async def _main() -> None:
         from langfuse import Langfuse
     except ImportError:
         logger.error("langfuse package not installed. Run: uv sync")
-        sys.exit(1)
+        return 1
 
     langfuse = Langfuse()
 
@@ -119,7 +163,7 @@ async def _main() -> None:
         all_metrics = [m for m in all_metrics if m.name in args.metric]
         if not all_metrics:
             logger.error("No matching metrics found for: %s", args.metric)
-            sys.exit(1)
+            return 1
 
     logger.info(
         "Running %d metric(s): %s",
@@ -128,7 +172,12 @@ async def _main() -> None:
     )
 
     # --- Run ---
-    from langgraph_kit.evals.report import print_console_report, write_json_report
+    from langgraph_kit.evals.report import (
+        check_ci_thresholds,
+        print_console_report,
+        report_to_ci_json,
+        write_json_report,
+    )
     from langgraph_kit.evals.runner import EvalRunner
 
     runner = EvalRunner(langfuse=langfuse, metrics=all_metrics, llm=llm)
@@ -148,6 +197,37 @@ async def _main() -> None:
     if args.report_file or not args.dry_run:
         write_json_report(report, report_path)
 
+    # --- CI integration: slim JSON + thresholds + baseline ---
+    if args.ci_json is not None:
+        ci_payload = report_to_ci_json(report)
+        args.ci_json.parent.mkdir(parents=True, exist_ok=True)
+        args.ci_json.write_text(json.dumps(ci_payload, indent=2), encoding="utf-8")
+        logger.info("CI JSON written to %s", args.ci_json)
+
+    baseline_payload: dict[str, Any] | None = None
+    if args.baseline is not None:
+        try:
+            baseline_payload = json.loads(args.baseline.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            logger.error("Baseline file not found: %s", args.baseline)
+            return 1
+        except json.JSONDecodeError as e:
+            logger.error("Baseline file is not valid JSON: %s (%s)", args.baseline, e)
+            return 1
+
+    failures = check_ci_thresholds(
+        report,
+        fail_under=args.fail_under,
+        baseline=baseline_payload,
+        baseline_tolerance=args.baseline_tolerance,
+    )
+    if failures:
+        for reason in failures:
+            sys.stderr.write(f"FAIL: {reason}\n")
+        return 1
+
+    return 0
+
 
 if __name__ == "__main__":
-    asyncio.run(_main())
+    sys.exit(asyncio.run(_main()))

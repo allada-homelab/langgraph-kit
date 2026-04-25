@@ -7,6 +7,17 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **CI-friendly exits for `python -m langgraph_kit.evals`.** Four new
+  flags: `--fail-under N` exits non-zero when the overall pass rate is
+  below N; `--baseline FILE` compares against a stored slim JSON
+  report and fails on regression; `--baseline-tolerance` allows a
+  configurable drop; `--ci-json PATH` writes a slim, schema-versioned
+  JSON document suitable for CI artifact upload and as input to a
+  future `--baseline` run. Helpers `compute_overall_pass_rate`,
+  `report_to_ci_json`, and `check_ci_thresholds` are exported from
+  `langgraph_kit.evals.report` for in-process use. Fixes
+  [#14](https://github.com/allada-homelab/langgraph-kit/issues/14).
+
 - **SSE heartbeats and event ids in `stream_agent_events`.** Every emitted
   chunk now carries an `id: <n>` line with a per-stream monotonically-
   increasing sequence number, and a configurable
