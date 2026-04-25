@@ -33,11 +33,28 @@ just examples-smoke
 | [`orchestration_workers.py`](orchestration_workers.py) | Worker definitions + extending the catalogue |
 | [`hitl_approval_flow.py`](hitl_approval_flow.py) | `interrupt()` → `Command(resume=...)` round-trip |
 | [`fastapi_minimal_router.py`](fastapi_minimal_router.py) | Mounting the agent router via ASGI in-process client |
+| [`fastapi_full_router_curl.md`](fastapi_full_router_curl.md) | curl recipes for the remaining 9 router endpoints |
 | [`replay_record_and_play.py`](replay_record_and_play.py) | Recording a hermetic run + reloading the JSON |
+| [`audit_log_and_query.py`](audit_log_and_query.py) | `AuditStore.write` / `query` — actor + action filters |
+| [`disaster_recovery_export_import.py`](disaster_recovery_export_import.py) | JSONL export + selective import via `DisasterRecoveryManager` |
+| [`rate_limit_token_bucket.py`](rate_limit_token_bucket.py) | Per-key token-bucket backend (continuous refill) |
+| [`security_injection_and_pii.py`](security_injection_and_pii.py) | Inbound injection scan + outbound PII redaction |
+| [`memory_semantic_search.py`](memory_semantic_search.py) | `embedding_fn` opt-in for cosine-similarity ranking |
+| [`memory_consolidation.py`](memory_consolidation.py) | Merging near-duplicates via `MemoryConsolidator` |
+| [`orchestration_async_tasks.py`](orchestration_async_tasks.py) | Fire-and-forget `AsyncTaskManager` lifecycle |
+| [`tools_risk_levels_and_hitl.py`](tools_risk_levels_and_hitl.py) | `interrupt_before` declared on a `ToolCapability` |
+| [`tools_mcp_integration.py`](tools_mcp_integration.py) | Wrapping MCP-server tools as native capabilities |
+| [`plugins_skill_discovery.py`](plugins_skill_discovery.py) | `PluginLoader` + `SkillRegistry` discovery |
+| [`dev_hot_reload.py`](dev_hot_reload.py) | `Reloader` mtime polling for the dev server |
+| [`evals_rule_and_model_graded.py`](evals_rule_and_model_graded.py) | Rule-based + (optional) `LLMJudgeMetric` scoring |
+| [`observability_langfuse.py`](observability_langfuse.py) | `REQUIRES_NETWORK` — Langfuse tracing on a real run |
 
-The remaining demos (security, audit, DR, rate limit, plugins, MCP,
-observability, evals, full FastAPI) ship in Phase 3 — tracked in
-[issue #61](https://github.com/allada-homelab/langgraph-kit/issues/61).
+Companion fixtures (excluded from the smoke runner via the `_` prefix):
+
+| File | Purpose |
+| --- | --- |
+| [`_sample_plugin.py`](_sample_plugin.py) | `contribute()` exemplar consumed by the plugins demo |
+| [`_sample_mcp_server.py`](_sample_mcp_server.py) | Tool-shape declaration consumed by the MCP demo |
 
 ## CLI shortcut
 
