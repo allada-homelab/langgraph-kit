@@ -7,6 +7,16 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Dev-mode hot-reload primitive.** New `langgraph_kit.dev.Reloader`
+  watches a list of paths via stdlib mtime polling and fires a
+  callback (sync or async) on each batch of changes. Default ignore
+  list keeps `__pycache__` / `.pyc` / `.venv` / VCS directories out
+  of the watch surface. No third-party dependency on
+  `watchfiles` / `watchdog`. The full `langgraph-kit dev` server
+  (file-watch + agent rebuild + checkpoint preservation + inspector
+  UI) is multi-PR effort; this lands the foundation. Fixes
+  [#36](https://github.com/allada-homelab/langgraph-kit/issues/36).
+
 - **Disaster-recovery export / import.** New
   `langgraph_kit.core.dr.DisasterRecoveryManager` exports Store
   contents as JSON Lines (manifest header first, one record per line)
