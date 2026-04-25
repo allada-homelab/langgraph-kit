@@ -1,0 +1,26 @@
+id: refactor_extract_function
+target: coding_agent.core_identity
+description: |
+  User wants a refactor that pulls a duplicated branch out into a
+  helper function. Agent should produce the refactored version without
+  changing behavior, and surface the rename trade-offs cleanly.
+agent_profile: coding_agent
+turns:
+  - user: |
+      Refactor this Python so the duplicated math is extracted into a
+      shared helper, but keep the public function names identical:
+      ```python
+      def total_with_tax(price):
+          return price + price * 0.0875
+
+      def total_with_discount(price):
+          discounted = price - price * 0.10
+          return discounted + discounted * 0.0875
+      ```
+expected_behaviors:
+  must_mention:
+    - def
+  min_tool_calls: 0
+  max_tool_calls: 3
+rubric: rubrics/coding_correctness.md
+samples: 5

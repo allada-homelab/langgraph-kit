@@ -1,0 +1,18 @@
+id: preserve_recent_tool_calls
+target: compaction.full_prompt
+description: |
+  Conversation has heavy tool usage in the last few turns; older turns
+  are chatter. Compaction should keep the recent tool call/response
+  context verbatim and aggressively summarize the older small talk.
+agent_profile: reference_deep_agent
+turns:
+  - user: |
+      Continue the previous task using the most recent tool results, not
+      the small talk from earlier in the thread.
+expected_behaviors:
+  must_mention:
+    - tool
+  min_tool_calls: 0
+  max_tool_calls: 1
+rubric: rubrics/compaction_fidelity.md
+samples: 5

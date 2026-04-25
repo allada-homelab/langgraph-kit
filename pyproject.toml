@@ -150,6 +150,7 @@ markers = [
     "asyncio: mark test as async",
     "integration: mark test as integration (requires external services)",
     "e2e: end-to-end test — runs a real compiled graph with a scripted LLM",
+    "prompt_bench: prompt-optimization bench scenario (real LLM when PROMPT_BENCH_LLM=real)",
 ]
 
 [tool.coverage.run]

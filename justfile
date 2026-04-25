@@ -45,6 +45,22 @@ testapp:
 examples-smoke:
     uv run python -m examples.run_all
 
+# Prompt-bench — internal prompt-optimization harness under tests/prompt_bench/.
+# Hermetic by default. Set PROMPT_BENCH_LLM=real and AGENT_LLM_API_KEY for live runs.
+prompt-bench-test:
+    uv run pytest tests/prompt_bench -v
+
+prompt-bench-targets:
+    uv run python -m tests.prompt_bench.run list-targets
+
+prompt-bench-scenarios target="":
+    uv run python -m tests.prompt_bench.run list-scenarios {{ if target != "" { "--target " + target } else { "" } }}
+
+# Phase 0 surfaces signal-check via the CLI; it exits non-zero until the
+# Phase 1 PR wires live execution. Remove the leading "-" once that lands.
+prompt-bench-signal-check target:
+    -uv run python -m tests.prompt_bench.run signal-check --target {{target}}
+
 # Release
 build:
     uv build

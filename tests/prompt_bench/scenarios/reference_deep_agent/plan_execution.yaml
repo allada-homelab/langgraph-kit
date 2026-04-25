@@ -1,0 +1,22 @@
+id: plan_execution
+target: reference_deep_agent.core_identity
+description: |
+  Multi-step user request that requires the agent to plan, delegate
+  small bounded sub-tasks where appropriate, and synthesize a final
+  answer. The "deliberate / direct approach" guidance in core_identity
+  should produce a tight execution plan rather than excessive
+  exploration or recursion.
+agent_profile: reference_deep_agent
+turns:
+  - user: |
+      I want to launch a weekly newsletter. Give me a 4-step rollout plan
+      that covers (1) topic strategy, (2) tooling picks (free tier ok),
+      (3) audience growth tactics in the first 90 days, and (4) success
+      metrics with target numbers I should hit by week 12.
+expected_behaviors:
+  must_mention:
+    - week
+  min_tool_calls: 0
+  max_tool_calls: 4
+rubric: rubrics/plan_completeness.md
+samples: 5

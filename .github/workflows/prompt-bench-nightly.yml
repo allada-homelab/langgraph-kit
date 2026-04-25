@@ -1,0 +1,85 @@
+name: Prompt-bench (nightly harness check)
+
+on:
+  schedule:
+    # Daily at 07:30 UTC — staggered behind the examples-nightly cron at
+    # 06:00 so failures from the two suites don't pile into one issue
+    # tracker burst.
+    - cron: "30 7 * * *"
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Optional bench target for signal-check (e.g. reference_deep_agent.core_identity)"
+        required: false
+        default: ""
+
+jobs:
+  prompt-bench-harness:
+    name: Prompt-bench harness (hermetic)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras --all-groups
+
+      - name: Run prompt-bench unit tests
+        run: uv run pytest tests/prompt_bench -v
+
+      - name: Discover scenarios
+        run: uv run python -m tests.prompt_bench.run list-scenarios
+
+      - name: Discover targets
+        run: uv run python -m tests.prompt_bench.run list-targets
+
+      # Phase 0 ships the harness modules + scenarios + diff API but
+      # defers live signal-check (baseline-vs-baseline + baseline-vs-
+      # deliberately-broken) to Phase 1, which wires the run.py CLI to
+      # the profile builders. The placeholder step below lights up once
+      # the CLI's `signal-check` exits 0 instead of 3.
+      - name: Signal validation (Phase 1+)
+        if: ${{ inputs.target != '' }}
+        env:
+          AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
+          PROMPT_BENCH_LLM: real
+        run: |
+          set -euo pipefail
+          if uv run python -m tests.prompt_bench.run signal-check --target "${{ inputs.target }}"; then
+            echo "Signal-check passed."
+          else
+            echo "::warning::signal-check exited non-zero; Phase 0 surfaces this command but does not yet wire end-to-end execution."
+          fi
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const today = new Date().toISOString().slice(0, 10);
+            const title = `[nightly prompt-bench] harness failure on ${today}`;
+            const body = [
+              `Nightly prompt-bench harness check failed.`,
+              ``,
+              `Logs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ``,
+              `Likely causes:`,
+              `- Pydantic / pytest schema drift after a kit upgrade`,
+              `- Scenario YAML schema regression`,
+              `- Profile section list moved or renamed (e.g. _CORE_SECTIONS)`,
+              ``,
+              `Run \`uv run pytest tests/prompt_bench -v\` locally to reproduce.`,
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['bug'],
+            });

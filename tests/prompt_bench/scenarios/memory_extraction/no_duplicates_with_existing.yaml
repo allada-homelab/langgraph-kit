@@ -1,0 +1,20 @@
+id: no_duplicates_with_existing
+target: memory_extraction.prompt
+description: |
+  Conversation reasserts a fact already in memory. The extraction prompt
+  should prefer updating / not duplicating over creating a fresh
+  memory. Tests the "prefer updating existing" instruction.
+agent_profile: reference_deep_agent
+seeded_state:
+  memory:
+    - kind: user
+      content: "User is a vegetarian."
+turns:
+  - user: |
+      Just to confirm — I'm vegetarian, so please don't suggest meat
+      dishes when I ask for recipes.
+expected_behaviors:
+  must_mention:
+    - vegetarian
+rubric: rubrics/memory_extraction_correctness.md
+samples: 5

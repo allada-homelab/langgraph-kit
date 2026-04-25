@@ -1,0 +1,23 @@
+id: trace_to_root_cause
+target: coding_agent.core_identity
+description: |
+  User reports a bug in a small Python snippet. Agent should diagnose
+  the root cause (off-by-one + signed comparison) and explain the fix
+  rather than just patching symptoms. Tests the "search-first" coding
+  discipline before the agent recommends a change.
+agent_profile: coding_agent
+turns:
+  - user: |
+      This Python snippet is supposed to return True for any non-empty
+      list, but it returns False on a list of one item. Tell me why.
+      ```python
+      def is_non_empty(xs):
+          return len(xs) - 1 > 0
+      ```
+expected_behaviors:
+  must_mention:
+    - "len"
+  must_not_mention:
+    - "I cannot help"
+rubric: rubrics/coding_correctness.md
+samples: 5

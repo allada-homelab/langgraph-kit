@@ -1,0 +1,16 @@
+id: structured_summary
+target: compaction.full_prompt
+description: |
+  After compaction, the agent's next turn should be coherent — meaning
+  the summary preserved enough structure that the agent can plan its
+  next move without re-asking for facts already established earlier.
+agent_profile: reference_deep_agent
+turns:
+  - user: |
+      Now that you have the compacted context, what is the next most
+      useful thing you could do for me, given everything we've discussed?
+expected_behaviors:
+  must_mention:
+    - next
+rubric: rubrics/compaction_fidelity.md
+samples: 5
