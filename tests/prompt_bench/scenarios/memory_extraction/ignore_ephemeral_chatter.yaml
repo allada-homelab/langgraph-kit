@@ -1,0 +1,14 @@
+id: ignore_ephemeral_chatter
+target: memory_extraction.prompt
+description: |
+  Conversation is purely small talk. No durable facts to extract.
+  The extraction prompt should return zero memories, not invent
+  pseudo-facts to satisfy a "must extract something" instinct.
+agent_profile: reference_deep_agent
+turns:
+  - user: "Hi there. How is your day going? Just wanted to say hello."
+expected_behaviors:
+  min_tool_calls: 0
+  max_tool_calls: 1
+rubric: rubrics/memory_extraction_correctness.md
+samples: 5

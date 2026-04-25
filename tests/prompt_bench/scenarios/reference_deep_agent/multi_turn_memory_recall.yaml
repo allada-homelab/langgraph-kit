@@ -1,0 +1,24 @@
+id: multi_turn_memory_recall
+target: reference_deep_agent.core_identity
+description: |
+  3-turn conversation: user states a fact, asks an unrelated question,
+  then asks back about the original fact. Agent must persist the fact
+  via memory tools and recall it correctly on turn 3.
+agent_profile: reference_deep_agent
+seeded_state:
+  memory: []
+turns:
+  - user: "My favorite color is teal. Please remember that."
+  - user: "What is 2+2?"
+  - user: "What did I tell you my favorite color was?"
+expected_behaviors:
+  must_call_tool:
+    - memory_save
+  must_mention:
+    - teal
+  must_not_mention:
+    - "I don't know"
+    - "I don't recall"
+    - "no information"
+rubric: rubrics/memory_recall_quality.md
+samples: 5

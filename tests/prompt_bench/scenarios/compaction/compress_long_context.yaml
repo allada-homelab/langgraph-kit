@@ -1,0 +1,19 @@
+id: compress_long_context
+target: compaction.full_prompt
+description: |
+  A long conversation that exceeds the kit's pressure threshold. The
+  compaction prompt should produce a structured summary that captures
+  the essential decisions/state without losing any user-stated
+  preferences or pinned facts.
+agent_profile: reference_deep_agent
+turns:
+  - user: |
+      Long-running thread placeholder — actual contents are constructed
+      programmatically by the runner so we can synthesize > pressure
+      threshold messages without bloating the YAML. Final user turn
+      asks: "Summarize where we ended up and what's still TODO."
+expected_behaviors:
+  must_mention:
+    - TODO
+rubric: rubrics/compaction_fidelity.md
+samples: 5

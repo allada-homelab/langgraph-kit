@@ -1,0 +1,17 @@
+id: extract_durable_facts
+target: memory_extraction.prompt
+description: |
+  Conversation contains a mix of durable user facts ("I'm a vegetarian")
+  and ephemeral chatter ("nice weather today"). The extraction prompt
+  should recover the durable facts and ignore the chatter.
+agent_profile: reference_deep_agent
+turns:
+  - user: |
+      Hi! Nice weather today. By the way, I'm a strict vegetarian and
+      I work as a backend engineer at a fintech startup in Berlin.
+expected_behaviors:
+  must_mention:
+    - vegetarian
+  min_tool_calls: 0
+rubric: rubrics/memory_extraction_correctness.md
+samples: 5

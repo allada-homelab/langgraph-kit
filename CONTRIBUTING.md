@@ -85,6 +85,41 @@ The hermetic substrate is `langgraph_kit.replay.RecordedChatModel`,
 which is also what the e2e suite uses — patterns that work in
 `tests/e2e/` work for an example.
 
+## Optimizing a prompt
+
+The kit has ~25 distinct prompts (agent system prompts, prompt-assembly
+sections, middleware prompts, worker definitions). They evolve through
+the internal **prompt-bench** harness under `tests/prompt_bench/`.
+
+Iteration loop:
+
+1. **Read [tests/prompt_bench/README.md](tests/prompt_bench/README.md)** for the full workflow,
+   acceptance bar, and seven variant dimensions to try (one per
+   iteration).
+2. **Drop a candidate** at `tests/prompt_bench/variants/<target>/<variant_name>.md`.
+   Frontmatter (notes, dimension changed) is stripped; everything below
+   is the prompt text the overlay injects.
+3. **Run the harness** (Phase 1 onwards — hermetic check works today via
+   `just prompt-bench-test`):
+   ```bash
+   PROMPT_BENCH_LLM=real AGENT_LLM_API_KEY=... \
+     uv run python -m tests.prompt_bench.run run \
+       --target <target> --variant <variant_name>
+   ```
+4. **Diff** baseline vs variant; the markdown report goes in the PR.
+5. **Strict acceptance bar** — a change ships only when:
+   - Pairwise win rate ≥ 60% across decided pairs
+   - Two-judge agreement ≥ 70%
+   - No rule-based metric regression > 5%
+   - Cross-prompt regression suite passes
+   - N=5 samples per scenario (re-run high-variance scenarios with N=10)
+
+Do not lower the thresholds (`WIN_RATE_THRESHOLD` /
+`JUDGE_AGREEMENT_THRESHOLD` / `METRIC_REGRESSION_TOLERANCE` in
+`tests/prompt_bench/diff.py`) per-PR. If a candidate doesn't clear the
+bar, it doesn't ship — iterate the prompt instead of relaxing the
+gate.
+
 ## Releasing
 
 Releases are tag-driven via PyPI Trusted Publishing (no manual API tokens).

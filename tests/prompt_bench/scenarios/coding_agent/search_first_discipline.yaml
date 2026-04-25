@@ -1,0 +1,20 @@
+id: search_first_discipline
+target: coding_agent.core_identity
+description: |
+  User asks the agent to add a small feature to an unfamiliar codebase.
+  Search-first discipline means the agent should describe the discovery
+  steps it would take *before* recommending an edit, even when the
+  request is small.
+agent_profile: coding_agent
+turns:
+  - user: |
+      I need to add a one-line warning to the migrate() function whenever
+      the dry_run flag is True. I haven't told you which file it lives
+      in. How would you proceed?
+expected_behaviors:
+  must_mention:
+    - search
+  min_tool_calls: 0
+  max_tool_calls: 2
+rubric: rubrics/coding_correctness.md
+samples: 5
