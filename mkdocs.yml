@@ -126,13 +126,27 @@ nav:
   - Examples:
     - Overview: examples/index.md
     - Memory — save & recall: examples/memory_save_recall.md
+    - Memory — semantic search: examples/memory_semantic_search.md
+    - Memory — consolidation: examples/memory_consolidation.md
     - Tools — register capability: examples/tools_register_capability.md
+    - Tools — risk levels + HITL: examples/tools_risk_levels_and_hitl.md
+    - Tools — MCP integration: examples/tools_mcp_integration.md
     - Prompt assembly — sections: examples/prompt_assembly_sections.md
     - HITL — approval flow: examples/hitl_approval_flow.md
     - Orchestration — workers: examples/orchestration_workers.md
+    - Orchestration — async tasks: examples/orchestration_async_tasks.md
     - Replay — record & play: examples/replay_record_and_play.md
     - FastAPI — minimal router: examples/fastapi_minimal_router.md
+    - FastAPI — full router (curl): examples/fastapi_full_router_curl.md
     - Context — compaction: examples/context_compaction.md
+    - Audit — log & query: examples/audit_log_and_query.md
+    - DR — export & import: examples/disaster_recovery_export_import.md
+    - Rate limit — token bucket: examples/rate_limit_token_bucket.md
+    - Security — injection + PII: examples/security_injection_and_pii.md
+    - Plugins + skills: examples/plugins_skill_discovery.md
+    - Dev — hot reload: examples/dev_hot_reload.md
+    - Evals — rule + model-graded: examples/evals_rule_and_model_graded.md
+    - Observability — Langfuse: examples/observability_langfuse.md
   - CLI: cli/reference.md
   - API reference:
     - Public API: api-reference/public-api.md

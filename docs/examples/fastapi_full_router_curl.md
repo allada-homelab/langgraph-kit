@@ -1,0 +1,1 @@
+--8<-- "examples/fastapi_full_router_curl.md"
