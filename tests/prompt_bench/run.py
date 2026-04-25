@@ -319,8 +319,17 @@ async def _cmd_signal_check(target: str, samples_override: int | None) -> int:
     )
 
     base_overlay = _build_overlay(target_meta, "baseline", variants["baseline"])
-    broken_overlay = _build_overlay(
-        target_meta, "deliberately_broken", variants["deliberately_broken"]
+    # For the ceiling check we want a catastrophically broken agent. A
+    # single-section override gets drowned out by the ~9 other sections
+    # the kit assembles (memory, orchestration, ACTIVATION_SECTIONS,
+    # tool_guidance, etc.) — the agent stays helpful and judges call ties.
+    # Apply the broken text to every core section the profile ships so
+    # the agent has nothing helpful to fall back on. Phase-1+ runs use
+    # ``run`` (single-section overlay) where weak signal IS what we want
+    # to measure; signal-check's job is to prove the harness can detect
+    # a clear difference, so we bias toward a strong one.
+    broken_overlay = _build_ceiling_overlay(
+        target_meta, variants["deliberately_broken"]
     )
 
     # Run baseline twice (independent samples) to measure the noise floor,
@@ -432,6 +441,42 @@ def _build_overlay(
         name=variant_name,
         middleware_attr=target_meta["module_attr"],
         text=text,
+    )
+
+
+def _build_ceiling_overlay(
+    target_meta: dict[str, str],
+    variant_path: Path,
+) -> PromptOverlay:
+    """Strong-signal broken overlay for signal-check ceiling validation.
+
+    For ``kind=section`` targets, applies the broken text to *every*
+    core section the profile ships (not just the named one). A
+    single-section override gets drowned out by the other sections the
+    kit assembles (memory, orchestration, ACTIVATION_SECTIONS, etc.) —
+    the agent stays helpful and judges call ties. Overriding all core
+    sections leaves the agent with no helpful instruction to fall back
+    on, producing a clear "broken" output the judges can confidently
+    rank below baseline.
+
+    For ``kind=middleware`` targets, falls back to the standard
+    single-attribute swap (middleware constants don't have the
+    multi-section fallback problem).
+    """
+    text = load_variant(variant_path)
+    if target_meta["kind"] != "section":
+        return overlay_from_variant_file(
+            name="deliberately_broken",
+            middleware_attr=target_meta["module_attr"],
+            text=text,
+        )
+
+    from tests.prompt_bench.profiles import get_baseline_sections
+
+    section_ids = [s.id for s in get_baseline_sections(target_meta["agent"])]
+    return PromptOverlay(
+        name="deliberately_broken",
+        section_overrides=dict.fromkeys(section_ids, text),
     )
 
 
