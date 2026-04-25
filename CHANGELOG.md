@@ -7,6 +7,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Append-only audit log.** New `langgraph_kit.core.audit` module ships
+  `AuditAction` (bounded enum: agent_invoke, memory_create/update/delete,
+  hitl_approve/reject, injection_detected, output_redacted, data_export/
+  delete), `AuditEntry` (immutable five-tuple of timestamp/actor/action/
+  target/metadata), and `AuditStore` (the only sanctioned read/write
+  surface). Storage is time-bucketed by year-month under `("audit",
+  "YYYY_MM")` so monthly listings stay cheap; `query(...)` walks
+  buckets newest-first so the common "last N entries" path stops as
+  soon as it has enough. Store write failures are logged and swallowed
+  so audit never blocks a real action. The FastAPI admin endpoint that
+  queries the log is deferred to a follow-up. Fixes
+  [#24](https://github.com/allada-homelab/langgraph-kit/issues/24).
+
 - **Outbound PII / secret redaction.** New `OutputSafetyMiddleware`
   scans the most recent `AIMessage` after every turn and rewrites
   matched substrings with `[REDACTED]` before the message reaches the
