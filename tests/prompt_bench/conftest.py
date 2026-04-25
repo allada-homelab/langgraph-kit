@@ -205,11 +205,9 @@ def _silence_bench_warnings() -> Iterator[None]:
         yield
 
 
-# Note: when running ``pytest tests/prompt_bench`` in isolation, third-
-# party HTTP clients (langfuse / langsmith / langgraph defaults) leak
-# sockets + an event loop during GC sweep, and pytest's
-# ``unraisableexception`` plugin flips the exit code to 1 even though
-# all 57 tests pass. The full test suite (``pytest``) doesn't trip this
-# — other fixtures finalise the offending singletons in time. Disable
-# the plugin via ``-p no:unraisableexception`` for the harness-only
-# subset (the justfile recipe and the nightly workflow both pass it).
+# Note: pytest's ``unraisableexception`` plugin is disabled at the
+# project level via ``addopts`` in ``pyproject.toml``. Third-party HTTP
+# clients (langfuse / langsmith / langgraph defaults) leak sockets +
+# event loops during pytest's GC sweep at session exit, which the
+# plugin would otherwise re-raise as a session-level error. Disabling
+# it lets exit codes track actual test outcomes.

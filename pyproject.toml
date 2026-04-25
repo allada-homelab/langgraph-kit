@@ -140,7 +140,18 @@ keep-runtime-typing = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--import-mode=importlib --strict-markers --strict-config -ra"
+# ``-p no:unraisableexception`` disables pytest's plugin that re-raises
+# ResourceWarnings collected during the GC sweep at session teardown.
+# Third-party HTTP-client singletons (langfuse, langsmith, langgraph
+# default httpx clients) leak sockets at session exit on Python 3.13;
+# the plugin elevates those to a session-level error, flipping the exit
+# code to 1 even though every test passes. We don't control those
+# singletons and the leaks don't affect correctness — disable the
+# plugin so CI can rely on the actual test outcome. Resource leaks in
+# our own code surface as ResourceWarnings during the test (still
+# captured by ``filterwarnings = ["error"]`` below), so we only lose
+# visibility into the third-party noise.
+addopts = "--import-mode=importlib --strict-markers --strict-config -ra -p no:unraisableexception"
 filterwarnings = [
     "error",
 ]

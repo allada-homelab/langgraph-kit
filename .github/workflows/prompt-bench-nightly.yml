@@ -31,12 +31,7 @@ jobs:
       - run: uv sync --all-extras --all-groups
 
       - name: Run prompt-bench unit tests
-        # ``-p no:unraisableexception`` — third-party HTTP clients leak
-        # sockets during GC sweep when the harness-only subset runs in
-        # isolation; the full suite doesn't trip this. Plugin disabled
-        # only for this job, so other suites still gate on resource
-        # warnings as before.
-        run: uv run pytest tests/prompt_bench -v -p no:unraisableexception
+        run: uv run pytest tests/prompt_bench -v
 
       - name: Discover scenarios
         run: uv run python -m tests.prompt_bench.run list-scenarios
