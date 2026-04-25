@@ -5,6 +5,42 @@ Internal tooling for systematically optimizing the prompts the kit ships
 worker definitions, skill content). **Not** part of the public API —
 lives under `tests/` deliberately.
 
+## Status
+
+**Paused as of 2026-04-25.** The harness pipeline works end-to-end (run
+agents under overlays → pairwise judge panel → diff report) and the
+`pytest tests/prompt_bench` suite passes. Active prompt iteration is
+paused for two reasons:
+
+1. **deepagents framework dominance.** `create_deep_agent` always
+   appends its `BASE_AGENT_PROMPT` after our overlay, and per-tool
+   middleware (`write_todos`, filesystem, `task` spawner, etc.) inject
+   additional system-prompt blocks. Section-level overlays are one of
+   ~10 competing prompt blocks, and the framework-injected ones
+   overpower them. The "deliberately broken" ceiling validation
+   couldn't pass even with every core section overridden by an
+   explicit override — direct LLM probes confirmed the override binds a
+   bare model call but not the agent path.
+2. **No specific prompt grievance.** Optimization without a real
+   "this prompt is wrong" signal is speculation. The harness is built
+   to *measure* differences; it doesn't generate hypotheses about
+   *which* prompts to change.
+
+If you want to restart this:
+
+- Prefer **middleware-prompt** targets (`memory_extraction.prompt`,
+  `compaction.full_prompt`, `consolidation_prompt`) and **worker
+  definitions** over section-level overlays. Middleware prompts run
+  in isolation with no framework wrapper, so overlays take full effect.
+- Calibrate `signal-check` thresholds to the kit before re-enabling.
+  The defaults below (floor [0.45, 0.55], ceiling >= 0.80) were
+  modeled on a "naked LLM" assumption that doesn't hold here.
+  Suggested starting band: floor [0.30, 0.70], ceiling >= 0.30.
+- If you must optimize a section-level prompt (e.g. `core_identity`),
+  decide first whether to override `BASE_AGENT_PROMPT` via
+  `_HarnessProfile.base_system_prompt` (`deepagents.profiles._harness_profiles`)
+  or accept that section overlays produce small effects in this kit.
+
 ## Why pairwise, not absolute scoring
 
 Absolute scores from a single LLM judge are noisy and drift across
