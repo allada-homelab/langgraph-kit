@@ -7,6 +7,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Per-user data lifecycle: export / delete / anonymize.** New
+  `langgraph_kit.core.lifecycle.DataLifecycleManager` exposes the
+  GDPR-friendly trio over the LangGraph Store. Operates on the
+  namespaces where `user_id` is already present today (the per-user
+  thread index and the actor-keyed audit log); coverage will widen
+  as #33 multi-tenancy adds tenant scoping to the rest. Anonymize
+  uses a salted SHA-256 pseudonym (`anon-<16 hex>`) so records keep
+  their analytical shape while the link to a real person is severed.
+  Every lifecycle call writes a `DATA_EXPORT` / `DATA_DELETE` audit
+  entry — the record of "user X requested deletion at time T" lives
+  on after the data itself is gone. Fixes
+  [#31](https://github.com/allada-homelab/langgraph-kit/issues/31).
+
 - **Prometheus-format metrics primitives + `/metrics` ASGI endpoint.**
   New `langgraph_kit.observability_metrics` module ships pure-Python
   `Counter`, `Gauge`, `Histogram` (cumulative buckets, default
