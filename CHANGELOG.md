@@ -7,6 +7,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Opt-in structured-output validation via `StructuredOutputMiddleware`.**
+  Pass `output_schema=` to `build_deep_agent` and the agent's terminal
+  `AIMessage` is validated against your Pydantic schema. The model is
+  asked to wrap its structured payload in a single
+  `<output_schema>{...}</output_schema>` block (matches the existing
+  `CompactionResult` convention); on mismatch the middleware retries
+  with the schema rendered as JSON Schema, capped at 2 nudges. No
+  provider-native `response_format` plumbing — provider-agnostic by
+  design. Helpers `format_schema_instruction(schema)`,
+  `extract_structured_output(content)`, and
+  `parse_structured_output(content, schema)` are exported for prompt
+  composition and post-run extraction. `AgentMetadata.output_schema`
+  surfaces the contract for discovery. Fixes
+  [#17](https://github.com/allada-homelab/langgraph-kit/issues/17). See
+  [docs/resilience/structured-output.md](docs/resilience/structured-output.md).
+
 - **Opt-in semantic search for `PersistentMemoryManager`.** Pass an async
   `embedding_fn` (or set `AgentConfig.memory_embedding_fn`) to index
   records on create/update and rank `search()` by cosine similarity

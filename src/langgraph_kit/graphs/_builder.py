@@ -28,9 +28,12 @@ it to cap runaway loops in tests or evals. See :data:`DEFAULT_RECURSION_LIMIT`.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langgraph_kit._config import get_config
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 from langgraph_kit.core.context_management.pressure import PressureMonitor
 from langgraph_kit.core.graph_builder.backend import build_backend_factory
 from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
@@ -154,6 +157,7 @@ def build_deep_agent(
     plugins: PluginRegistry | list[PluginContribution] | None = None,
     conditions: set[str] | None = None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
+    output_schema: type[BaseModel] | None = None,
 ) -> tuple[Any, Any]:
     """Build a deep agent with the standard skeleton.
 
@@ -305,6 +309,7 @@ def build_deep_agent(
         command_dispatcher=command_dispatcher,
         stop_hooks=stop_hooks,
         tool_search_loop_threshold=tool_search_loop_threshold,
+        output_schema=output_schema,
     )
 
     # --- Compose system prompt ---

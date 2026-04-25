@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langgraph_kit.core.commands.dispatch import CommandDispatcher
 from langgraph_kit.core.commands.middleware import CommandMiddleware
@@ -25,9 +25,13 @@ from langgraph_kit.core.resilience import (
     PostRunBackstopMiddleware,
     RuntimeStateMiddleware,
     StopHooksMiddleware,
+    StructuredOutputMiddleware,
     ToolErrorMiddleware,
     ToolLoopGuardMiddleware,
 )
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 
 def build_middleware_stack(
@@ -38,6 +42,7 @@ def build_middleware_stack(
     command_dispatcher: CommandDispatcher | None = None,
     stop_hooks: list[Any] | None = None,
     tool_search_loop_threshold: int = DEFAULT_LOOP_THRESHOLD,
+    output_schema: type[BaseModel] | None = None,
 ) -> tuple[list[Any], PressureMonitor]:
     """Build the standard middleware stack shared by all deep agents.
 
@@ -51,6 +56,12 @@ def build_middleware_stack(
     ``tool_search_loop_threshold`` controls the soft loop-detection
     nudge emitted after ``N`` consecutive ``tool_search`` calls.
     Defaults to :data:`DEFAULT_LOOP_THRESHOLD`. Set to ``0`` to disable.
+
+    ``output_schema`` is opt-in: when a Pydantic model class is supplied,
+    a :class:`StructuredOutputMiddleware` is appended to validate the
+    agent's terminal message and retry on schema mismatch (capped). When
+    ``None`` (default), no validation middleware is added — agents that
+    return free-form text are unaffected.
     """
     middleware: list[Any] = []
 
@@ -79,8 +90,16 @@ def build_middleware_stack(
             EmptyTurnMiddleware(max_nudges=2),
             CompletionGuardMiddleware(min_tool_calls=1),
             StopHooksMiddleware(hooks=stop_hooks),
-            PostRunBackstopMiddleware(),
         ]
     )
+
+    # Structured-output validation slots after the empty-turn / completion
+    # guards (they ensure a turn exists at all) and before PostRunBackstop
+    # (the schema check is a richer terminal-state check than the backstop's
+    # generic last-resort message).
+    if output_schema is not None:
+        middleware.append(StructuredOutputMiddleware(schema=output_schema))
+
+    middleware.append(PostRunBackstopMiddleware())
 
     return middleware, pressure_monitor

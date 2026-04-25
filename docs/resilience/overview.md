@@ -11,6 +11,7 @@ The resilience system provides middleware that catches failure modes and prevent
 | [Tool Error](tool-error.md) | Structured error handling with transient retry |
 | [Post-Run Backstop](post-run.md) | Final checks after graph execution |
 | [Graceful Shutdown](graceful-shutdown.md) | Drain in-flight async sub-agent tasks on SIGTERM |
+| [Structured Output](structured-output.md) | Validate the agent's terminal message against a Pydantic schema |
 
 ## Middleware Stack Position
 
