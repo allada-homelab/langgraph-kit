@@ -158,6 +158,7 @@ def build_deep_agent(
     conditions: set[str] | None = None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
     output_schema: type[BaseModel] | None = None,
+    coordinator: bool = False,
 ) -> tuple[Any, Any]:
     """Build a deep agent with the standard skeleton.
 
@@ -310,6 +311,7 @@ def build_deep_agent(
         stop_hooks=stop_hooks,
         tool_search_loop_threshold=tool_search_loop_threshold,
         output_schema=output_schema,
+        tool_registry=tool_registry,
     )
 
     # --- Compose system prompt ---
@@ -366,12 +368,29 @@ def build_deep_agent(
     if plugin_registry is not None:
         merged_subagents.extend(plugin_registry.collect_workers())
 
+    # Coordinator profile narrows the tool surface to read-only and adds
+    # delegation prompt sections (CoordinatorMode.get_coordinator_tools()
+    # filters by ToolRisk.READ_ONLY, so plugin tools survive subject to
+    # the same risk filter as standard tools).
+    if coordinator:
+        from langgraph_kit.core.coordinator import CoordinatorMode
+
+        coord = CoordinatorMode(tool_registry)
+        compiled_tools = coord.get_coordinator_tools()
+        # Append coordinator prompt sections before re-rendering the
+        # system prompt so they're folded into the same composition pass.
+        section_registry.register_many(coord.get_coordinator_sections())
+        active_conditions |= coord.get_conditions()
+        system_prompt = composer.compose_sections_only(conditions=active_conditions)
+    else:
+        compiled_tools = tool_registry.compile_tools()
+
     # ``subagents`` is a list of dict-shaped specs (deepagents accepts both
     # the typed ``SubAgent`` dataclass and the dict form at runtime, but
     # the stub only types the dataclass path).
     graph = _create(
         model=llm,
-        tools=tool_registry.compile_tools(),
+        tools=compiled_tools,
         system_prompt=system_prompt,
         middleware=middleware,
         subagents=merged_subagents,  # pyright: ignore[reportArgumentType]

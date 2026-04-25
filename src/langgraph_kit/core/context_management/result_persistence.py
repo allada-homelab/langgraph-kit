@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain.agents.middleware.types import AgentMiddleware
 
 from langgraph_kit.core.tools.result_retrieval import tool_results_namespace
+
+if TYPE_CHECKING:
+    from langgraph_kit.core.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +25,17 @@ DEFAULT_PREVIEW_LENGTH = 300
 class ResultPersistenceMiddleware(AgentMiddleware):  # type: ignore[misc]
     """Persists large tool results to Store, replaces with compact preview + reference.
 
-    When a tool returns a result larger than `persist_threshold` chars:
+    When a tool returns a result larger than the effective threshold:
     1. Persists the full result to Store under ("tool_results", thread_id)
     2. Replaces the inline result with a preview + retrieval reference
     3. The agent can later retrieve the full result using the retrieve tool
+
+    The threshold is per-tool when ``ToolCapability.max_output_chars`` is
+    set (look-up via the optional ``tool_registry`` constructor arg), and
+    falls back to the middleware's ``persist_threshold`` otherwise. A
+    tool can opt out of persistence entirely by setting
+    ``offload_large_results=False`` on its capability — the result then
+    stays inline regardless of size.
 
     Namespacing by thread_id prevents cross-thread reads of persisted refs.
     """
@@ -34,10 +44,13 @@ class ResultPersistenceMiddleware(AgentMiddleware):  # type: ignore[misc]
         self,
         persist_threshold: int = DEFAULT_PERSIST_THRESHOLD,
         preview_length: int = DEFAULT_PREVIEW_LENGTH,
+        *,
+        tool_registry: ToolRegistry | None = None,
     ) -> None:
         super().__init__()
         self._threshold = persist_threshold
         self._preview_length = preview_length
+        self._tool_registry = tool_registry
 
     async def awrap_tool_call(self, request: Any, handler: Any) -> Any:
         """Execute tool, then persist and replace if result is large."""
@@ -45,7 +58,29 @@ class ResultPersistenceMiddleware(AgentMiddleware):  # type: ignore[misc]
 
         # Only process ToolMessage results with string content
         content = getattr(result, "content", None)
-        if not isinstance(content, str) or len(content) <= self._threshold:
+        if not isinstance(content, str):
+            return result
+
+        # Per-tool overrides on the capability, when a registry is wired in.
+        tool_name = request.tool_call.get("name", "unknown")
+        cap = (
+            self._tool_registry.find_by_tool_name(tool_name)
+            if self._tool_registry is not None
+            else None
+        )
+
+        # offload_large_results=False on the capability is an explicit
+        # opt-out: keep the result inline regardless of size.
+        if cap is not None and not cap.offload_large_results:
+            return result
+
+        # Effective threshold: per-tool override beats the middleware default.
+        effective_threshold = (
+            cap.max_output_chars
+            if cap is not None and cap.max_output_chars is not None
+            else self._threshold
+        )
+        if len(content) <= effective_threshold:
             return result
 
         # Persist to store
@@ -53,7 +88,6 @@ class ResultPersistenceMiddleware(AgentMiddleware):  # type: ignore[misc]
         if store is None:
             return result  # No store available, leave inline
 
-        tool_name = request.tool_call.get("name", "unknown")
         tool_call_id = request.tool_call.get("id", "")
         result_key = hashlib.sha256(f"{tool_call_id}:{tool_name}".encode()).hexdigest()[
             :16

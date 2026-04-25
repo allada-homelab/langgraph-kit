@@ -7,6 +7,40 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Wire up four `ToolCapability` orphan fields.** Three previously-advisory
+  fields are now enforced by bundled middleware (Fixes
+  [#6](https://github.com/allada-homelab/langgraph-kit/issues/6)):
+  - `max_output_chars` (new field) — per-tool override of
+    `ResultPersistenceMiddleware`'s threshold so chatty tools (`read_file`)
+    can declare their own caps. The legacy `max_output_tokens` is kept as
+    an advisory hint for caller-supplied tokenizer-aware middleware.
+  - `offload_large_results` — `ResultPersistenceMiddleware` now consults
+    the flag; setting `False` opts the tool out of persistence regardless
+    of size. **Default flipped from `False` to `True`** (see Changed).
+  - `interrupt_before` — new `AutoInterruptMiddleware` (in
+    `core.hitl.auto_interrupt`) auto-pauses for HITL approval before any
+    tool whose capability declares this flag. Coexists with the manual
+    `approve_action` tool: use `interrupt_before` for tools whose risk is
+    intrinsic, `approve_action` when the agent should decide whether to
+    ask.
+  - `coordinator=True` keyword on `build_deep_agent` wires `CoordinatorMode`
+    (was previously unreachable from the public builder): narrows the tool
+    surface to `ToolRisk.READ_ONLY`, merges coordinator prompt sections,
+    and activates the `coordinator` / `orchestration` section conditions.
+  - The `SkillMetadata.allowed_tools` re-add is deferred — it depends on
+    `#7` (active skill state) and re-adding the field without that
+    plumbing would re-introduce the same dead-contract problem.
+
+### Changed
+
+- **`ToolCapability.offload_large_results` default flipped from `False`
+  to `True`** to match the expected meaning of the flag now that
+  `ResultPersistenceMiddleware` honors it. Pre-flip the field was an
+  ignored hint; callers who set `False` explicitly now get the opt-out
+  behaviour they were trying to express. Callers who relied on the
+  silent default see no behaviour change for over-threshold results
+  (which were already being persisted unconditionally).
+
 - **Opt-in structured-output validation via `StructuredOutputMiddleware`.**
   Pass `output_schema=` to `build_deep_agent` and the agent's terminal
   `AIMessage` is validated against your Pydantic schema. The model is
