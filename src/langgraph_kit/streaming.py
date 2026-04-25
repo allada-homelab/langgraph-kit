@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
+import time
 from typing import TYPE_CHECKING, Any
 
 from langgraph_kit.core.artifacts import ARTIFACT_SENTINEL
@@ -30,6 +32,28 @@ logger = logging.getLogger(__name__)
 _TRAILING_ARTIFACT_RE = re.compile(r"\s*```(?:json)?\s*\[\s*\]\s*```\s*$")
 _BUFFER_SIZE = 30  # characters — enough for "```json\n[]\n```"
 _MAX_TOOL_OUTPUT_SSE = 3000  # truncate tool outputs longer than this in the SSE stream
+
+# Default cadence for heartbeats during quiet periods. Many proxies
+# (nginx default proxy_read_timeout = 60s, AWS NLB idle = 350s, Cloudflare
+# idle = 100s) drop idle SSE connections; 15s leaves comfortable margin
+# without flooding healthy streams with no-ops.
+DEFAULT_HEARTBEAT_INTERVAL_SECONDS: float = 15.0
+
+
+def _sse_chunk(seq: int, payload: dict[str, Any] | str) -> str:
+    """Format an SSE chunk with an ``id:`` line and ``data:`` body.
+
+    ``payload`` is JSON-encoded when given as a dict, or used verbatim
+    when given as a string (e.g. the ``[DONE]`` sentinel). The ``id:``
+    line is part of the SSE wire format and lets reconnecting clients
+    tell the server (via the ``Last-Event-ID`` header) which events
+    they have already seen — the durable replay log that consumes that
+    id is a follow-up; for now the id makes the contract forward-
+    compatible.
+    """
+    body = json.dumps(payload) if isinstance(payload, dict) else payload
+    return f"id: {seq}\ndata: {body}\n\n"
+
 
 # Map sentinel prefixes to SSE event keys
 _SENTINEL_MAP: dict[str, str] = {
@@ -62,6 +86,7 @@ async def stream_agent_events(
     config: dict[str, Any],
     *,
     store: Any | None = None,
+    heartbeat_interval: float | None = DEFAULT_HEARTBEAT_INTERVAL_SECONDS,
 ) -> AsyncGenerator[str]:
     """Stream LangGraph events as SSE chunks.
 
@@ -71,7 +96,24 @@ async def stream_agent_events(
       - ``{"tool_call_start": {...}}`` — tool invocation started
       - ``{"tool_call_end": {...}}`` — tool invocation completed
       - ``{"interrupt": {...}}`` — graph paused for human input
+      - ``{"heartbeat": {"ts": ..., "last_event_id": ...}}`` — emitted
+        every ``heartbeat_interval`` seconds during quiet periods so
+        proxies / load balancers don't drop the idle connection
       - ``[DONE]`` — stream finished
+
+    Every emitted chunk carries an SSE ``id:`` line with a per-stream
+    monotonically-increasing sequence number. Clients can record the
+    most recent id (e.g. via ``EventSource.lastEventId``) and pass it
+    back as ``Last-Event-ID`` on reconnect; the durable replay log
+    that honors that header is a follow-up — for now the id makes the
+    contract forward-compatible.
+
+    Parameters
+    ----------
+    heartbeat_interval:
+        Seconds between heartbeat chunks during periods with no real
+        events. ``None`` disables heartbeats. Defaults to
+        :data:`DEFAULT_HEARTBEAT_INTERVAL_SECONDS` (15 s).
 
     If ``store`` is provided, marks the thread as busy for the duration
     of the run so that the queue endpoints can detect active threads.
@@ -89,6 +131,10 @@ async def stream_agent_events(
 
     started_text = False
     stream_error: Exception | None = None
+    # Per-stream monotonic sequence for SSE ``id:`` lines. Resets per
+    # request because the durable replay log is not yet wired in;
+    # clients should treat ids as unique within a single connection.
+    seq = 0
 
     try:
         # Accumulate text so we can detect trailing artifacts from models
@@ -122,85 +168,163 @@ async def stream_agent_events(
             stream_error = exc
             event_iter = _empty_aiter()
 
-        async for event in _guarded_events(event_iter):
-            if isinstance(event, _StreamError):
-                stream_error = event.exc
-                break
-            # Drop events from kit-internal LLM calls (memory extraction,
-            # consolidation, context compaction, routing). Without this
-            # filter, their tokens and tool-call metadata leak into the
-            # user-facing transcript — see langgraph_kit.core.internal_tags.
-            if INTERNAL_TAG in (event.get("tags") or ()):
-                continue
+        # Producer-consumer split so heartbeats can race against the
+        # next-event fetch without cancelling the upstream iterator
+        # (cancelling an async generator mid-iteration is unsafe — the
+        # iterator may have buffered state that the cancel doesn't
+        # restore). The producer drains _guarded_events into a small
+        # queue; the consumer pulls with a timeout to emit heartbeats
+        # during quiet periods.
+        event_queue: asyncio.Queue[Any] = asyncio.Queue(maxsize=1)
+        _PRODUCER_DONE = object()  # local sentinel — None is a valid event payload
 
-            kind = event["event"]
+        async def _producer() -> None:
+            try:
+                async for ev in _guarded_events(event_iter):
+                    await event_queue.put(ev)
+            finally:
+                await event_queue.put(_PRODUCER_DONE)
 
-            # --- Tool call start ---
-            if kind == "on_tool_start":
-                tool_input = event["data"].get("input", {})
-                name = event.get("name", "unknown")
-                run_id = event.get("run_id", "")
-                yield f"data: {json.dumps({'tool_call_start': {'id': run_id, 'name': name, 'args': tool_input}})}\n\n"
-                continue
+        producer_task = asyncio.create_task(_producer())
 
-            # --- Tool call end (artifacts + normal output) ---
-            if kind == "on_tool_end":
-                output = event["data"].get("output", "")
-                name = event.get("name", "unknown")
-                run_id = event.get("run_id", "")
-
-                # Check for sentinel-prefixed tool outputs → emit as dedicated SSE events
-                sentinel_event = (
-                    _parse_sentinel(output) if isinstance(output, str) else None
-                )
-                if sentinel_event:
-                    yield f"data: {json.dumps(sentinel_event)}\n\n"
+        try:
+            while True:
+                if heartbeat_interval is None:
+                    event = await event_queue.get()
                 else:
-                    # Normal tool output
-                    output_str = str(output) if not isinstance(output, str) else output
-                    # Truncate very long outputs for the SSE stream
-                    if len(output_str) > _MAX_TOOL_OUTPUT_SSE:
-                        output_str = (
-                            output_str[:_MAX_TOOL_OUTPUT_SSE] + "...(truncated)"
+                    try:
+                        event = await asyncio.wait_for(
+                            event_queue.get(), timeout=heartbeat_interval
                         )
-                    yield f"data: {json.dumps({'tool_call_end': {'id': run_id, 'name': name, 'output': output_str}})}\n\n"
-                continue
+                    except TimeoutError:
+                        # Quiet period — emit a heartbeat so proxies don't
+                        # drop the connection. Carries the most recent
+                        # event id so a future replay layer (or a savvy
+                        # client) knows where to resume from.
+                        yield _sse_chunk(
+                            seq,
+                            {
+                                "heartbeat": {
+                                    "ts": time.time(),
+                                    "last_event_id": seq - 1,
+                                }
+                            },
+                        )
+                        seq += 1
+                        continue
 
-            # --- Text token events ---
-            if kind != "on_chat_model_stream":
-                continue
-            chunk = event["data"].get("chunk")
-            if chunk is None:
-                continue
-            # Skip tool call chunks — only yield text tokens
-            if getattr(chunk, "tool_call_chunks", None):
-                continue
-            token = chunk.content
-            if not isinstance(token, str) or not token:
-                continue
+                if event is _PRODUCER_DONE:
+                    break
+                if isinstance(event, _StreamError):
+                    stream_error = event.exc
+                    break
 
-            # Drop leading whitespace prefix to avoid blank chat bubble
-            if not started_text:
-                token = token.lstrip()
-                if not token:
+                # Drop events from kit-internal LLM calls (memory extraction,
+                # consolidation, context compaction, routing). Without this
+                # filter, their tokens and tool-call metadata leak into the
+                # user-facing transcript — see langgraph_kit.core.internal_tags.
+                if INTERNAL_TAG in (event.get("tags") or ()):
                     continue
-                started_text = True
 
-            accumulated += token
+                kind = event["event"]
 
-            # Yield text that's safely past the buffer window.
-            # We hold back the tail so we can strip trailing artifacts
-            # once the stream ends.
-            safe_end = max(yielded_up_to, len(accumulated) - _BUFFER_SIZE)
-            if safe_end > yielded_up_to:
-                yield f"data: {json.dumps({'token': accumulated[yielded_up_to:safe_end]})}\n\n"
-                yielded_up_to = safe_end
+                # --- Tool call start ---
+                if kind == "on_tool_start":
+                    tool_input = event["data"].get("input", {})
+                    name = event.get("name", "unknown")
+                    run_id = event.get("run_id", "")
+                    yield _sse_chunk(
+                        seq,
+                        {
+                            "tool_call_start": {
+                                "id": run_id,
+                                "name": name,
+                                "args": tool_input,
+                            }
+                        },
+                    )
+                    seq += 1
+                    continue
+
+                # --- Tool call end (artifacts + normal output) ---
+                if kind == "on_tool_end":
+                    output = event["data"].get("output", "")
+                    name = event.get("name", "unknown")
+                    run_id = event.get("run_id", "")
+
+                    # Check for sentinel-prefixed tool outputs → emit as dedicated SSE events
+                    sentinel_event = (
+                        _parse_sentinel(output) if isinstance(output, str) else None
+                    )
+                    if sentinel_event:
+                        yield _sse_chunk(seq, sentinel_event)
+                        seq += 1
+                    else:
+                        # Normal tool output
+                        output_str = (
+                            str(output) if not isinstance(output, str) else output
+                        )
+                        # Truncate very long outputs for the SSE stream
+                        if len(output_str) > _MAX_TOOL_OUTPUT_SSE:
+                            output_str = (
+                                output_str[:_MAX_TOOL_OUTPUT_SSE] + "...(truncated)"
+                            )
+                        yield _sse_chunk(
+                            seq,
+                            {
+                                "tool_call_end": {
+                                    "id": run_id,
+                                    "name": name,
+                                    "output": output_str,
+                                }
+                            },
+                        )
+                        seq += 1
+                    continue
+
+                # --- Text token events ---
+                if kind != "on_chat_model_stream":
+                    continue
+                chunk = event["data"].get("chunk")
+                if chunk is None:
+                    continue
+                # Skip tool call chunks — only yield text tokens
+                if getattr(chunk, "tool_call_chunks", None):
+                    continue
+                token = chunk.content
+                if not isinstance(token, str) or not token:
+                    continue
+
+                # Drop leading whitespace prefix to avoid blank chat bubble
+                if not started_text:
+                    token = token.lstrip()
+                    if not token:
+                        continue
+                    started_text = True
+
+                accumulated += token
+
+                # Yield text that's safely past the buffer window.
+                # We hold back the tail so we can strip trailing artifacts
+                # once the stream ends.
+                safe_end = max(yielded_up_to, len(accumulated) - _BUFFER_SIZE)
+                if safe_end > yielded_up_to:
+                    yield _sse_chunk(
+                        seq, {"token": accumulated[yielded_up_to:safe_end]}
+                    )
+                    seq += 1
+                    yielded_up_to = safe_end
+        finally:
+            producer_task.cancel()
+            # Drain any queued event so the producer can finish cleanly.
+            await asyncio.gather(producer_task, return_exceptions=True)
 
         # --- Flush remaining buffered text, stripping trailing artifacts ---
         remaining = accumulated[yielded_up_to:]
         remaining = _TRAILING_ARTIFACT_RE.sub("", remaining)
         if remaining:
-            yield f"data: {json.dumps({'token': remaining})}\n\n"
+            yield _sse_chunk(seq, {"token": remaining})
+            seq += 1
 
         # --- Check final state for command results and interrupts ---
         try:
@@ -227,13 +351,17 @@ async def stream_agent_events(
                         and getattr(last, "type", "") == "ai"
                         and getattr(last, "content", "")
                     ):
-                        yield f"data: {json.dumps({'command_result': {'output': last.content}})}\n\n"
+                        yield _sse_chunk(
+                            seq, {"command_result": {"output": last.content}}
+                        )
+                        seq += 1
 
             if hasattr(state, "tasks") and state.tasks:
                 for task in state.tasks:
                     for intr in getattr(task, "interrupts", []):
                         value = intr.value if hasattr(intr, "value") else intr
-                        yield f"data: {json.dumps({'interrupt': value})}\n\n"
+                        yield _sse_chunk(seq, {"interrupt": value})
+                        seq += 1
         except Exception:
             logger.debug("Could not check interrupt state", exc_info=True)
 
@@ -241,7 +369,17 @@ async def stream_agent_events(
         trace_handler = config.get("metadata", {}).get("_trace_handler")
         if trace_handler is not None:
             trace = trace_handler.get_trace()
-            yield f"data: {json.dumps({'trace': {'trace_id': trace.trace_id, 'duration_ms': round(trace.duration_ms, 2), 'span_count': trace.span_count}})}\n\n"
+            yield _sse_chunk(
+                seq,
+                {
+                    "trace": {
+                        "trace_id": trace.trace_id,
+                        "duration_ms": round(trace.duration_ms, 2),
+                        "span_count": trace.span_count,
+                    }
+                },
+            )
+            seq += 1
             # Save trace to store if available
             if store is not None:
                 try:
@@ -258,7 +396,18 @@ async def stream_agent_events(
             usage_list = budget_callback.get_accumulated()
             if usage_list:
                 total = budget_callback.get_total()
-                yield f"data: {json.dumps({'budget': {'tokens_used': total.total_tokens, 'input_tokens': total.input_tokens, 'output_tokens': total.output_tokens, 'estimated_cost_usd': round(total.estimated_cost_usd, 6)}})}\n\n"
+                yield _sse_chunk(
+                    seq,
+                    {
+                        "budget": {
+                            "tokens_used": total.total_tokens,
+                            "input_tokens": total.input_tokens,
+                            "output_tokens": total.output_tokens,
+                            "estimated_cost_usd": round(total.estimated_cost_usd, 6),
+                        }
+                    },
+                )
+                seq += 1
 
                 # Persist accumulated usage into the BudgetManager so the
                 # state survives the stream. Without this the callback
@@ -290,9 +439,11 @@ async def stream_agent_events(
         # client can distinguish "backend failure" from "run completed".
         if stream_error is not None:
             message = _format_stream_error(stream_error)
-            yield f"data: {json.dumps({'error': {'message': message}})}\n\n"
+            yield _sse_chunk(seq, {"error": {"message": message}})
+            seq += 1
 
-        yield "data: [DONE]\n\n"
+        yield _sse_chunk(seq, "[DONE]")
+        seq += 1
     finally:
         if tracker and thread_id:
             await tracker.mark_idle(thread_id)

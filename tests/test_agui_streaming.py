@@ -325,10 +325,20 @@ async def test_stream_agui_events_sse_json_parse_failure_is_skipped(
 
 
 def test_sse_done_sentinel_is_recognized() -> None:
-    """Regression: ``data: [DONE]`` should end the stream cleanly."""
-    # Covered indirectly above but asserting the literal too.
-    payload = "data: [DONE]\n\n"
-    assert payload.strip().removeprefix("data: ") == "[DONE]"
+    """Regression: ``data: [DONE]`` should end the stream cleanly.
+
+    With SSE ``id:`` lines now prepended to every chunk, the sentinel
+    is rendered as ``id: <n>\\ndata: [DONE]\\n\\n``. A correct parser
+    looks at every line and only acts on the one starting with
+    ``data:``.
+    """
+    payload = "id: 7\ndata: [DONE]\n\n"
+    data_line = next(
+        line.removeprefix("data: ").strip()
+        for line in payload.split("\n")
+        if line.startswith("data: ")
+    )
+    assert data_line == "[DONE]"
     # sanity: json.loads should fail on this.
     with pytest.raises(json.JSONDecodeError):
         json.loads("[DONE]")

@@ -63,8 +63,15 @@ async def test_stream_emits_error_event_and_done_on_failure() -> None:
     assert done_idx is not None, f"No [DONE] frame in {frames!r}"
     assert error_idx < done_idx, "error must precede [DONE]"
 
-    # Error frame carries a readable exception type + message.
-    error_payload = json.loads(frames[error_idx].removeprefix("data: ").strip())
+    # Error frame carries a readable exception type + message. Frames now
+    # have an SSE ``id:`` line preceding the ``data:`` line — extract
+    # the data line specifically.
+    data_line = next(
+        line.removeprefix("data: ").strip()
+        for line in frames[error_idx].split("\n")
+        if line.startswith("data: ")
+    )
+    error_payload = json.loads(data_line)
     assert "error" in error_payload
     assert "RuntimeError" in error_payload["error"]["message"]
     assert "upstream boom" in error_payload["error"]["message"]
