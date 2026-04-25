@@ -7,6 +7,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Disaster-recovery export / import.** New
+  `langgraph_kit.core.dr.DisasterRecoveryManager` exports Store
+  contents as JSON Lines (manifest header first, one record per line)
+  and re-imports the same shape back. Three import modes — `replace`
+  (clear each namespace before importing, the loud default),
+  `append` (skip existing keys), `merge` (last value wins). Manifest
+  carries `schema_version` (currently 1) so future format changes
+  reject old files cleanly. Not a substitute for full database
+  backups — a complement for selective restore (per-tenant,
+  per-thread, etc.). The HTTP admin endpoint and the CLI integration
+  are deferred to a follow-up. Fixes
+  [#35](https://github.com/allada-homelab/langgraph-kit/issues/35).
+
 - **Schema versioning + lazy forward migrations.** New
   `langgraph_kit.core.migrations` module ships a `Versioned` Pydantic
   mixin (adds `model_version: int`), a `Migration` (forward step
