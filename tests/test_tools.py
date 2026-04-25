@@ -47,7 +47,12 @@ class TestToolCapability:
         assert cap.profiles is None
         assert cap.worker_types is None
         assert cap.max_output_tokens is None
-        assert cap.offload_large_results is False
+        assert cap.max_output_chars is None
+        # Default flipped from False to True in #6 — see the
+        # ResultPersistenceMiddleware wiring. Pre-flip callers who
+        # relied on the silent no-op behavior get the documented
+        # default-True behavior now.
+        assert cap.offload_large_results is True
         assert cap.interrupt_before is False
 
     def test_capability_with_all_fields(self) -> None:

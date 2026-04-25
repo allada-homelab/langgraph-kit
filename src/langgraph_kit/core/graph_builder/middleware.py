@@ -13,6 +13,7 @@ from langgraph_kit.core.context_management.pressure_middleware import (
 from langgraph_kit.core.context_management.result_persistence import (
     ResultPersistenceMiddleware,
 )
+from langgraph_kit.core.hitl import AutoInterruptMiddleware
 from langgraph_kit.core.memory.extraction import AutoMemoryExtractor
 from langgraph_kit.core.memory.extraction_middleware import ExtractionMiddleware
 from langgraph_kit.core.memory.models import MemoryScope
@@ -33,6 +34,8 @@ from langgraph_kit.core.resilience import (
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
+    from langgraph_kit.core.tools.registry import ToolRegistry
+
 
 def build_middleware_stack(
     *,
@@ -43,6 +46,7 @@ def build_middleware_stack(
     stop_hooks: list[Any] | None = None,
     tool_search_loop_threshold: int = DEFAULT_LOOP_THRESHOLD,
     output_schema: type[BaseModel] | None = None,
+    tool_registry: ToolRegistry | None = None,
 ) -> tuple[list[Any], PressureMonitor]:
     """Build the standard middleware stack shared by all deep agents.
 
@@ -74,6 +78,12 @@ def build_middleware_stack(
             RuntimeStateMiddleware(),
             QueuedInputMiddleware(),
             ToolErrorMiddleware(max_retries=1),
+            # Auto-interrupt sits BEFORE the tool runs, so it has to be
+            # outermost on the tool-wrapping side after the error wrap
+            # (errors happen during execution; the interrupt prevents
+            # execution entirely). Tools without ``interrupt_before``
+            # set on their capability pass through unchanged.
+            AutoInterruptMiddleware(tool_registry=tool_registry),
             # Loop guard wraps tool calls BEFORE ResultPersistence so the
             # advisory appears in the full-text content rather than in
             # the persisted preview, and the model sees it on its next
@@ -83,7 +93,7 @@ def build_middleware_stack(
                 threshold=tool_search_loop_threshold,
             ),
             PressureMiddleware(pressure_monitor, llm=llm),
-            ResultPersistenceMiddleware(),
+            ResultPersistenceMiddleware(tool_registry=tool_registry),
             ExtractionMiddleware(
                 AutoMemoryExtractor(memory_mgr, llm), scope=MemoryScope.USER
             ),

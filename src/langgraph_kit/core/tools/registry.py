@@ -35,6 +35,21 @@ class ToolRegistry:
     def get(self, tool_id: str) -> ToolCapability | None:
         return self._tools.get(tool_id)
 
+    def find_by_tool_name(self, name: str) -> ToolCapability | None:
+        """Look up a capability by the LLM-visible tool name.
+
+        Tool names (the function ``__name__``, e.g. ``save_memory``) are
+        what appear in ``tool_call["name"]``. Capability ``id`` values
+        are typically prefixed (e.g. ``memory.save_memory``) so the id
+        lookup ``.get()`` does not match. This helper closes that gap
+        for middleware that needs to consult a capability based on the
+        tool the model just called.
+        """
+        for cap in self._tools.values():
+            if cap.name == name:
+                return cap
+        return None
+
     def remove(self, tool_id: str) -> None:
         self._tools.pop(tool_id, None)
 

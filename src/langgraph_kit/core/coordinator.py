@@ -1,14 +1,11 @@
 """Coordinator mode — supervisor profile emphasizing orchestration over direct execution.
 
-.. note::
-    This module is **not wired into any shipped graph**. It defines
-    reusable prompt sections and a tool-surface narrowing helper for
-    callers that want to build a coordinator/delegation profile
-    themselves. See ``CoordinatorMode.get_conditions()`` for the
-    condition keys that must be passed into
-    ``SectionRegistry.get_active`` for the sections to appear. If the
-    kit later adds a shipped coordinator agent this note should be
-    removed.
+Wire into any deep agent by passing ``coordinator=True`` to
+:func:`langgraph_kit.graphs.build_deep_agent` — the kit then narrows
+the tool surface to ``ToolRisk.READ_ONLY``, merges the coordinator
+prompt sections, and activates the ``coordinator`` /
+``orchestration`` section conditions. Plugin-contributed tools still
+flow through, subject to the same read-only filter.
 """
 
 from __future__ import annotations
