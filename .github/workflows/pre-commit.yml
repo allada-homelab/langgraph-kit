@@ -30,7 +30,7 @@ jobs:
           cache-dependency-glob: |
             pyproject.toml
             uv.lock
-      - run: uv sync --all-extras --all-groups
+      - run: uv sync --locked --all-extras --all-groups
       - id: precommit
         run: uv run pre-commit run --from-ref origin/${GITHUB_BASE_REF} --to-ref HEAD --show-diff-on-failure
         continue-on-error: true

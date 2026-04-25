@@ -29,7 +29,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
-      - run: uv sync --all-extras --all-groups
+      - run: uv sync --locked --all-extras --all-groups
 
       - name: Run prompt-bench unit tests
         run: uv run pytest tests/prompt_bench -v
