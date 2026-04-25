@@ -20,7 +20,7 @@ class TestGetBaselineSections:
         assert a is not b  # caller can mutate without affecting source
 
     def test_unknown_profile(self) -> None:
-        with pytest.raises(KeyError, match=r"[Uu]nknown agent profile"):
+        with pytest.raises(KeyError, match="Unknown agent profile"):
             get_baseline_sections("nonexistent_profile")
 
 
