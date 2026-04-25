@@ -7,6 +7,21 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Schema versioning + lazy forward migrations.** New
+  `langgraph_kit.core.migrations` module ships a `Versioned` Pydantic
+  mixin (adds `model_version: int`), a `Migration` (forward step
+  ``v → v+1`` operating on dicts pre-validation), a `MigrationRegistry`
+  keyed by `(model_class, source_version)`, and a `migrate_dict`
+  helper that walks the registry until a payload reaches the model's
+  current `MODEL_VERSION`. Forward-only by design (down-migrations are
+  easy to lose data on); legacy rows without a `model_version` field
+  are treated as v1 and walked forward; missing steps raise
+  `MissingMigrationError` so deployments fail loud rather than
+  silently misread old data. Adopting this for the kit's own models
+  (`MemoryRecord`, `SessionNotebook`, `AsyncTask`, …) lands as those
+  models bump their schemas. Fixes
+  [#34](https://github.com/allada-homelab/langgraph-kit/issues/34).
+
 - **Per-user data lifecycle: export / delete / anonymize.** New
   `langgraph_kit.core.lifecycle.DataLifecycleManager` exposes the
   GDPR-friendly trio over the LangGraph Store. Operates on the
