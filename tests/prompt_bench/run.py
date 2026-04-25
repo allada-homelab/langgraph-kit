@@ -560,6 +560,7 @@ def _serialize_report(report: BenchReport) -> str:
                     "final_output": s.final_output,
                     "tool_calls": s.tool_calls,
                     "error": s.error,
+                    "user_input": s.user_input,
                 }
                 for s in report.samples
             ],
@@ -581,6 +582,7 @@ def _deserialize_report(path: Path) -> BenchReport:
                 final_output=s["final_output"],
                 tool_calls=s.get("tool_calls", []),
                 error=s.get("error"),
+                user_input=s.get("user_input", ""),
             )
             for s in payload["samples"]
         ],

@@ -40,13 +40,25 @@ class BenchSample:
     final_output: str
     tool_calls: list[dict[str, Any]] = field(default_factory=list)
     error: str | None = None
+    user_input: str = ""
+    """Full user-facing input the agent saw — joined ``USER: ...`` turns.
+
+    Stored on the sample so the pairwise judge can anchor its decision
+    in what was actually asked. Without this the judge only sees the
+    output text + scenario id and can't tell whether ``"No."`` is a
+    refusal or a valid answer.
+    """
 
     def to_trace(self) -> TraceData:
         """Convert to the canonical :class:`TraceData` shape used by metrics."""
         return TraceData(
             id=f"{self.scenario_id}#{self.overlay_name}#{self.sample_index}",
             name=self.scenario_id,
-            input={"scenario": self.scenario_id, "overlay": self.overlay_name},
+            input={
+                "scenario": self.scenario_id,
+                "overlay": self.overlay_name,
+                "user_input": self.user_input,
+            },
             output=self.final_output,
             tags=[f"overlay:{self.overlay_name}", f"scenario:{self.scenario_id}"],
             duration_ms=self.duration_ms,

@@ -160,13 +160,18 @@ def _build_reference_deep_agent(overlay: PromptOverlay, deps: Any) -> Any:
 
     sections = apply_overlay_to_sections("reference_deep_agent", overlay)
     checkpointer, store = deps
-    return build_deep_agent(
+    # ``build_deep_agent`` returns ``(graph, command_dispatcher)``; the
+    # bench only needs the graph, so unpack and discard the dispatcher
+    # (the e2e suite + ``examples/reference_deep_agent.py`` follow the
+    # same pattern).
+    graph, _dispatcher = build_deep_agent(
         agent_name="reference-deep-agent",
         core_sections=sections,
         subagents=GENERAL_WORKERS,
         checkpointer=checkpointer,
         store=store,
     )
+    return graph
 
 
 def _build_coding_agent(overlay: PromptOverlay, deps: Any) -> Any:
@@ -180,13 +185,14 @@ def _build_coding_agent(overlay: PromptOverlay, deps: Any) -> Any:
 
     sections = apply_overlay_to_sections("coding_agent", overlay)
     checkpointer, store = deps
-    return build_deep_agent(
+    graph, _dispatcher = build_deep_agent(
         agent_name="coding-agent",
         core_sections=sections,
         subagents=CODING_WORKERS,
         checkpointer=checkpointer,
         store=store,
     )
+    return graph
 
 
 def _require_profile(name: str) -> ProfileSpec:
