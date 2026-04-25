@@ -95,7 +95,12 @@ def build_memory_tools(memory_manager: PersistentMemoryManager) -> list[Any]:
         query: str,
         scope: str = "user",
     ) -> str:
-        """Search memories by semantic relevance.
+        """Search saved memories by relevance to a query.
+
+        Ranking uses cosine similarity on embeddings when the application
+        configured ``AgentConfig.memory_embedding_fn``; otherwise it
+        scores by case-insensitive token overlap against title, summary,
+        and body. Either way it returns the most relevant records first.
 
         Args:
             query: Search query describing what you're looking for

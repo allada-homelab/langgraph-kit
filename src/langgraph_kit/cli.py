@@ -27,6 +27,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langgraph_kit._config import get_config
 from langgraph_kit.core.context_management.pressure import PressureMonitor
 from langgraph_kit.core.memory.persistent import PersistentMemoryManager
 from langgraph_kit.core.prompt_assembly.activation import ACTIVATION_SECTIONS
@@ -100,7 +101,9 @@ def build_{{fn_name}}(
     )
 
     llm = build_llm()
-    memory_mgr = PersistentMemoryManager(store)
+    memory_mgr = PersistentMemoryManager(
+        store, embedding_fn=get_config().memory_embedding_fn
+    )
 
     # --- Tools ---
     tool_registry = ToolRegistry()

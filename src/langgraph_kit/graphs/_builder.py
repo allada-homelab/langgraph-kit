@@ -30,6 +30,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from langgraph_kit._config import get_config
 from langgraph_kit.core.context_management.pressure import PressureMonitor
 from langgraph_kit.core.graph_builder.backend import build_backend_factory
 from langgraph_kit.core.graph_builder.commands import build_command_dispatcher
@@ -220,7 +221,9 @@ def build_deep_agent(
     )
 
     llm = build_llm()
-    memory_mgr = PersistentMemoryManager(store)
+    memory_mgr = PersistentMemoryManager(
+        store, embedding_fn=get_config().memory_embedding_fn
+    )
 
     # Normalize the plugin input so the rest of the builder only has to
     # deal with one shape. Accept either a pre-built PluginRegistry or a

@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import dataclasses
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
 
 
 @dataclass(frozen=True)
@@ -47,6 +50,17 @@ class AgentConfig:
     # tasks before cancelling them during FastAPI lifespan teardown.
     # Set to 0 to skip draining (cancel immediately).
     shutdown_timeout_seconds: float = 30.0
+
+    # Memory: optional async embedding function for semantic search.
+    # When None (default), `PersistentMemoryManager.search` falls back to
+    # keyword token-overlap scoring. When provided, records are indexed on
+    # create/update and search ranks by cosine similarity. The callable is
+    # invoked batch-style: takes a list of texts, returns a list of vectors.
+    # No silent semantic/keyword mixing — the presence of the callable is
+    # the only signal that semantic search is enabled.
+    memory_embedding_fn: Callable[[list[str]], Awaitable[list[list[float]]]] | None = (
+        dataclasses.field(default=None, compare=False)
+    )
 
     def __repr__(self) -> str:
         """Mask secrets in repr to prevent accidental leakage in logs.

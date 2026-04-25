@@ -302,19 +302,20 @@ class TestPersistentMemoryManager:
     async def test_search_filter_by_type_restricts_namespace_scan(
         self, manager: PersistentMemoryManager
     ) -> None:
-        """``search(memory_type=...)`` only hits that type's namespace.
+        """``search(memory_type=...)`` only returns records of that type.
 
-        The search API takes a ``memory_type`` filter that narrows the
-        scan to one namespace. This test confirms that records of other
-        types aren't returned even though MockStore returns whatever is
-        in the namespace it's given.
+        The search API takes a ``memory_type`` filter that narrows results
+        to one namespace. Without an embedding function configured the
+        manager uses keyword-overlap scoring; both records share the
+        default "Detailed body content" so "detailed" matches both, and
+        the type filter is the only thing keeping user-typed out.
         """
         await manager.create(_make_record(title="user-typed", type=MemoryType.USER))
         await manager.create(
             _make_record(title="feedback-typed", type=MemoryType.FEEDBACK)
         )
         results = await manager.search(
-            "anything", MemoryScope.USER, memory_type=MemoryType.FEEDBACK
+            "detailed", MemoryScope.USER, memory_type=MemoryType.FEEDBACK
         )
         titles = {r.title for r in results}
         assert titles == {"feedback-typed"}, (
