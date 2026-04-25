@@ -7,6 +7,20 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Outbound PII / secret redaction.** New `OutputSafetyMiddleware`
+  scans the most recent `AIMessage` after every turn and rewrites
+  matched substrings with `[REDACTED]` before the message reaches the
+  user. Default mode `"redact"`; `"warn"` flags only via
+  `additional_kwargs`; `"off"` disables. Configurable via
+  `AgentConfig.output_safety_mode`. Patterns cover credentials (API
+  keys, GitHub PATs, Bearer tokens, AWS / Slack / Stripe / GCP) and
+  PII (email, US phone, SSN, credit-card with Luhn validation to
+  suppress 16-digit-but-not-actually-a-card false positives).
+  Helpers `scan_for_unsafe_output` and `redact` are exported for
+  in-process callers. Per-turn idempotent (won't re-redact the
+  placeholder). Fixes
+  [#23](https://github.com/allada-homelab/langgraph-kit/issues/23).
+
 - **Inbound prompt-injection scanner.** New `langgraph_kit.core.security`
   module ships `INJECTION_PATTERNS` (regex set covering known phrasings
   like "ignore previous instructions", persona override, jailbreak

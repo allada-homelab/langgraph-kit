@@ -70,6 +70,13 @@ class AgentConfig:
     # layer on top of this default in a follow-up.
     prompt_injection_mode: str = "warn"
 
+    # Security: outbound assistant-message scanner mode.
+    # ``"redact"`` (default) replaces matched PII / secrets with
+    # ``[REDACTED]`` before the message is shown to the user.
+    # ``"warn"`` flags without mutating (useful for shadow-mode
+    # rollouts to gather detection metrics first). ``"off"`` disables.
+    output_safety_mode: str = "redact"
+
     def __repr__(self) -> str:
         """Mask secrets in repr to prevent accidental leakage in logs.
 

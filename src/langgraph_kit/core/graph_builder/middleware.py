@@ -30,7 +30,10 @@ from langgraph_kit.core.resilience import (
     ToolErrorMiddleware,
     ToolLoopGuardMiddleware,
 )
-from langgraph_kit.core.security import PromptInjectionGuardMiddleware
+from langgraph_kit.core.security import (
+    OutputSafetyMiddleware,
+    PromptInjectionGuardMiddleware,
+)
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -114,6 +117,15 @@ def build_middleware_stack(
             StopHooksMiddleware(hooks=stop_hooks),
         ]
     )
+
+    # Outbound PII / secret redaction. Append late so the redaction
+    # runs *after* completion-guard has had a chance to see the raw
+    # content (the guard reasons about whether the model said anything
+    # meaningful; redaction would mask that signal). ``"off"`` skips
+    # appending entirely.
+    out_mode = get_config().output_safety_mode
+    if out_mode and out_mode != "off":
+        middleware.append(OutputSafetyMiddleware(mode=out_mode))  # type: ignore[arg-type]
 
     # Structured-output validation slots after the empty-turn / completion
     # guards (they ensure a turn exists at all) and before PostRunBackstop

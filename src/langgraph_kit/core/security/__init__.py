@@ -1,8 +1,7 @@
 """Security middlewares and helpers.
 
-Currently houses the inbound-prompt-injection scanner. The outbound
-PII/secret scanner and the audit-log infrastructure
-(issues #23 / #24) will join this module as they land.
+Inbound: prompt-injection pattern scanner. Outbound: PII / credential
+redactor. The audit-log infrastructure (#24) will land alongside.
 """
 
 from .injection_guard import (
@@ -14,11 +13,29 @@ from .injection_patterns import (
     INJECTION_PATTERNS,
     scan_for_injection,
 )
+from .output_patterns import (
+    REDACTION_PLACEHOLDER,
+    OutputMatch,
+    redact,
+    scan_for_unsafe_output,
+)
+from .output_safety import (
+    OUTPUT_SAFETY_FLAG,
+    OutputSafetyMiddleware,
+    SafetyMode,
+)
 
 __all__ = [
     "INJECTION_PATTERNS",
+    "OUTPUT_SAFETY_FLAG",
     "PROMPT_INJECTION_FLAG",
+    "REDACTION_PLACEHOLDER",
     "InjectionMatch",
+    "OutputMatch",
+    "OutputSafetyMiddleware",
     "PromptInjectionGuardMiddleware",
+    "SafetyMode",
+    "redact",
     "scan_for_injection",
+    "scan_for_unsafe_output",
 ]
