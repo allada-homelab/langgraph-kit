@@ -62,6 +62,14 @@ class AgentConfig:
         dataclasses.field(default=None, compare=False)
     )
 
+    # Security: inbound prompt-injection scanner mode.
+    # ``"warn"`` (default) scans every user message and logs / flags
+    # detections without changing agent behaviour. ``"off"`` disables
+    # the scan entirely. The richer ``"quarantine"`` mode (narrow tool
+    # surface for the affected turn) is tracked separately and will
+    # layer on top of this default in a follow-up.
+    prompt_injection_mode: str = "warn"
+
     def __repr__(self) -> str:
         """Mask secrets in repr to prevent accidental leakage in logs.
 
