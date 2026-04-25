@@ -46,8 +46,8 @@ tests/prompt_bench/
 ├── profiles.py      Per-agent overlay-application bridges
 ├── diff.py          DiffReport + acceptance-criteria evaluation
 ├── scenarios.py     Scenario YAML schema + loader
-├── conftest.py      Pytest fixtures (mocked LLM by default; real LLM
-│                    when PROMPT_BENCH_LLM=real and AGENT_LLM_API_KEY)
+├── conftest.py      Pytest fixtures (stub by default; ChatOpenAI when
+│                    LLM_BASE_URL/LLM_API_KEY/LLM_MODEL are all set)
 ├── run.py           CLI entry: list-targets, list-scenarios, ...
 ├── scenarios/<target>/*.yaml      Scenario library, grows over time
 ├── rubrics/*.md                   Pairwise + per-target rubrics
@@ -76,15 +76,17 @@ guidance:
    frontmatter block (notes, rationale, dimension changed) — the
    loader strips it. Everything below the frontmatter is the prompt
    text the overlay will inject.
-3. **Run the bench.** Once the live `run`/`diff` CLI lands (Phase 1),
-   it'll be:
+3. **Run the bench.** With `LLM_BASE_URL` / `LLM_API_KEY` /
+   `LLM_MODEL` populated in `.env`:
 
    ```bash
-   PROMPT_BENCH_LLM=real AGENT_LLM_API_KEY=... \
-     python -m tests.prompt_bench.run run --target reference_deep_agent.core_identity --variant my_candidate
+   set -a && source .env && set +a
+   uv run python -m tests.prompt_bench.run run \
+     --target reference_deep_agent.core_identity --variant my_candidate \
+     --out /tmp/variant.json
    ```
 
-   For now the bench is exercised via the pytest harness and the
+   The bench can also be exercised via the pytest harness (stub mode) and the
    nightly workflow.
 4. **Diff.** `python -m tests.prompt_bench.run diff --base base.json --variant variant.json --out diff.md`
 5. **Open a PR** with the variant file, the diff report (markdown),
@@ -109,19 +111,32 @@ Optional: `seeded_state`, `expected_behaviors`, `description`.
 Default mode is **hermetic** — `bench_llm` is a deterministic stub.
 Use this for:
 
-- Unit-testing harness logic (`pytest tests/prompt_bench/`)
+- Unit-testing harness logic (`just prompt-bench-test`)
 - CI's per-PR run (no API key required)
+- Wiring validation (does the loop crash?)
 
-**Real-LLM mode** is enabled by `PROMPT_BENCH_LLM=real` +
-`AGENT_LLM_API_KEY`. Use this for:
+**Real-LLM mode** activates when *all three* of these env vars are
+set; otherwise the harness silently falls back to stub mode:
 
-- Actual prompt-iteration cycles
-- The nightly CI workflow
-- Local validation before opening a PR
+```bash
+LLM_BASE_URL=http://10.69.1.169:8690/v1   # OpenAI-compatible /v1 endpoint
+LLM_API_KEY=placeholder                    # API key for the proxy
+LLM_MODEL=large-default:agent              # default model name routed by the proxy
+```
 
-The execution LLM defaults to `claude-sonnet-4-6` (quality matters);
-judges default to `claude-opus-4-7` and `claude-haiku-4-5`. Override
-in `conftest.py` if needed.
+Optional per-role model overrides — useful when judges should be a
+different model (or different family) than the executor:
+
+```bash
+BENCH_EXECUTOR_MODEL=...     # model under evaluation     (defaults to LLM_MODEL)
+BENCH_JUDGE_MODEL_A=...      # primary pairwise judge     (defaults to LLM_MODEL)
+BENCH_JUDGE_MODEL_B=...      # secondary pairwise judge   (defaults to LLM_MODEL)
+```
+
+`signal-check` refuses to run in stub mode (the numbers would be
+meaningless). Real prompt iteration only happens locally — the CI
+nightly is hermetic-only by design, so iteration cost stays visible
+to the human running it.
 
 ## Signal validation (run before optimizing real prompts)
 
@@ -134,6 +149,14 @@ trusted:
 2. **Ceiling:** baseline-vs-`deliberately_broken.md` produces a
    baseline win rate ≥ 80%. Lower → the judges aren't discriminating.
 
-Both are exercised by the nightly workflow. The `deliberately_broken.md`
-variants under `variants/<target>/` exist for this reason — do not
-delete them.
+To run signal-check locally:
+
+```bash
+# After populating .env with LLM_BASE_URL / LLM_API_KEY / LLM_MODEL
+set -a && source .env && set +a
+uv run python -m tests.prompt_bench.run signal-check \
+  --target reference_deep_agent.core_identity
+```
+
+The `deliberately_broken.md` variants under `variants/<target>/`
+exist for this reason — do not delete them.
