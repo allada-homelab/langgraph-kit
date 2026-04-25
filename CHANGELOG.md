@@ -7,6 +7,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Prometheus-format metrics primitives + `/metrics` ASGI endpoint.**
+  New `langgraph_kit.observability_metrics` module ships pure-Python
+  `Counter`, `Gauge`, `Histogram` (cumulative buckets, default
+  spans 5 ms to 30 s), a `MetricsRegistry`, and a `MetricsEndpoint`
+  ASGI app that renders the registry as the standard text-exposition
+  format. No third-party dependency added — the kit's metrics needs
+  are bounded and importing `prometheus_client` would cost more than
+  the ~200 LOC implementation. Wiring kit-internal counters (LLM
+  tokens, tool calls, compactions, rate-limit hits, HITL interrupts)
+  is deferred to a follow-up. Fixes
+  [#28](https://github.com/allada-homelab/langgraph-kit/issues/28).
+
 - **Per-user rate limiting.** New `langgraph_kit.contrib.rate_limit`
   module with a token-bucket primitive (`TokenBucket`), an
   in-memory backend (`InMemoryRateLimitBackend`), and an ASGI
