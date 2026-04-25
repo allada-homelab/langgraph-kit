@@ -5,7 +5,7 @@ description: Take a GitHub issue to merged in this session — branch, implement
 
 # new-task
 
-Drives one issue from open to closed **in the current Claude Code session**. Does not dispatch subagents. Does not hand off. Every stage below runs in this same session — when the skill says "follow `superpowers:feature-dev`", it means load that skill's instructions and run them here, not spawn an agent.
+Drives one issue from open to closed **in the current Claude Code session**. Does not dispatch subagents. Does not hand off. Every stage below runs in this same session — when the skill says "follow `feature-dev:feature-dev`", it means load that skill's instructions and run them here, not spawn an agent.
 
 Parallelism is external: run this skill in multiple sessions, each rooted in a different `git worktree` (see [`worktree-for`](../worktree-for/SKILL.md)).
 
@@ -36,9 +36,9 @@ EXISTING_BRANCH="$(git for-each-ref --format='%(refname:short)' refs/heads/ | gr
 
 - No existing branch → run stage 1.
 - Branch exists, currently checked out, matches this issue → figure out resume point:
-  - No commits beyond `origin/main` → resume at stage 3 (implementation).
-  - Commits exist, no open PR → resume at stage 5 (PR creation).
-  - Open PR exists → resume at stage 6 (CI loop).
+  - No commits beyond `origin/main` → resume at stage 3 (plan + implement).
+  - Commits exist, no open PR → resume at stage 6 (PR creation).
+  - Open PR exists → resume at stage 7 (CI loop).
 - Branch exists but **not** checked out → abort. Ask the user to check it out or delete it.
 
 ### Stage 1. Pre-flight
@@ -67,7 +67,7 @@ gh pr list --repo "$REPO" --state open --json number,title,headRefName,files \
 
 Print that summary and **ask the user** whether to proceed. This is honest — path collisions only become real during implementation.
 
-**gh version check:** if `GH_MAJOR_MINOR` < 2.7, note that stage 6 will fall back to `gh run view --log | tail -500` instead of `--log-failed`. Non-blocking; informational.
+**gh version check:** if `GH_MAJOR_MINOR` < 2.7, note that stage 7 will fall back to `gh run view --log | tail -500` instead of `--log-failed`. Non-blocking; informational.
 
 ### Stage 2. Branch setup + mark "In progress"
 
@@ -101,17 +101,61 @@ ITEM_ID="$(gh api graphql -f query='
 
 Non-fatal if the board update fails — log a warning and continue.
 
-### Stage 3. Implementation
+### Stage 3. Review and flesh out the issue **before** writing code
 
-Load the `superpowers:feature-dev` skill and follow its steps **in this session**. Seed with:
+Items on the project board are often single paragraphs — they capture intent, not the full design. Implementing straight from a thin body produces the wrong thing or misses hidden decisions. So before any implementation skill runs:
 
-- The issue title + body fetched in stage 1.
-- Scope hints: top-level directories mentioned in the issue, plus `tests/` for any of them.
+**3a. Audit the issue body against the actual code.**
+
+- Is the scope concrete enough to implement directly, or is it a one-liner that needs unpacking?
+- Does the body name specific files / functions / config fields? Verify each one exists at the named path and matches the issue's assumption — stale references point to design drift.
+- What hidden design decisions does the body gloss over? (opt-in vs. default, sync vs. async, new dep vs. reuse, breaking vs. additive, who owns the flag, etc.)
+- What edge cases does the body not mention but the code will hit? Enumerate them explicitly.
+- Are there obvious adjacent issues in the queue (other open sub-issues of #5) that would conflict, share a dep, or change the answer here? Check before committing to an approach.
+
+**3b. Gather context to answer every one of the above.**
+
+- Launch an Explore subagent with a focused brief when the scope covers an unfamiliar subsystem — hand it file path hints from the issue body and request a surface map.
+- Read the files the issue names. Don't trust the description over the code.
+- If there's a relevant design document, CLAUDE.md section, or past merged PR, read it.
+- Run `superpowers:brainstorming` when the shape of the feature is genuinely unclear (e.g. "should we add X?" vs. "add X by doing Y").
+
+**3c. Write the expanded plan back to the issue.**
+
+Post the fleshed-out plan **as a comment on the GitHub issue** so it becomes the permanent record of the design, not just a transient thought in this session:
+
+```bash
+gh issue comment "$N" --repo "$REPO" --body "$(cat <<'PLAN'
+## Plan
+
+**Scope:** <one-sentence restatement>
+**Files to touch:** <list, with reason each>
+**New surface:** <config fields, functions, tests>
+**Out of scope (deferred):** <what this PR will NOT do>
+**Edge cases handled:** <bullet list>
+**Edge cases deferred:** <bullet list with a follow-up issue link if any>
+**Design decisions made:** <bullets — "opt-in via config", "no silent fallback", etc.>
+
+_Sourced from automated code review on <branch>; will be the PR's scope contract._
+PLAN
+)"
+```
+
+If the user already confirmed a specific design choice during the audit, reflect that in the plan comment so nothing drifts between discussion and implementation.
+
+**3d. If the plan contradicts the issue title, pause.**
+
+A plan that says "actually we should do Z, not Y as the issue title suggests" means the issue's framing was wrong. Surface it to the user before implementing — don't silently implement Z under a Y-titled issue.
+
+### Stage 4. Implementation
+
+Load the `feature-dev:feature-dev` skill and follow its steps **in this session**. Seed with:
+
+- The issue title + body, **plus the plan comment** you wrote in stage 3c.
+- Scope hints: top-level directories mentioned in the plan, plus `tests/` for any of them.
 - Hard scope: never hand-edit `testapp/`, `uv.lock`, or `checkpoints.db` (the `block-protected-paths` hook blocks them anyway). `uv.lock` being regenerated by `uv sync` / `uv lock` is **fine** — that's the tool doing its job, not a hand-edit.
 
-If the issue body is short or ambiguous, follow `superpowers:brainstorming` first to align on scope with the user.
-
-### Stage 4. Verification gate (capped at 3 fix iterations)
+### Stage 5. Verification gate (capped at 3 fix iterations)
 
 Follow the `superpowers:verification-before-completion` skill, which for this repo means running:
 
@@ -126,7 +170,7 @@ Triage helpers:
 - Coverage dropped on changed files → invoke the `coverage-floor-guardian` agent. Never lower `fail_under`.
 - New pytest warning fires as error (`filterwarnings = ["error"]`) → invoke the `warning-investigator` agent.
 
-### Stage 5. Commit, push, PR
+### Stage 6. Commit, push, PR
 
 Load and follow the `commit-commands:commit-push-pr` skill **in this session**. Explicitly pass a PR body that ends with `Fixes #<N>` — do not let auto-generation elide the trailer. The trailer is what auto-closes the sub-issue and moves the Project card to Done on merge.
 
@@ -142,9 +186,9 @@ Body template:
 Fixes #<N>
 ```
 
-Record the PR URL and its head commit SHA for stage 6.
+Record the PR URL and its head commit SHA for stage 7.
 
-### Stage 6. CI auto-fix loop (cap: 3 iterations, no busy-wait)
+### Stage 7. CI auto-fix loop (cap: 3 iterations, no busy-wait)
 
 **Don't block the session sleeping.** Use the `ScheduleWakeup` tool (or the `loop` skill, whichever is available) to yield control between polls. User can interrupt any time.
 
@@ -178,7 +222,7 @@ while attempt < 3:
         else:
             gh run view $r.databaseId --log | tail -500
 
-    # Fix in-session. Re-run stage 4 (local gate) before pushing.
+    # Fix in-session. Re-run stage 5 (local gate) before pushing.
     # Commit + push to the same branch. New sha → next poll picks it up.
 
 # After loop:
@@ -189,7 +233,7 @@ while attempt < 3:
 
 **Polling cadence:** 180s via `ScheduleWakeup`. This exceeds the 5-min prompt cache so expect some cache misses; the alternative (busy-waiting in the session) wastes user-visible time. Worth the cache miss.
 
-### Caveats encoded for stage 6
+### Caveats encoded for stage 7
 
 - **Never edit a test to paper over a production bug.** If a fix requires changing an assertion's expected value, stop and ask the user. Fixing a legitimately wrong test is fine — be explicit about which you're doing.
 - **`uv.lock` / `pyproject.toml` conflicts** from another PR merging first: run `git fetch origin && git rebase origin/main && uv lock && just test`. That's the fix step; counts as one iteration. (`uv lock` is a tool regenerating the file — not a hand-edit — so the protected-paths hook does not fire.)
@@ -211,7 +255,7 @@ This skill is the *inside* of one parallel task. To run three in parallel:
 2. Open two new terminals, `cd` into each worktree, run `claude`.
 3. In each session (including the original), invoke `/new-task <N>`.
 
-No cross-session coordination — collisions surface in stage 1's open-PR summary and stage 6's CI loop (which handles rebase).
+No cross-session coordination — collisions surface in stage 1's open-PR summary and stage 7's CI loop (which handles rebase).
 
 ## Cleanup (printed by the success banner)
 
