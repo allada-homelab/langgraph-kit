@@ -9,10 +9,24 @@ Usage::
     python -m tests.prompt_bench.run signal-check --target <name>
 
 Hermetic by default — uses a deterministic stub LLM so the harness
-loop runs end-to-end without an API key. Set ``PROMPT_BENCH_LLM=real``
-+ ``AGENT_LLM_API_KEY`` to use real models. Stub mode is meant for
-*wiring* validation; signal numbers from stub mode have no meaning
-beyond "did the loop crash?".
+loop runs end-to-end without a real model. The bench uses an
+**OpenAI-compatible** chat endpoint when these are all set::
+
+    LLM_BASE_URL    e.g. http://10.69.1.169:8690/v1 (any OpenAI-compat proxy)
+    LLM_API_KEY     api key for the proxy (often a placeholder for local)
+    LLM_MODEL       default model name routed through the proxy
+
+Optional per-role overrides — useful when judges need to be different
+models (or different families) than the executor::
+
+    BENCH_EXECUTOR_MODEL    model under evaluation     (defaults to LLM_MODEL)
+    BENCH_JUDGE_MODEL_A     primary pairwise judge     (defaults to LLM_MODEL)
+    BENCH_JUDGE_MODEL_B     secondary pairwise judge   (defaults to LLM_MODEL)
+
+If any of the three required vars (``LLM_BASE_URL``, ``LLM_API_KEY``,
+``LLM_MODEL``) is missing, the harness falls back to its deterministic
+stub. Stub-mode signal numbers have no meaning beyond "did the loop
+crash?". ``signal-check`` refuses to run in stub mode.
 """
 
 from __future__ import annotations
@@ -49,8 +63,18 @@ logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).parent
 
-_LLM_MODE_ENV = "PROMPT_BENCH_LLM"
-_API_KEY_ENV = "AGENT_LLM_API_KEY"
+# OpenAI-compatible chat endpoint (any proxy that speaks ``/v1/chat/completions``).
+# All three must be set for real-LLM mode; otherwise the harness uses its stub.
+_BASE_URL_ENV = "LLM_BASE_URL"
+_API_KEY_ENV = "LLM_API_KEY"
+_MODEL_ENV = "LLM_MODEL"
+
+# Optional per-role overrides — when a single proxy can route to multiple
+# upstream models, pin different ones for executor / judges. If unset,
+# every role uses ``LLM_MODEL``.
+_EXECUTOR_MODEL_ENV = "BENCH_EXECUTOR_MODEL"
+_JUDGE_A_MODEL_ENV = "BENCH_JUDGE_MODEL_A"
+_JUDGE_B_MODEL_ENV = "BENCH_JUDGE_MODEL_B"
 
 
 # ---------------------------------------------------------------------------
@@ -262,10 +286,11 @@ async def _cmd_signal_check(target: str, samples_override: int | None) -> int:
 
     if not _real_llm_enabled():
         sys.stderr.write(
-            "signal-check requires a real LLM. Set both PROMPT_BENCH_LLM=real "
-            f"and {_API_KEY_ENV}=<key> before running.\n"
-            f"Current: PROMPT_BENCH_LLM={os.environ.get(_LLM_MODE_ENV, '<unset>')!r}, "
-            f"{_API_KEY_ENV}={'set' if os.environ.get(_API_KEY_ENV) else '<unset>'}\n"
+            "signal-check requires a real LLM. Set all three of "
+            f"{_BASE_URL_ENV}, {_API_KEY_ENV}, {_MODEL_ENV} before running.\n"
+            f"Current: {_BASE_URL_ENV}={'set' if os.environ.get(_BASE_URL_ENV) else '<unset>'}, "
+            f"{_API_KEY_ENV}={'set' if os.environ.get(_API_KEY_ENV) else '<unset>'}, "
+            f"{_MODEL_ENV}={os.environ.get(_MODEL_ENV, '<unset>')!r}\n"
         )
         return EXIT_USAGE
 
@@ -404,18 +429,20 @@ async def _execute_overlay(
 
 def _build_executor_llm() -> Any:
     if _real_llm_enabled():
-        return _build_real_chat_model("claude-sonnet-4-6")
+        return _build_real_chat_model(_role_model(_EXECUTOR_MODEL_ENV))
     return _StubExecutorLLM()
 
 
 def _build_pairwise_panel() -> PairwisePanel:
     if _real_llm_enabled():
+        model_a = _role_model(_JUDGE_A_MODEL_ENV)
+        model_b = _role_model(_JUDGE_B_MODEL_ENV)
         judges = [
             PairwiseJudge(
-                name="claude-opus", llm=_build_real_chat_model("claude-opus-4-7")
+                name=f"judge_a:{model_a}", llm=_build_real_chat_model(model_a)
             ),
             PairwiseJudge(
-                name="claude-haiku", llm=_build_real_chat_model("claude-haiku-4-5")
+                name=f"judge_b:{model_b}", llm=_build_real_chat_model(model_b)
             ),
         ]
     else:
@@ -431,23 +458,36 @@ def _build_pairwise_panel() -> PairwisePanel:
 
 
 def _real_llm_enabled() -> bool:
-    return os.environ.get(_LLM_MODE_ENV, "stub").lower() == "real" and bool(
-        os.environ.get(_API_KEY_ENV)
+    """Real mode is active iff base URL + key + default model are all set."""
+    return all(
+        os.environ.get(name) for name in (_BASE_URL_ENV, _API_KEY_ENV, _MODEL_ENV)
     )
 
 
-def _build_real_chat_model(model_id: str) -> Any:
-    from langchain_anthropic import (  # pyright: ignore[reportMissingImports]
-        ChatAnthropic,
+def _role_model(role_env: str) -> str:
+    """Pick the per-role model override, falling back to ``LLM_MODEL``."""
+    return os.environ.get(role_env) or os.environ[_MODEL_ENV]
+
+
+def _build_real_chat_model(model_name: str) -> Any:
+    """Return a ``ChatOpenAI`` pointed at the configured proxy.
+
+    The proxy must speak the OpenAI ``/v1/chat/completions`` shape;
+    most local LLM servers (vLLM, llama-server, LiteLLM proxy, etc.)
+    do, even when routing to non-OpenAI upstreams.
+    """
+    from langchain_openai import (  # pyright: ignore[reportMissingImports]
+        ChatOpenAI,
     )
 
     kwargs: dict[str, Any] = {
-        "model": model_id,
+        "model": model_name,
         "api_key": os.environ[_API_KEY_ENV],
+        "base_url": os.environ[_BASE_URL_ENV],
         "max_tokens": 1024,
         "timeout": 60,
     }
-    return ChatAnthropic(**kwargs)  # pyright: ignore[reportCallIssue]
+    return ChatOpenAI(**kwargs)  # pyright: ignore[reportCallIssue]
 
 
 # ---------------------------------------------------------------------------

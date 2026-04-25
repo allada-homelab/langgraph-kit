@@ -4,12 +4,14 @@ Lives at the package root (under ``tests/``) so unit tests can import
 fixtures with no ``--rootdir`` gymnastics. Provides:
 
 - ``bench_llm`` — chat model used for *agent execution*. Hermetic by
-  default (a deterministic stub that echoes the input). When
-  ``PROMPT_BENCH_LLM=real`` and ``AGENT_LLM_API_KEY`` is set, returns
-  a real Claude model pinned to ``DEFAULT_EXECUTION_MODEL``.
-- ``judge_llms`` — two-model panel for pairwise judging. Same hermetic
-  default; real mode pulls in a Claude judge + an external judge if
-  configured (otherwise two Claude judges with different temperature).
+  default (a deterministic stub). When ``LLM_BASE_URL`` /
+  ``LLM_API_KEY`` / ``LLM_MODEL`` are all set, returns a
+  ``ChatOpenAI`` pointed at the proxy, optionally pinned via
+  ``BENCH_EXECUTOR_MODEL``.
+- ``judge_llms`` — two-model panel for pairwise judging. Stub by
+  default; real mode reads ``BENCH_JUDGE_MODEL_A`` and
+  ``BENCH_JUDGE_MODEL_B`` (each falling back to ``LLM_MODEL`` if
+  unset).
 - ``bench_pairwise_panel`` — a :class:`PairwisePanel` wired up with
   ``judge_llms``.
 - ``mock_section_registry_factory`` — returns a fresh
@@ -32,25 +34,28 @@ if TYPE_CHECKING:
 
 
 # ---------------------------------------------------------------------------
-# Mode detection — separate env vars from the examples harness so the two
-# harnesses don't accidentally cross-talk (examples use scripted by default
-# even with PROMPT_BENCH_LLM=real, and vice versa).
+# Mode detection — uses the same OpenAI-compatible env vars as ``run.py``
+# (``LLM_BASE_URL`` / ``LLM_API_KEY`` / ``LLM_MODEL``). Real mode is active
+# only when all three are present; otherwise fixtures fall back to the
+# deterministic stub so unit tests don't accidentally hit a network.
 # ---------------------------------------------------------------------------
 
-_LLM_MODE_ENV = "PROMPT_BENCH_LLM"
-_API_KEY_ENV = "AGENT_LLM_API_KEY"
-
-# The model under evaluation (we want quality signal — Sonnet matters).
-DEFAULT_EXECUTION_MODEL = "claude-sonnet-4-6"
-# Judges should be capable but cheaper than the executor — Opus is the
-# default high-end judge; the second judge is OpenAI / Gemini if their
-# env vars are set, falling back to a second Claude with different temp.
-DEFAULT_JUDGE_MODEL_PRIMARY = "claude-opus-4-7"
-DEFAULT_JUDGE_MODEL_SECONDARY = "claude-haiku-4-5"
+_BASE_URL_ENV = "LLM_BASE_URL"
+_API_KEY_ENV = "LLM_API_KEY"
+_MODEL_ENV = "LLM_MODEL"
+_EXECUTOR_MODEL_ENV = "BENCH_EXECUTOR_MODEL"
+_JUDGE_A_MODEL_ENV = "BENCH_JUDGE_MODEL_A"
+_JUDGE_B_MODEL_ENV = "BENCH_JUDGE_MODEL_B"
 
 
 def _real_llm_enabled() -> bool:
-    return os.environ.get(_LLM_MODE_ENV, "stub").lower() == "real"
+    return all(
+        os.environ.get(name) for name in (_BASE_URL_ENV, _API_KEY_ENV, _MODEL_ENV)
+    )
+
+
+def _role_model(role_env: str) -> str:
+    return os.environ.get(role_env) or os.environ[_MODEL_ENV]
 
 
 # ---------------------------------------------------------------------------
@@ -111,21 +116,21 @@ def stub_llm_factory():
 def bench_llm() -> Any:
     """Chat model used for *agent execution* in scenarios.
 
-    Hermetic stub by default; switches to real Claude when
-    ``PROMPT_BENCH_LLM=real`` + ``AGENT_LLM_API_KEY`` are set.
+    Hermetic stub by default; switches to a real ``ChatOpenAI`` pointed
+    at ``LLM_BASE_URL`` when the three required env vars are all set.
     """
-    if _real_llm_enabled() and os.environ.get(_API_KEY_ENV):
-        return _build_real_chat_model(DEFAULT_EXECUTION_MODEL)
+    if _real_llm_enabled():
+        return _build_real_chat_model(_role_model(_EXECUTOR_MODEL_ENV))
     return _DeterministicStub()
 
 
 @pytest.fixture
 def judge_llms() -> list[Any]:
     """Two-model panel for pairwise judging (real or stub)."""
-    if _real_llm_enabled() and os.environ.get(_API_KEY_ENV):
+    if _real_llm_enabled():
         return [
-            _build_real_chat_model(DEFAULT_JUDGE_MODEL_PRIMARY),
-            _build_real_chat_model(DEFAULT_JUDGE_MODEL_SECONDARY),
+            _build_real_chat_model(_role_model(_JUDGE_A_MODEL_ENV)),
+            _build_real_chat_model(_role_model(_JUDGE_B_MODEL_ENV)),
         ]
     return [_DeterministicStub(), _DeterministicStub()]
 
@@ -159,27 +164,26 @@ def reference_section_registry_factory():
 # ---------------------------------------------------------------------------
 
 
-def _build_real_chat_model(model_id: str) -> Any:
-    """Build a real Anthropic chat model with the given model id.
+def _build_real_chat_model(model_name: str) -> Any:
+    """Return a ``ChatOpenAI`` pointed at ``LLM_BASE_URL``.
 
-    Matches what ``langgraph_kit.llm.build_llm`` would have produced,
-    but lets us pin different models for executor vs judges without
-    going through ``configure(AgentConfig(...))`` (which is global).
+    The bench targets OpenAI-compatible endpoints (any proxy that
+    speaks ``/v1/chat/completions``). Per-role model overrides go
+    through ``BENCH_EXECUTOR_MODEL`` / ``BENCH_JUDGE_MODEL_A`` /
+    ``BENCH_JUDGE_MODEL_B``; this function takes a resolved name.
     """
-    from langchain_anthropic import (  # pyright: ignore[reportMissingImports]
-        ChatAnthropic,
+    from langchain_openai import (  # pyright: ignore[reportMissingImports]
+        ChatOpenAI,
     )
 
-    # Pass via **kwargs so basedpyright's stricter stub doesn't flag the
-    # well-known runtime kwargs (``model``, ``max_tokens``, ``timeout``)
-    # as unrecognised — langchain_anthropic accepts them at runtime.
     kwargs: dict[str, Any] = {
-        "model": model_id,
+        "model": model_name,
         "api_key": os.environ[_API_KEY_ENV],
+        "base_url": os.environ[_BASE_URL_ENV],
         "max_tokens": 1024,
         "timeout": 60,
     }
-    return ChatAnthropic(**kwargs)  # pyright: ignore[reportCallIssue]
+    return ChatOpenAI(**kwargs)  # pyright: ignore[reportCallIssue]
 
 
 # ---------------------------------------------------------------------------

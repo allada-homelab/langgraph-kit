@@ -7,11 +7,12 @@ on:
     # tracker burst.
     - cron: "30 7 * * *"
   workflow_dispatch:
-    inputs:
-      target:
-        description: "Optional bench target for signal-check (e.g. reference_deep_agent.core_identity)"
-        required: false
-        default: ""
+
+# Hermetic only. Real-LLM runs (signal-check, prompt iteration) are
+# triggered manually from a dev workstation with the operator's local
+# .env (``LLM_BASE_URL`` / ``LLM_API_KEY`` / ``LLM_MODEL``). We keep
+# the bench out of CI's automatic-spend path so iteration credit
+# costs stay visible to the human running them.
 
 jobs:
   prompt-bench-harness:
@@ -39,23 +40,6 @@ jobs:
       - name: Discover targets
         run: uv run python -m tests.prompt_bench.run list-targets
 
-      # Phase 0.5 wired live signal-check end-to-end. The step runs only
-      # when ``target`` is dispatched (the daily cron path skips it to
-      # avoid burning credits on every harness check). Failure surfaces
-      # as a workflow warning + the auto-issue step below.
-      - name: Signal validation
-        if: ${{ inputs.target != '' }}
-        env:
-          AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
-          PROMPT_BENCH_LLM: real
-        run: |
-          set -euo pipefail
-          if [ -z "${AGENT_LLM_API_KEY}" ]; then
-            echo "::error::AGENT_LLM_API_KEY secret is not set on this repo. Configure it before dispatching signal-check."
-            exit 1
-          fi
-          uv run python -m tests.prompt_bench.run signal-check --target "${{ inputs.target }}"
-
       - name: Open issue on failure
         if: failure()
         uses: actions/github-script@v8
@@ -73,7 +57,7 @@ jobs:
               `- Scenario YAML schema regression`,
               `- Profile section list moved or renamed (e.g. _CORE_SECTIONS)`,
               ``,
-              `Run \`uv run pytest tests/prompt_bench -v\` locally to reproduce.`,
+              `Run \`just prompt-bench-test\` locally to reproduce.`,
             ].join('\n');
             await github.rest.issues.create({
               owner: context.repo.owner,

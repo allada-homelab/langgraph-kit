@@ -99,12 +99,14 @@ Iteration loop:
 2. **Drop a candidate** at `tests/prompt_bench/variants/<target>/<variant_name>.md`.
    Frontmatter (notes, dimension changed) is stripped; everything below
    is the prompt text the overlay injects.
-3. **Run the harness** (Phase 1 onwards — hermetic check works today via
-   `just prompt-bench-test`):
+3. **Run the harness.** Hermetic check via `just prompt-bench-test`.
+   For real-LLM iteration, populate `.env` with
+   `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` (any
+   OpenAI-compatible endpoint) and run:
    ```bash
-   PROMPT_BENCH_LLM=real AGENT_LLM_API_KEY=... \
-     uv run python -m tests.prompt_bench.run run \
-       --target <target> --variant <variant_name>
+   set -a && source .env && set +a
+   uv run python -m tests.prompt_bench.run run \
+     --target <target> --variant <variant_name>
    ```
 4. **Diff** baseline vs variant; the markdown report goes in the PR.
 5. **Strict acceptance bar** — a change ships only when:
