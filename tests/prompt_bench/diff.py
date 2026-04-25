@@ -266,16 +266,16 @@ def render_markdown(diff: DiffReport) -> str:
         + f"({win_status} {WIN_RATE_THRESHOLD:.0%} bar)"
     )
     agree_status = (
-        "meets" if diff.overall_judge_agreement >= JUDGE_AGREEMENT_THRESHOLD else "BELOW"
+        "meets"
+        if diff.overall_judge_agreement >= JUDGE_AGREEMENT_THRESHOLD
+        else "BELOW"
     )
     lines.append(
         f"- Judge agreement: **{diff.overall_judge_agreement:.1%}** "
         + f"({agree_status} {JUDGE_AGREEMENT_THRESHOLD:.0%} bar)"
     )
     if diff.regression_flags:
-        lines.append(
-            f"- Regressions flagged on: {', '.join(diff.regression_flags)}"
-        )
+        lines.append(f"- Regressions flagged on: {', '.join(diff.regression_flags)}")
     else:
         lines.append("- No rule-based metric regressions beyond tolerance")
     lines.append("")

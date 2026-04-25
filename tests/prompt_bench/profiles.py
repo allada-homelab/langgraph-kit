@@ -30,7 +30,7 @@ class ProfileSpec:
 
     name: str
     section_source_module: str  # e.g. "langgraph_kit.graphs.reference_deep_agent"
-    section_attr: str            # e.g. "_CORE_SECTIONS"
+    section_attr: str  # e.g. "_CORE_SECTIONS"
 
 
 PROFILES: dict[str, ProfileSpec] = {

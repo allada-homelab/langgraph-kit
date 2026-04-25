@@ -99,7 +99,9 @@ def main(argv: list[str] | None = None) -> int:
     p_signal.add_argument("--target", required=True)
 
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+    logging.basicConfig(
+        level=logging.INFO, format="%(levelname)s %(name)s: %(message)s"
+    )
 
     if args.cmd == "list-targets":
         return _cmd_list_targets()
@@ -116,9 +118,7 @@ def main(argv: list[str] | None = None) -> int:
 def _cmd_list_targets() -> int:
     sys.stdout.write("Declared bench targets:\n")
     for name, meta in sorted(TARGETS.items()):
-        sys.stdout.write(
-            f"  {name:<48s} kind={meta['kind']} agent={meta['agent']}\n"
-        )
+        sys.stdout.write(f"  {name:<48s} kind={meta['kind']} agent={meta['agent']}\n")
     return EXIT_OK
 
 

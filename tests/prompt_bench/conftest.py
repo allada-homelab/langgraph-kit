@@ -68,7 +68,9 @@ class _DeterministicStub:
 
     def __init__(self, responses: list[dict[str, Any]] | None = None) -> None:
         super().__init__()
-        self._responses = responses or [{"winner": "tie", "confidence": 0.5, "reason": "stub"}]
+        self._responses = responses or [
+            {"winner": "tie", "confidence": 0.5, "reason": "stub"}
+        ]
         self._call_index = 0
 
     async def ainvoke(self, _messages: list[Any]) -> Any:
@@ -98,6 +100,7 @@ def stub_llm() -> _DeterministicStub:
 @pytest.fixture
 def stub_llm_factory():
     """Factory: build a stub with a custom response list."""
+
     def _make(responses: list[dict[str, Any]]) -> _DeterministicStub:
         return _DeterministicStub(responses=responses)
 

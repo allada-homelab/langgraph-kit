@@ -60,9 +60,7 @@ def load_variant(path: Path, name: str | None = None) -> str:
     return text.strip()
 
 
-def apply_section_overlay(
-    registry: SectionRegistry, overlay: PromptOverlay
-) -> None:
+def apply_section_overlay(registry: SectionRegistry, overlay: PromptOverlay) -> None:
     """Mutate *registry* in-place to swap any section IDs named in *overlay*.
 
     The replacement section preserves the original's stability,

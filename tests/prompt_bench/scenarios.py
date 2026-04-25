@@ -106,9 +106,7 @@ def load_scenario(path: Path) -> Scenario:
     return Scenario.model_validate(raw)
 
 
-def discover_scenarios(
-    root: Path, target: str | None = None
-) -> list[Scenario]:
+def discover_scenarios(root: Path, target: str | None = None) -> list[Scenario]:
     """Discover scenarios under ``root/scenarios/``.
 
     If *target* is provided, only scenarios under

@@ -204,7 +204,9 @@ class PairwiseJudge:
 class PairwisePanel:
     """Multi-judge panel that produces a decided/undecided verdict."""
 
-    def __init__(self, judges: list[PairwiseJudge], rng: random.Random | None = None) -> None:
+    def __init__(
+        self, judges: list[PairwiseJudge], rng: random.Random | None = None
+    ) -> None:
         if not judges:
             msg = "PairwisePanel requires at least one judge"
             raise ValueError(msg)
