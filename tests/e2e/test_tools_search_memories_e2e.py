@@ -46,9 +46,13 @@ async def test_search_memories_returns_matching_records(
         )
     )
 
+    # The default (no embedding_fn) search uses keyword token overlap, so
+    # the query must contain a token that lives in the record's text. Use
+    # "tacos" to match the title/summary/body directly rather than "food"
+    # (which only worked when MockStore.asearch ignored the query).
     scripted = scripted_llm(
         [
-            tool_call_turn("search_memories", {"query": "food"}),
+            tool_call_turn("search_memories", {"query": "tacos"}),
             answer("found it"),
         ]
     )

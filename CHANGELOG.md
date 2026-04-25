@@ -7,6 +7,16 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Opt-in semantic search for `PersistentMemoryManager`.** Pass an async
+  `embedding_fn` (or set `AgentConfig.memory_embedding_fn`) to index
+  records on create/update and rank `search()` by cosine similarity
+  instead of keyword overlap. No silent fallback — if no embedding
+  function is configured the search uses case-insensitive token
+  overlap against `title` / `summary` / `body`, which is deterministic
+  regardless of `Store` backend support for `asearch(query=...)`. Fixes
+  [#8](https://github.com/allada-homelab/langgraph-kit/issues/8). See
+  [docs/memory/persistent-manager.md](docs/memory/persistent-manager.md#searchquery-str-scope-memoryscope-memory_type-memorytype--none--none-limit-int--5---listmemoryrecord).
+
 - **Phase 4 testing complete — 90.55% line coverage, 765 tests passing.**
   Grew the test suite from a 442-test / ~72%-coverage baseline to 765
   tests / 90.55% coverage across 23 new module-level coverage files and
