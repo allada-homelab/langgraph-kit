@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import logging
-import math
 import re
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
+from langgraph_kit.core._vector_math import cosine_similarity
 from langgraph_kit.core.memory.models import (
     MemoryRecord,
     MemoryScope,
@@ -42,16 +42,7 @@ def _tokenize(text: str) -> set[str]:
     return {m.group(0).lower() for m in _TOKEN_RE.finditer(text)}
 
 
-def _cosine(a: list[float], b: list[float]) -> float:
-    """Cosine similarity. Returns 0.0 if either vector is the zero vector."""
-    if not a or not b or len(a) != len(b):
-        return 0.0
-    dot = sum(x * y for x, y in zip(a, b, strict=True))
-    na = math.sqrt(sum(x * x for x in a))
-    nb = math.sqrt(sum(y * y for y in b))
-    if na == 0.0 or nb == 0.0:
-        return 0.0
-    return dot / (na * nb)
+_cosine = cosine_similarity
 
 
 class PersistentMemoryManager:

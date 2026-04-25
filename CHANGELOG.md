@@ -7,6 +7,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **RAG primitives — foundation layer.** New `langgraph_kit.core.rag`
+  module: `Document`, default `word_chunker` (3.2k chars / 200-char
+  overlap, no mid-word splits), `RetrievalIndex` with
+  ingest/search/delete on top of any LangGraph `Store`, and
+  `build_search_knowledge_tool(index)` factory that wraps the index as
+  an agent-facing `search_knowledge` tool. Embedding function is
+  caller-supplied (same convention as semantic memory search from #8)
+  — no new heavyweight dependencies. Cosine helper extracted to
+  `langgraph_kit.core._vector_math` for reuse across memory and RAG.
+  Citation verification + grounding-eval rubric are deferred to a
+  follow-up. Fixes
+  [#16](https://github.com/allada-homelab/langgraph-kit/issues/16).
+
 - **CI-friendly exits for `python -m langgraph_kit.evals`.** Four new
   flags: `--fail-under N` exits non-zero when the overall pass rate is
   below N; `--baseline FILE` compares against a stored slim JSON
