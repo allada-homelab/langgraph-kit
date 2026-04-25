@@ -37,7 +37,7 @@ class _Metric:
     """Base class for the kit's metric primitives.
 
     Subclasses define ``_help_kind`` (``"counter"`` / ``"gauge"`` /
-    ``"histogram"``) and implement ``_render_lines``.
+    ``"histogram"``) and implement :meth:`render`.
     """
 
     _help_kind: ClassVar[str] = "untyped"
@@ -53,6 +53,15 @@ class _Metric:
             f"# HELP {self.name} {self.help_text}",
             f"# TYPE {self.name} {self._help_kind}",
         ]
+
+    def render(self) -> list[str]:  # pragma: no cover — overridden
+        """Render this metric to Prometheus exposition lines.
+
+        Subclasses must implement this. Defined on the base so the
+        registry's iteration over ``_Metric`` instances type-checks
+        without each call site needing to narrow.
+        """
+        raise NotImplementedError
 
 
 class Counter(_Metric):
