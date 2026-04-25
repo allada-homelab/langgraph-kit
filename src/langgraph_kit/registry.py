@@ -19,6 +19,14 @@ class AgentMetadata(BaseModel):
     capabilities: list[str] = Field(default_factory=list)
     input_modes: list[str] = Field(default_factory=lambda: ["text/plain"])
     output_modes: list[str] = Field(default_factory=lambda: ["text/plain"])
+    # Optional structured-output contract. When set, the agent has
+    # opted into schema-validated final messages (enforced by
+    # ``StructuredOutputMiddleware``). Stored as ``Any`` so consumers
+    # can introspect via ``model_json_schema()`` without forcing a
+    # pydantic import on every metadata reader.
+    output_schema: Any = None
+
+    model_config = {"arbitrary_types_allowed": True}
 
 
 _registry: dict[str, Any] = {}
@@ -68,13 +76,16 @@ def list_agents() -> list[dict[str, Any]]:
     result: list[dict[str, Any]] = []
     for agent_id in _registry:
         meta = _metadata.get(agent_id, AgentMetadata())
-        result.append(
-            {
-                "id": agent_id,
-                "name": agent_id.replace("-", " ").title(),
-                "description": meta.description,
-                "tags": meta.tags,
-                "version": meta.version,
-            }
-        )
+        entry: dict[str, Any] = {
+            "id": agent_id,
+            "name": agent_id.replace("-", " ").title(),
+            "description": meta.description,
+            "tags": meta.tags,
+            "version": meta.version,
+        }
+        if meta.output_schema is not None:
+            # Render the schema as JSON Schema so consumers can document /
+            # validate without needing a pydantic import.
+            entry["output_schema"] = meta.output_schema.model_json_schema()
+        result.append(entry)
     return result

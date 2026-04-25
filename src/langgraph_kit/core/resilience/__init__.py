@@ -9,6 +9,12 @@ from .loop_guard import (
 from .post_run import PostRunBackstopMiddleware
 from .runtime_state import RuntimeStateMiddleware
 from .stop_hooks import StopHooksMiddleware
+from .structured_output import (
+    StructuredOutputMiddleware,
+    extract_structured_output,
+    format_schema_instruction,
+    parse_structured_output,
+)
 from .tool_error import ToolErrorMiddleware
 
 __all__ = [
@@ -18,6 +24,10 @@ __all__ = [
     "PostRunBackstopMiddleware",
     "RuntimeStateMiddleware",
     "StopHooksMiddleware",
+    "StructuredOutputMiddleware",
     "ToolErrorMiddleware",
     "ToolLoopGuardMiddleware",
+    "extract_structured_output",
+    "format_schema_instruction",
+    "parse_structured_output",
 ]
