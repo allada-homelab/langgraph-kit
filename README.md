@@ -226,23 +226,12 @@ See [docs/memory/overview.md](docs/memory/overview.md), [extraction](docs/memory
 
 ### Tools with capability metadata
 
-Tools aren't just callables — they carry risk levels, profile/worker filters, tags, and prompt guidance. The registry supports filtering and compilation:
+Tools aren't just callables — they carry risk levels, profile/worker filters, tags, and prompt guidance. The registry supports filtering and compilation by max risk so a worker only sees what it's allowed to call.
 
-```python
-from langgraph_kit.core.tools.registry import ToolRegistry
-from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
+Runnable demo: [`examples/tools_register_capability.py`](examples/tools_register_capability.py) — registers three tools across `READ_ONLY`, `MUTATING`, and `DESTRUCTIVE` risk levels, then filters the compiled list.
 
-registry = ToolRegistry()
-registry.register(ToolCapability(
-    name="delete_branch",
-    func=my_delete_branch_impl,
-    risk=ToolRisk.DESTRUCTIVE,
-    interrupt_before=True,              # triggers HITL approval
-    profiles={"coding"},
-    worker_types={"implementer"},
-    prompt_guidance="Use only after confirming the branch is merged.",
-))
-tools = registry.compile_tools(max_risk=ToolRisk.MUTATING)  # filtered
+```bash
+uv run python -m examples.tools_register_capability
 ```
 
 See [docs/tools/overview.md](docs/tools/overview.md), [capability](docs/tools/capability.md), [registry](docs/tools/registry.md), [memory-tools](docs/tools/memory-tools.md), [worktree-tools](docs/tools/worktree-tools.md).
@@ -251,19 +240,10 @@ See [docs/tools/overview.md](docs/tools/overview.md), [capability](docs/tools/ca
 
 Layered sections + context providers, ordered stable-first for prompt-cache efficiency.
 
-```python
-from langgraph_kit.core.prompt_assembly.sections import (
-    PromptSection, SectionStability, SectionRegistry,
-)
-from langgraph_kit.core.prompt_assembly.composer import PromptComposer
+Runnable demo: [`examples/prompt_assembly_sections.py`](examples/prompt_assembly_sections.py) — registers stable / volatile / conditional sections at different priorities, shows what gets included under different `conditions` sets.
 
-registry = SectionRegistry()
-registry.register(PromptSection(
-    id="core_identity", priority=100, stability=SectionStability.STABLE,
-    content="You are a helpful coding assistant...",
-))
-composer = PromptComposer(registry, providers=[...])
-system_prompt = composer.compose_sections_only(conditions={"memory", "skills"})
+```bash
+uv run python -m examples.prompt_assembly_sections
 ```
 
 See [docs/prompt-assembly/overview.md](docs/prompt-assembly/overview.md).
@@ -295,29 +275,22 @@ See [docs/commands/overview.md](docs/commands/overview.md).
 
 Declarative worker definitions for the deepagents `task` tool, plus `start_async_task` / `check_async_task` for fire-and-forget background work and a store-backed per-thread message queue for busy threads.
 
-```python
-from langgraph_kit.core.orchestration.workers import GENERAL_WORKERS, CODING_WORKERS
-# or define your own:
-MY_WORKERS = [
-    {"name": "data-analyst", "description": "...", "system_prompt": "...", "tools": [...]},
-]
+Runnable demo: [`examples/orchestration_workers.py`](examples/orchestration_workers.py) — inspects the bundled `GENERAL_WORKERS` and `CODING_WORKERS` lists and shows how to extend them with a domain-specific worker.
+
+```bash
+uv run python -m examples.orchestration_workers
 ```
 
 See [docs/orchestration/overview.md](docs/orchestration/overview.md).
 
 ### Human-in-the-loop
 
-```python
-# In a tool or middleware:
-from langgraph_kit.core.hitl.tools import approve_action
+Pause-and-resume approval via LangGraph's `interrupt()` primitive, surfaced through the kit's `approve_action` tool and `/resume` HTTP endpoint.
 
-await approve_action(
-    action="delete_file",
-    description="Remove stale config",
-    context={"path": "config.yaml"},
-)
-# → graph pauses via interrupt, SSE emits the approval request,
-# client POSTs /resume with {"responses": [{"type": "accept"}]}.
+Runnable demo: [`examples/hitl_approval_flow.py`](examples/hitl_approval_flow.py) — wires a tiny custom graph that interrupts on a `delete_branch` request, then resumes with `Command(resume={"type": "accept"})`.
+
+```bash
+uv run python -m examples.hitl_approval_flow
 ```
 
 See [docs/hitl/overview.md](docs/hitl/overview.md).

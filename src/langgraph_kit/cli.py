@@ -6,11 +6,16 @@ Usage::
     python -m langgraph_kit.cli new my-agent --output-dir ./agents
     python -m langgraph_kit.cli new my-agent --force   # overwrite existing
     python -m langgraph_kit.cli list
+    python -m langgraph_kit.cli examples list
+    python -m langgraph_kit.cli examples run quickstart_echo
 """
 
 from __future__ import annotations
 
 import argparse
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 from textwrap import dedent
@@ -207,6 +212,93 @@ def _out(text: str) -> None:
     sys.stdout.write(text + "\n")
 
 
+# ---------------------------------------------------------------------------
+# Examples discovery
+# ---------------------------------------------------------------------------
+
+
+def _examples_dir() -> Path | None:
+    """Locate the repo-root ``examples/`` directory, or ``None`` if missing.
+
+    The kit's wheel doesn't yet ship examples (they live at the repo
+    root, not under ``src/langgraph_kit/``). When run from a source
+    checkout, walk up from the installed package to find them. When
+    run from a PyPI install, this returns None and the caller surfaces
+    a clear "clone the repo" message — see issue #61.
+    """
+    candidate = Path(__file__).resolve().parent.parent.parent / "examples"
+    return candidate if candidate.is_dir() else None
+
+
+def _example_pitch(path: Path) -> str:
+    """Return the first non-blank docstring line as the example's pitch."""
+    try:
+        head = path.read_text(encoding="utf-8")[:2000]
+    except OSError:
+        return ""
+    # Capture the docstring delimited by ``"""..."""``; the first line is
+    # the pitch.
+    match = re.search(r'"""(.+?)"""', head, re.DOTALL)
+    if not match:
+        return ""
+    body = match.group(1).strip()
+    return body.splitlines()[0] if body else ""
+
+
+def _list_examples(examples_dir: Path) -> list[Path]:
+    """Return the discoverable examples, sorted alphabetically."""
+    return sorted(
+        p
+        for p in examples_dir.glob("*.py")
+        if p.name != "run_all.py" and not p.name.startswith("_")
+    )
+
+
+def _cmd_examples_list() -> int:
+    examples_dir = _examples_dir()
+    if examples_dir is None:
+        sys.stderr.write(
+            "examples/ directory not found. Examples ship from the source "
+            "checkout — clone https://github.com/allada-homelab/langgraph-kit "
+            "and run from there.\n"
+        )
+        return 1
+    paths = _list_examples(examples_dir)
+    _out(f"{len(paths)} example(s) in {examples_dir}:")
+    for path in paths:
+        pitch = _example_pitch(path)
+        # Right-pad the name so pitches line up; widest current name is ~30.
+        _out(f"  {path.stem:<32} {pitch}")
+    return 0
+
+
+def _cmd_examples_run(name: str, *, real_llm: bool = False) -> int:
+    examples_dir = _examples_dir()
+    if examples_dir is None:
+        sys.stderr.write(
+            "examples/ directory not found. Examples ship from the source "
+            "checkout — clone the repo to use ``examples run``.\n"
+        )
+        return 1
+    target = examples_dir / f"{name}.py"
+    if not target.is_file():
+        sys.stderr.write(
+            f"No example named {name!r}. Run ``examples list`` to see options.\n"
+        )
+        return 2
+
+    repo_root = examples_dir.parent
+    env = dict(os.environ)
+    env.setdefault("LANGGRAPH_KIT_EXAMPLES_LLM", "real" if real_llm else "scripted")
+    completed = subprocess.run(  # noqa: S603 — fixed argv, no shell, internal use
+        [sys.executable, "-m", f"examples.{name}"],
+        check=False,
+        cwd=repo_root,
+        env=env,
+    )
+    return completed.returncode
+
+
 def main() -> None:
     """CLI entry point."""
     parser = argparse.ArgumentParser(
@@ -231,6 +323,20 @@ def main() -> None:
     # list command
     sub.add_parser("list", help="List available agent templates")
 
+    # examples command (with nested list / run subcommands)
+    examples_parser = sub.add_parser(
+        "examples", help="Discover and run the bundled feature examples"
+    )
+    ex_sub = examples_parser.add_subparsers(dest="examples_command")
+    ex_sub.add_parser("list", help="List discoverable examples")
+    run_parser = ex_sub.add_parser("run", help="Run an example by name")
+    run_parser.add_argument("name", help="Example file name without extension")
+    run_parser.add_argument(
+        "--real-llm",
+        action="store_true",
+        help="Use the real LLM (requires AGENT_LLM_API_KEY)",
+    )
+
     args = parser.parse_args()
 
     if args.command == "new":
@@ -254,6 +360,13 @@ def main() -> None:
     elif args.command == "list":
         _out("Available templates:")
         _out("  default — Full-featured agent with memory, tools, commands, middleware")
+    elif args.command == "examples":
+        if args.examples_command == "list":
+            sys.exit(_cmd_examples_list())
+        elif args.examples_command == "run":
+            sys.exit(_cmd_examples_run(args.name, real_llm=args.real_llm))
+        else:
+            examples_parser.print_help()
     else:
         parser.print_help()
 

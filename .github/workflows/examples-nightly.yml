@@ -1,0 +1,67 @@
+name: Examples (nightly real-LLM)
+
+on:
+  schedule:
+    # Daily at 06:00 UTC. Picks up upstream model drift overnight while
+    # the team is asleep so a failing demo greets us in the morning
+    # rather than mid-day.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+jobs:
+  examples-real:
+    name: Examples (real LLM)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv sync --all-extras --all-groups
+
+      - name: Run examples against real LLM
+        id: run
+        env:
+          # Cost guardrail lives inside examples/_lib.py: builds default to
+          # claude-haiku-4-5 with hard caps on max_output_tokens / turns.
+          AGENT_LLM_API_KEY: ${{ secrets.AGENT_LLM_API_KEY }}
+          LANGGRAPH_KIT_EXAMPLES_LLM: real
+          # ``RUN_NETWORK=1`` un-skips ``REQUIRES_NETWORK = True`` examples
+          # (Langfuse, real MCP). Hermetic-but-LLM-touching demos run in
+          # both tiers so model drift is caught quickly.
+          RUN_NETWORK: "1"
+        run: uv run python -m examples.run_all
+
+      - name: Open issue on failure
+        if: failure()
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const today = new Date().toISOString().slice(0, 10);
+            const title = `[nightly examples] failure on ${today}`;
+            const body = [
+              `Nightly real-LLM examples run failed.`,
+              ``,
+              `Logs: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              ``,
+              `Likely causes:`,
+              `- Upstream model drift (haiku-4-5 prompt format change)`,
+              `- Provider outage`,
+              `- Newly-added example missing scripted/real-LLM mode handling`,
+              ``,
+              `Triage with the warning-investigator agent if it's a model warning,`,
+              `or run \`just examples-smoke\` locally to confirm the hermetic tier still passes.`,
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['bug'],
+            });
