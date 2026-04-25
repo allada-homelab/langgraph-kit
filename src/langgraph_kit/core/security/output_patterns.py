@@ -7,7 +7,7 @@ redacted without exposing the raw match.
 
 Two pattern families:
 
-- **Secrets / credentials** — re-uses the same shapes as the inbound
+- **Secrets / credentials** — same shapes as the inbound
   guard from #5 (API keys, GitHub PATs, Bearer tokens, AWS keys, etc.).
   Kept here as well so the security module is self-contained — the
   memory module's private ``_SECRET_PATTERNS`` covers the same ground
