@@ -216,19 +216,10 @@ Each subsystem is independent and can be used on its own. The examples below are
 
 Typed, scoped, persistent knowledge that survives across conversations. Five agent-callable CRUD tools, LLM-powered auto-extraction after each turn, and background consolidation to merge near-duplicates and prune stale records.
 
-```python
-from langgraph_kit.core.memory.persistent import PersistentMemoryManager
-from langgraph_kit.core.memory.models import MemoryRecord, MemoryType, MemoryScope
+Runnable demo: [`examples/memory_save_recall.py`](examples/memory_save_recall.py) — creates three typed records, lists them by scope, updates one, and runs a keyword search. Single source of truth: this file is also what the docs site renders for the memory page.
 
-mgr = PersistentMemoryManager(store)
-await mgr.save(MemoryRecord(
-    title="User prefers terse responses",
-    type=MemoryType.FEEDBACK,
-    scope=MemoryScope.USER,
-    summary="No trailing summaries; diff is sufficient.",
-    body="...why and how to apply...",
-))
-hits = await mgr.search("response style", scope=MemoryScope.USER)
+```bash
+uv run python -m examples.memory_save_recall
 ```
 
 See [docs/memory/overview.md](docs/memory/overview.md), [extraction](docs/memory/extraction.md), [consolidation](docs/memory/consolidation.md), [shared-memory](docs/memory/shared-memory.md), [session-notebook](docs/memory/session-notebook.md).
