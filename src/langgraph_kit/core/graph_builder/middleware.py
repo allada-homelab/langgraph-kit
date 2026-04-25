@@ -30,6 +30,7 @@ from langgraph_kit.core.resilience import (
     ToolErrorMiddleware,
     ToolLoopGuardMiddleware,
 )
+from langgraph_kit.core.security import PromptInjectionGuardMiddleware
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -68,6 +69,17 @@ def build_middleware_stack(
     return free-form text are unaffected.
     """
     middleware: list[Any] = []
+
+    # Inbound prompt-injection scanner runs early so the flag is
+    # available to downstream middleware that wants to react. Mode is
+    # read from the active AgentConfig; default ``"warn"`` is
+    # non-blocking. ``"off"`` skips appending the middleware entirely
+    # so there is zero overhead when the feature is disabled.
+    from langgraph_kit._config import get_config
+
+    pi_mode = get_config().prompt_injection_mode
+    if pi_mode and pi_mode != "off":
+        middleware.append(PromptInjectionGuardMiddleware(mode=pi_mode))  # type: ignore[arg-type]
 
     # Command interception (if dispatcher provided)
     if command_dispatcher:

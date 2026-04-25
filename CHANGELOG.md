@@ -7,6 +7,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Inbound prompt-injection scanner.** New `langgraph_kit.core.security`
+  module ships `INJECTION_PATTERNS` (regex set covering known phrasings
+  like "ignore previous instructions", persona override, jailbreak
+  vocabulary, system-prompt exfil, pseudo-system tags) and a
+  `PromptInjectionGuardMiddleware` that scans the most recent
+  `HumanMessage` on every turn. Default mode `"warn"` logs at WARNING
+  and tags `additional_kwargs` with the matched pattern names so audit /
+  observability layers can react; `"off"` disables. An optional
+  `classifier=` hook handles paraphrases (regex stays the fast-path).
+  Wired into the standard middleware stack via
+  `AgentConfig.prompt_injection_mode`. The richer `"quarantine"` mode
+  (narrow tool surface for the affected turn) is deferred to a
+  follow-up — it depends on the audit-log infrastructure tracked in
+  #24. Fixes
+  [#22](https://github.com/allada-homelab/langgraph-kit/issues/22).
+
 - **RAG primitives — foundation layer.** New `langgraph_kit.core.rag`
   module: `Document`, default `word_chunker` (3.2k chars / 200-char
   overlap, no mid-word splits), `RetrievalIndex` with
