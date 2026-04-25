@@ -7,6 +7,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Per-user rate limiting.** New `langgraph_kit.contrib.rate_limit`
+  module with a token-bucket primitive (`TokenBucket`), an
+  in-memory backend (`InMemoryRateLimitBackend`), and an ASGI
+  middleware (`RateLimitMiddleware`) that emits `429 Too Many
+  Requests` with a `Retry-After` header on bucket exhaustion. Keyed
+  by the FastAPI `current_user` dependency by default; anonymous
+  traffic shares one bucket; health-check paths bypass. Backend is
+  swappable via the `RateLimitBackend` Protocol so a multi-process
+  Redis backend can drop in later (#27 cross-process consistency).
+  Tokens-per-day enforcement (the second limit in the issue) is
+  deferred — it integrates with the existing `BudgetManager`. Fixes
+  [#25](https://github.com/allada-homelab/langgraph-kit/issues/25).
+
 - **Append-only audit log.** New `langgraph_kit.core.audit` module ships
   `AuditAction` (bounded enum: agent_invoke, memory_create/update/delete,
   hitl_approve/reject, injection_detected, output_redacted, data_export/
