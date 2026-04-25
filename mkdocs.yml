@@ -126,6 +126,13 @@ nav:
   - Examples:
     - Overview: examples/index.md
     - Memory — save & recall: examples/memory_save_recall.md
+    - Tools — register capability: examples/tools_register_capability.md
+    - Prompt assembly — sections: examples/prompt_assembly_sections.md
+    - HITL — approval flow: examples/hitl_approval_flow.md
+    - Orchestration — workers: examples/orchestration_workers.md
+    - Replay — record & play: examples/replay_record_and_play.md
+    - FastAPI — minimal router: examples/fastapi_minimal_router.md
+    - Context — compaction: examples/context_compaction.md
   - CLI: cli/reference.md
   - API reference:
     - Public API: api-reference/public-api.md
