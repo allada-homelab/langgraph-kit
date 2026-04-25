@@ -108,15 +108,20 @@ async def test_stream_filters_internal_tagged_token_events() -> None:
     async for chunk in stream_agent_events(graph, {}, {}):
         chunks.append(chunk)
 
-    # Collect all emitted tokens from the SSE stream.
+    # Collect all emitted tokens from the SSE stream. Each chunk now
+    # carries an SSE ``id:`` line plus a ``data:`` line — pluck the data
+    # line specifically rather than naively stripping the "data: " prefix
+    # off the whole chunk.
     tokens: list[str] = []
     for raw in chunks:
-        for line in raw.strip().split("\n\n"):
-            line = line.removeprefix("data: ").strip()
-            if not line or line == "[DONE]":
+        for line in raw.split("\n"):
+            if not line.startswith("data: "):
+                continue
+            data = line.removeprefix("data: ").strip()
+            if not data or data == "[DONE]":
                 continue
             try:
-                payload = json.loads(line)
+                payload = json.loads(data)
             except json.JSONDecodeError:
                 continue
             if isinstance(payload, dict) and "token" in payload:

@@ -7,6 +7,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **SSE heartbeats and event ids in `stream_agent_events`.** Every emitted
+  chunk now carries an `id: <n>` line with a per-stream monotonically-
+  increasing sequence number, and a configurable
+  `heartbeat_interval` (default 15 s) emits
+  `{"heartbeat": {"ts": ..., "last_event_id": ...}}` chunks during quiet
+  periods so proxies / load balancers don't drop idle connections. Set
+  `heartbeat_interval=None` to disable. Existing `error` events continue
+  to fire before `[DONE]`. The durable replay log + `/stream/resume`
+  endpoint that consume the `id:` line are deferred to a follow-up — for
+  now the id makes the contract forward-compatible. Fixes
+  [#11](https://github.com/allada-homelab/langgraph-kit/issues/11).
+
 - **Wire up four `ToolCapability` orphan fields.** Three previously-advisory
   fields are now enforced by bundled middleware (Fixes
   [#6](https://github.com/allada-homelab/langgraph-kit/issues/6)):
