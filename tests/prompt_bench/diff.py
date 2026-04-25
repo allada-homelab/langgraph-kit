@@ -181,8 +181,12 @@ async def _diff_scenario(
     diff.pair_count = len(pairs)
 
     for base_sample, variant_sample in pairs:
+        # Anchor the judge in what the agent was actually asked. Falls
+        # back to the scenario id only if neither sample captured user
+        # input (older reports without the field).
+        input_text = base_sample.user_input or variant_sample.user_input or scenario_id
         result = await panel.compare(
-            input_text=scenario_id,
+            input_text=input_text,
             base_trace=base_sample.to_trace(),
             variant_trace=variant_sample.to_trace(),
         )

@@ -122,8 +122,10 @@ async def default_drive_scenario(graph: Any, scenario: Scenario) -> dict[str, An
     messages: list[Any] = []
     tool_calls: list[dict[str, Any]] = []
     final_output = ""
+    user_input_lines: list[str] = []
 
     for turn in scenario.turns:
+        user_input_lines.append(f"USER: {turn.user}")
         messages.append(HumanMessage(content=turn.user))
         result = await graph.ainvoke({"messages": messages}, config=config)
         if isinstance(result, dict) and "messages" in result:
@@ -148,7 +150,11 @@ async def default_drive_scenario(graph: Any, scenario: Scenario) -> dict[str, An
             content = last_ai.content
             final_output = content if isinstance(content, str) else str(content)
 
-    return {"final_output": final_output, "tool_calls": tool_calls}
+    return {
+        "final_output": final_output,
+        "tool_calls": tool_calls,
+        "user_input": "\n".join(user_input_lines),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -216,16 +222,21 @@ def make_run_one(
             )
 
         duration_ms = (time.monotonic() - start) * 1000
-        final_output = (
-            result.get("final_output", "") if isinstance(result, dict) else str(result)
-        )
-        tool_calls = result.get("tool_calls", []) if isinstance(result, dict) else []
+        if isinstance(result, dict):
+            final_output = result.get("final_output", "")
+            tool_calls = result.get("tool_calls", [])
+            user_input = result.get("user_input", "")
+        else:
+            final_output = str(result)
+            tool_calls = []
+            user_input = ""
         return BenchSample(
             scenario_id=scenario.id,
             sample_index=sample_index,
             overlay_name=overlay.name,
             duration_ms=duration_ms,
             final_output=final_output,
+            user_input=user_input,
             tool_calls=tool_calls,
         )
 
