@@ -7,6 +7,23 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Live graph overlay — `node_entered` / `node_exited` SSE
+  events.** `stream_agent_events` now emits
+  `{"node_entered": {"id", "name"}}` and
+  `{"node_exited": {"id", "name"}}` for every graph-declared node
+  enter/exit (filtered to events with `metadata.langgraph_node`
+  set, so internal middleware stays out of the stream). The
+  `name` field matches the node ids `print_graph` emits in
+  Mermaid markup, so a viewer can use it as a CSS selector key
+  to highlight the currently-running node. Repeated
+  `on_chain_start` events for the same node (sub-channel fan-in)
+  are coalesced — one `node_entered` per transition. `INTERNAL_TAG`
+  filter applies the same way it already does for tokens, so
+  memory extraction / consolidation / etc. don't pollute the
+  overlay. Sample HTML/JS viewer recipe at
+  [`docs/visualization/live.md`](docs/visualization/live.md).
+  Closes [#86](https://github.com/allada-homelab/langgraph-kit/issues/86).
+
 - **Store-condition watcher triggers
   (`langgraph_kit.contrib.watchers`).** Polling watchers that fire
   agent invocations when a Store namespace satisfies a predicate.
