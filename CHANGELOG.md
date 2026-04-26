@@ -5,6 +5,15 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Added
+
+- **`langgraph-kit shell`: `/info` slash command.** The interactive
+  REPL now responds to `/info` with the active agent id, thread
+  id, user id, and user-supplied module path — without invoking
+  the agent. Closes one of the deferred items on
+  [#37](https://github.com/allada-homelab/langgraph-kit/issues/37);
+  the shell already had `/exit` and full thread/user-id plumbing.
+
 ### Fixed
 
 - **`trace_to_mermaid` sequence-mode now renders nested chain

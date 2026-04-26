@@ -190,6 +190,7 @@ async def run_shell(
 
     write_output(f"langgraph-kit shell — agent={agent_id!r} thread={thread_id!r}")
     write_output("Type your message; '/exit' (or Ctrl-D / Ctrl-C) to quit.")
+    write_output("Built-in slash commands: /exit, /info.")
 
     while True:
         try:
@@ -201,6 +202,14 @@ async def run_shell(
             continue
         if user_input.strip().lower() in _EXIT_COMMANDS:
             return 0
+        if user_input.strip().lower() == "/info":
+            write_output(
+                f"  agent_id  = {agent_id}\n"
+                f"  thread_id = {thread_id}\n"
+                f"  user_id   = {user_id}\n"
+                f"  module    = {user_module or '(built-in)'}"
+            )
+            continue
         try:
             reply = await _invoke_once(graph, user_input, config)
         except Exception:
