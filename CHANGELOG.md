@@ -7,6 +7,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Webhook trigger surface.** New `langgraph_kit.contrib.webhook`
+  module turns inbound HTTP webhooks into agent runs. Define a
+  `WebhookSpec(id, agent_id, secret, payload_template)`, register it
+  with a `WebhookRegistry`, mount the FastAPI router via
+  `create_webhook_router(registry, graph_resolver=...)`. The route
+  HMAC-SHA256-validates the request body against `secret` (GitHub
+  `X-Hub-Signature-256` convention by default; override per-spec for
+  Stripe, etc.), renders `payload_template` against the parsed JSON
+  body, and invokes the resolved agent on a fresh
+  `webhook-{id}-{uuid}` thread. HMAC validation is mandatory by
+  design — no anonymous-fire mode. `compute_signature` and
+  `verify_signature` are exported as pure helpers for senders writing
+  test fixtures. Cron-style scheduled triggers and Store-condition
+  watchers are tracked separately as follow-up issues. Closes part of
+  [#19](https://github.com/allada-homelab/langgraph-kit/issues/19).
+
 - **Prompt versioning + run-level version tagging.** `PromptSection`
   gains a free-form `version: str` field (default `"1"`,
   caller-controlled — not a content hash) and `SectionRegistry` now
