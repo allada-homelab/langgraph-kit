@@ -1248,3 +1248,60 @@ def test_reference_extra_providers_alone_when_default_disabled(
 
     assert not any(isinstance(p, SystemContextProvider) for p in providers)
     assert providers[-1] is extra
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: output_schema= wiring
+# ---------------------------------------------------------------------------
+# The kwarg flows through to ``build_deep_agent`` which appends
+# StructuredOutputMiddleware when set. These tests pin the wiring so the
+# kwarg can't be silently dropped.
+
+
+def test_reference_output_schema_appends_structured_output_middleware(
+    mock_store: Any,
+) -> None:
+    """``output_schema=Schema`` adds a StructuredOutputMiddleware to the stack."""
+    from pydantic import BaseModel, Field
+
+    from langgraph_kit.core.resilience.structured_output import (
+        StructuredOutputMiddleware,
+    )
+
+    class Answer(BaseModel):
+        summary: str
+        confidence: float = Field(ge=0.0, le=1.0)
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_deep_agent(
+            checkpointer=MagicMock(),
+            store=mock_store,
+            output_schema=Answer,
+        )
+
+    middleware = deepagents_mod.create_deep_agent.call_args.kwargs["middleware"]
+    structured = [m for m in middleware if isinstance(m, StructuredOutputMiddleware)]
+    assert structured, (
+        "StructuredOutputMiddleware must be in the stack when output_schema= is set"
+    )
+    assert structured[0]._schema is Answer
+
+
+def test_reference_no_output_schema_omits_structured_output_middleware(
+    mock_store: Any,
+) -> None:
+    """Default build (no schema) leaves StructuredOutputMiddleware out of the stack."""
+    from langgraph_kit.core.resilience.structured_output import (
+        StructuredOutputMiddleware,
+    )
+
+    create = _build_reference_with_capture(mock_store)
+    middleware = create.call_args.kwargs["middleware"]
+    assert not any(isinstance(m, StructuredOutputMiddleware) for m in middleware)

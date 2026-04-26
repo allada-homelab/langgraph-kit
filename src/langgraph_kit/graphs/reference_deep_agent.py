@@ -10,7 +10,10 @@ and tools (see ``coding_agent`` for the canonical extension pattern).
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pydantic import BaseModel
 
 from langgraph_kit.core.orchestration.workers import GENERAL_WORKERS
 from langgraph_kit.core.prompt_assembly.sections import (
@@ -130,6 +133,7 @@ def build_reference_deep_agent(
     extra_configure_tools: Any | None = None,
     enable_default_extra_providers: bool = True,
     extra_providers: list[Any] | None = None,
+    output_schema: type[BaseModel] | None = None,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
 
@@ -191,6 +195,15 @@ def build_reference_deep_agent(
     stack additional :class:`~langgraph_kit.core.prompt_assembly.context_providers.ContextProvider`
     instances. Each provider's ``async provide(context)`` is invoked
     by :class:`PromptComposer` when a full prompt is composed.
+
+    ``output_schema`` accepts a Pydantic ``BaseModel`` subclass. When
+    set, :class:`~langgraph_kit.core.resilience.structured_output.StructuredOutputMiddleware`
+    is appended to the middleware stack and validates the agent's
+    terminal message against the schema (looking for a single
+    ``<output_schema>{...}</output_schema>`` block). On mismatch the
+    middleware injects a retry nudge with the JSON-Schema rendering
+    of the model. ``None`` (default) leaves structured-output
+    validation off.
     """
     stop_hooks: list[Any] = []
     if enable_default_stop_hooks:
@@ -233,4 +246,5 @@ def build_reference_deep_agent(
         configure_tools=configure_tools,
         configure_deferred_tools=configure_deferred_tools,
         extra_providers=providers or None,
+        output_schema=output_schema,
     )

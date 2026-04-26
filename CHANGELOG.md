@@ -7,6 +7,15 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: opt-in `output_schema=` kwarg.**
+  `build_reference_deep_agent` now accepts an `output_schema:
+  type[BaseModel] | None = None` kwarg and forwards it to
+  `build_deep_agent`, which appends `StructuredOutputMiddleware` to
+  the stack when set. Closes the gap where the structured-output
+  feature shipped without a reference exemplar — callers can now
+  attach a Pydantic schema to the reference build directly. Closes
+  [#102](https://github.com/allada-homelab/langgraph-kit/issues/102).
+
 - **Reference deep agent: default `SystemContextProvider`.**
   `build_reference_deep_agent` now registers a `SystemContextProvider`
   on the prompt composer, mirroring how `coding_agent` ships
