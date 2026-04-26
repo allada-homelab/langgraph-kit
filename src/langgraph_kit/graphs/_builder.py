@@ -160,6 +160,7 @@ def build_deep_agent(
     output_schema: type[BaseModel] | None = None,
     coordinator: bool = False,
     llm_callbacks: list[Any] | None = None,
+    graph_callbacks: list[Any] | None = None,
 ) -> tuple[Any, Any]:
     """Build a deep agent with the standard skeleton.
 
@@ -411,4 +412,11 @@ def build_deep_agent(
     # default survives the ``astream_events`` codepath — see that helper's
     # docstring for the langchain_core/langgraph config-merge interaction.
     graph = bind_kit_defaults(graph, recursion_limit=recursion_limit)
+    if graph_callbacks:
+        # Bind callbacks at the graph level so on_chain_*, on_tool_*,
+        # and on_llm_* events all propagate to the handler. This is
+        # the integration point for TraceCallbackHandler and any
+        # other callback that needs full event coverage rather than
+        # just LLM events (use ``llm_callbacks=`` for the latter).
+        graph = graph.with_config({"callbacks": list(graph_callbacks)})
     return graph, command_dispatcher

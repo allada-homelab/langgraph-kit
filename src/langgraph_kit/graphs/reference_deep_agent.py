@@ -137,6 +137,7 @@ def build_reference_deep_agent(
     output_schema: type[BaseModel] | None = None,
     coordinator: bool = False,
     llm_callbacks: list[Any] | None = None,
+    graph_callbacks: list[Any] | None = None,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
 
@@ -235,6 +236,15 @@ def build_reference_deep_agent(
     after the run; pair with
     :class:`~langgraph_kit.core.cost.budget.BudgetManager` for
     per-thread budget enforcement on the Store.
+
+    ``graph_callbacks`` are bound at the graph level via
+    ``with_config`` so ``on_chain_*``, ``on_tool_*``, and
+    ``on_llm_*`` events all propagate to the handler. Use this entry
+    point for full-coverage tracing
+    (:class:`~langgraph_kit.core.tracing.TraceCallbackHandler`).
+    Caller owns the callback object so they can call ``get_trace()``
+    after the run and persist it via
+    :class:`~langgraph_kit.core.tracing.TraceStore` if desired.
     """
     stop_hooks: list[Any] = []
     if enable_default_stop_hooks:
@@ -283,6 +293,7 @@ def build_reference_deep_agent(
         output_schema=output_schema,
         coordinator=coordinator,
         llm_callbacks=llm_callbacks,
+        graph_callbacks=graph_callbacks,
     )
 
 
