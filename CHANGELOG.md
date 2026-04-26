@@ -7,6 +7,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: default `SystemContextProvider`.**
+  `build_reference_deep_agent` now registers a `SystemContextProvider`
+  on the prompt composer, mirroring how `coding_agent` ships
+  `GitContextProvider` — closing the gap where the only in-tree
+  exemplar of `extra_providers=` was domain-specific. The provider
+  injects current UTC datetime (ISO 8601), `platform.system()`,
+  `os.name`, and the kit version under a `# System Context` heading.
+  Output is deterministic given a fixed `clock=` for testability. Two
+  new kwargs: `enable_default_extra_providers` (default `True`) opts
+  out, and `extra_providers` is appended after the default. Closes
+  [#101](https://github.com/allada-homelab/langgraph-kit/issues/101).
+
 - **Reference deep agent: default custom tool via
   `configure_tools=`.** `build_reference_deep_agent` now registers a
   read-only `current_environment` tool through the `configure_tools=`
