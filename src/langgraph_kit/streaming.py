@@ -95,6 +95,11 @@ async def stream_agent_events(
       - ``{"artifact": {...}}`` — structured UI artifacts from ``create_artifact`` tool
       - ``{"tool_call_start": {...}}`` — tool invocation started
       - ``{"tool_call_end": {...}}`` — tool invocation completed
+      - ``{"node_entered": {"id": ..., "name": ...}}`` — graph node
+        starts executing (matches the node ids ``print_graph`` emits;
+        the live-overlay viewer toggles ``.active`` styling on the
+        node when this fires)
+      - ``{"node_exited": {"id": ..., "name": ...}}`` — paired close
       - ``{"interrupt": {...}}`` — graph paused for human input
       - ``{"heartbeat": {"ts": ..., "last_event_id": ...}}`` — emitted
         every ``heartbeat_interval`` seconds during quiet periods so
@@ -135,6 +140,13 @@ async def stream_agent_events(
     # request because the durable replay log is not yet wired in;
     # clients should treat ids as unique within a single connection.
     seq = 0
+    # Coalesce ``node_entered`` events: LangGraph fires ``on_chain_start``
+    # multiple times per node when sub-channels fan in, but the live
+    # graph overlay only cares about the *transition*. Track the
+    # currently-entered node so duplicates are dropped. ``None`` means
+    # "no node currently active" (boundary at session start + after each
+    # ``node_exited``). See issue #86.
+    last_entered_node: str | None = None
 
     try:
         # Accumulate text so we can detect trailing artifacts from models
@@ -227,6 +239,56 @@ async def stream_agent_events(
                     continue
 
                 kind = event["event"]
+
+                # --- Graph node enter/exit (live overlay for print_graph, #86) ---
+                # LangGraph fires ``on_chain_start`` / ``on_chain_end`` for
+                # every Runnable in the call tree — most of those aren't
+                # graph-level nodes (the kit's middleware, deepagents'
+                # ``write_todos`` wrapper, langchain's RunnablePassthrough,
+                # etc.). Filter to events where ``metadata.langgraph_node``
+                # is set — that key is LangGraph's own marker for
+                # "this is one of the graph's declared nodes," matching the
+                # ids ``print_graph`` emits in its Mermaid output.
+                if kind in ("on_chain_start", "on_chain_end"):
+                    metadata = event.get("metadata") or {}
+                    node_name = metadata.get("langgraph_node")
+                    if node_name:
+                        run_id = event.get("run_id", "")
+                        if kind == "on_chain_start":
+                            # Coalesce: don't refire ``node_entered`` for the
+                            # same node back-to-back. LangGraph sometimes
+                            # emits multiple start events for a single node
+                            # (parallel sub-channel fan-in); the overlay
+                            # only cares about the transition.
+                            if last_entered_node == node_name:
+                                continue
+                            last_entered_node = node_name
+                            yield _sse_chunk(
+                                seq,
+                                {
+                                    "node_entered": {
+                                        "id": run_id,
+                                        "name": node_name,
+                                    }
+                                },
+                            )
+                            seq += 1
+                        else:  # on_chain_end
+                            if last_entered_node == node_name:
+                                last_entered_node = None
+                            yield _sse_chunk(
+                                seq,
+                                {
+                                    "node_exited": {
+                                        "id": run_id,
+                                        "name": node_name,
+                                    }
+                                },
+                            )
+                            seq += 1
+                    # Either way, fall through — the rest of the chain-event
+                    # surface (per-node token streams, tool calls) is
+                    # handled below; this block is purely additive overlay.
 
                 # --- Tool call start ---
                 if kind == "on_tool_start":
