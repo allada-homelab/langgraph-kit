@@ -14,9 +14,11 @@ from __future__ import annotations
 
 import os
 import platform
-from collections.abc import Callable
 from datetime import UTC, datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class SystemContextProvider:
