@@ -7,6 +7,23 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Store-condition watcher triggers
+  (`langgraph_kit.contrib.watchers`).** Polling watchers that fire
+  agent invocations when a Store namespace satisfies a predicate.
+  `StoreWatcherSpec(id, agent_id, namespace, predicate,
+  poll_interval_seconds, payload_template)` defines one watcher;
+  `StoreWatcherRegistry` collects them; `StoreWatcherRunner`
+  spawns one asyncio task per spec inside an async-context-manager
+  lifecycle and exposes `poll_now(spec_id)` for tests / manual
+  ops. Edge-triggered: predicate flipping false → true fires once
+  and re-arms only after another false → true edge, so a stable
+  "predicate stays true" state doesn't re-fire on every poll.
+  Predicate exceptions are logged and treated as `False` so a bad
+  predicate doesn't kill the loop. Push-based watchers via
+  `LISTEN/NOTIFY` and multi-worker advisory-lock coordination are
+  intentionally deferred. Closes
+  [#82](https://github.com/allada-homelab/langgraph-kit/issues/82).
+
 - **Cron-style scheduled triggers
   (`langgraph_kit.contrib.schedule`).** New optional dependency
   `langgraph-kit[schedule]` (apscheduler). `ScheduledSpec(id,
