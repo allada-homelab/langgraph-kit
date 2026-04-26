@@ -7,6 +7,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Static graph visualization.** New
+  `langgraph_kit.core.visualization.print_graph(graph, *, format=...,
+  expand_subgraphs=False)` returns Mermaid (default) or ASCII markup
+  for a compiled agent's structure. Thin wrapper over LangChain
+  Core's `Graph.draw_mermaid` / `draw_ascii` that adds: a single
+  kit-level entry point so callers don't have to memorize
+  `graph.get_graph().draw_mermaid()`; a `TypeError` with helpful
+  message when an uncompiled `StateGraph` is passed (common
+  mistake); an `expand_subgraphs` flag that maps to LangGraph's
+  `xray` for orchestration-heavy agents. ASCII output requires
+  `grandalf` at runtime (raises `ImportError` from LangChain Core
+  if unavailable). Live execution overlay (highlighting the
+  currently-running node via SSE) is tracked as a separate
+  follow-up. Closes part of
+  [#21](https://github.com/allada-homelab/langgraph-kit/issues/21).
+
 - **Multi-agent communication primitives.** Two new Store-backed
   modules under `langgraph_kit.core.orchestration`. `AgentWorkspace`
   is a typed Pydantic document with optimistic-concurrency `apatch`
