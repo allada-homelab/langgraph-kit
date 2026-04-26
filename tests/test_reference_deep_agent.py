@@ -856,6 +856,8 @@ def _build_reference_with_capture(
     *,
     enable_default_stop_hooks: bool | None = None,
     extra_stop_hooks: list[Any] | None = None,
+    enable_default_deferred_tools: bool | None = None,
+    extra_deferred_tools: Any | None = None,
 ) -> MagicMock:
     """Helper: build the reference graph under mocked deepagents+llm.
 
@@ -868,6 +870,10 @@ def _build_reference_with_capture(
         kwargs["enable_default_stop_hooks"] = enable_default_stop_hooks
     if extra_stop_hooks is not None:
         kwargs["extra_stop_hooks"] = extra_stop_hooks
+    if enable_default_deferred_tools is not None:
+        kwargs["enable_default_deferred_tools"] = enable_default_deferred_tools
+    if extra_deferred_tools is not None:
+        kwargs["extra_deferred_tools"] = extra_deferred_tools
     with (
         patch.dict(sys.modules, module_patches),
         patch(
@@ -939,3 +945,102 @@ def test_reference_extra_only_when_default_disabled(mock_store: Any) -> None:
     stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
     hooks = stop_mw._hooks
     assert hooks == [extra]
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: deferred-tool wiring
+# ---------------------------------------------------------------------------
+# The reference build must populate the DeferredToolRegistry by default
+# so the tool_search / call_deferred_tool discovery loop is exercised.
+# With the registry empty the builder strips both tools from the active
+# surface and the deferred_tools prompt section is gated off — the
+# showcase disappears entirely. These tests pin the wiring.
+
+
+def test_reference_default_deferred_tools_are_populated(mock_store: Any) -> None:
+    """Default build registers demo tools; tool_search + call_deferred_tool reach the LLM."""
+    create = _build_reference_with_capture(mock_store)
+
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
+    assert "tool_search" in tool_names
+    assert "call_deferred_tool" in tool_names
+    assert (
+        "use the tool_search tool to discover"
+        in create.call_args.kwargs["system_prompt"]
+    )
+
+
+def test_reference_default_deferred_tools_can_be_disabled(mock_store: Any) -> None:
+    """``enable_default_deferred_tools=False`` opts out — back to empty registry semantics."""
+    create = _build_reference_with_capture(
+        mock_store, enable_default_deferred_tools=False
+    )
+
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
+    assert "tool_search" not in tool_names
+    assert "call_deferred_tool" not in tool_names
+
+
+def test_reference_extra_deferred_tools_runs_after_default(mock_store: Any) -> None:
+    """``extra_deferred_tools=`` runs after the default registration so caller IDs win."""
+    from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
+
+    captured: dict[str, Any] = {}
+
+    async def _custom_tool() -> str:
+        return "custom"
+
+    def _extra(deferred: Any) -> None:
+        captured["pre_extra_ids"] = sorted(c.id for c in deferred.list_all())
+        deferred.register(
+            ToolCapability(
+                id="ref_web_fetch_demo",
+                name="caller_override",
+                description="caller override",
+                fn=_custom_tool,
+                risk=ToolRisk.READ_ONLY,
+            )
+        )
+
+    _build_reference_with_capture(mock_store, extra_deferred_tools=_extra)
+
+    assert "ref_web_fetch_demo" in captured["pre_extra_ids"]
+    assert "ref_code_indexer_demo" in captured["pre_extra_ids"]
+    assert "ref_db_query_demo" in captured["pre_extra_ids"]
+
+
+def test_reference_extra_deferred_tools_alone_when_default_disabled(
+    mock_store: Any,
+) -> None:
+    """With default disabled, ``extra_deferred_tools=`` is the sole configurator."""
+    from langgraph_kit.core.tools.capability import ToolCapability, ToolRisk
+
+    captured: dict[str, Any] = {}
+
+    async def _solo() -> str:
+        return ""
+
+    def _extra(deferred: Any) -> None:
+        captured["pre_extra_ids"] = sorted(c.id for c in deferred.list_all())
+        deferred.register(
+            ToolCapability(
+                id="solo_tool",
+                name="solo_tool",
+                description="x",
+                fn=_solo,
+                risk=ToolRisk.READ_ONLY,
+            )
+        )
+
+    create = _build_reference_with_capture(
+        mock_store,
+        enable_default_deferred_tools=False,
+        extra_deferred_tools=_extra,
+    )
+
+    assert captured["pre_extra_ids"] == []
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
+    assert "tool_search" in tool_names

@@ -19,6 +19,9 @@ from langgraph_kit.core.prompt_assembly.sections import (
 )
 from langgraph_kit.core.resilience.stop_hooks import TurnTelemetryStopHook
 from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT, build_deep_agent
+from langgraph_kit.graphs._reference_deferred_tools import (
+    make_reference_deferred_configurator,
+)
 
 # ---------------------------------------------------------------------------
 # Prompt sections — stable core + volatile context
@@ -117,6 +120,8 @@ def build_reference_deep_agent(
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
     enable_default_stop_hooks: bool = True,
     extra_stop_hooks: list[Any] | None = None,
+    enable_default_deferred_tools: bool = True,
+    extra_deferred_tools: Any | None = None,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
 
@@ -139,12 +144,37 @@ def build_reference_deep_agent(
     Each entry should expose an awaitable ``on_turn_complete(state)``;
     set ``blocking=True`` on a hook to make its exceptions fail the turn
     rather than be logged and swallowed.
+
+    ``enable_default_deferred_tools`` (default ``True``) populates the
+    :class:`~langgraph_kit.core.tools.deferred.DeferredToolRegistry` with
+    a small set of demo tools so the ``tool_search`` /
+    ``call_deferred_tool`` discovery loop is exercised by default —
+    closing the showcase gap where the reference always tripped the
+    "empty deferred → strip the search tools" branch in the builder.
+    Set to ``False`` to leave the catalog empty.
+
+    ``extra_deferred_tools`` is a callback
+    ``(DeferredToolRegistry) -> None`` that runs *after* the default
+    registration. Because the registry is keyed by capability id, a
+    callback registering under a default id (e.g. ``"ref_web_fetch_demo"``)
+    overrides the demo — keeping the "caller wins on collisions"
+    precedence the rest of the builder follows.
     """
     stop_hooks: list[Any] = []
     if enable_default_stop_hooks:
         stop_hooks.append(TurnTelemetryStopHook())
     if extra_stop_hooks:
         stop_hooks.extend(extra_stop_hooks)
+
+    if enable_default_deferred_tools:
+        configure_deferred_tools = make_reference_deferred_configurator(
+            extra=extra_deferred_tools
+        )
+    elif extra_deferred_tools is not None:
+        configure_deferred_tools = extra_deferred_tools
+    else:
+        configure_deferred_tools = None
+
     return build_deep_agent(
         agent_name="reference-deep-agent",
         core_sections=_CORE_SECTIONS,
@@ -155,4 +185,5 @@ def build_reference_deep_agent(
         plugins=plugins,
         recursion_limit=recursion_limit,
         stop_hooks=stop_hooks or None,
+        configure_deferred_tools=configure_deferred_tools,
     )

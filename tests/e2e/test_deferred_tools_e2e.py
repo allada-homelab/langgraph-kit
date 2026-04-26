@@ -134,7 +134,7 @@ async def test_empty_deferred_registry_does_not_push_llm_toward_tool_search(
     e2e_store: Any,
     patched_build_llm: Any,
 ) -> None:
-    """Default build with an empty DeferredToolRegistry must NOT tell the LLM to tool_search.
+    """An empty DeferredToolRegistry must NOT tell the LLM to tool_search.
 
     The regression: prompt said "don't assume unavailable — search first"
     while the registry was empty. Fix: ``build_deep_agent`` now auto-gates
@@ -146,12 +146,17 @@ async def test_empty_deferred_registry_does_not_push_llm_toward_tool_search(
     during that invocation via a capturing scripted model. Stronger
     than inspecting compose-time output because it proves the prompt
     survives all middleware transformations on the way to the model.
+
+    Note: the reference build now ships with a default deferred catalog
+    (the ``ref_*_demo`` tools), so we explicitly disable it here to
+    recreate the empty-registry condition this test pins.
     """
     capturing = capturing_scripted_llm([answer("hi there")])
     with patched_build_llm(capturing):
         graph, _ = build_reference_deep_agent(
             checkpointer=checkpointer,
             store=e2e_store,
+            enable_default_deferred_tools=False,
         )
 
     await graph.ainvoke(
