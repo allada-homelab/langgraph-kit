@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from langgraph_kit.replay.assertions import ReplayAssertions
-from langgraph_kit.replay.models import ConversationRecording
+from langgraph_kit.replay.models import ConversationRecording, RecordingOverrides
 from langgraph_kit.replay.player import RecordedChatModel
 from langgraph_kit.replay.recorder import ConversationRecorder
 
@@ -65,18 +65,64 @@ class ReplayRunner:
             )
         return self._original
 
-    async def run(self) -> ConversationRecording:
+    async def run(
+        self,
+        *,
+        start_at: int = 0,
+        stop_at: int | None = None,
+        overrides: RecordingOverrides | None = None,
+    ) -> ConversationRecording:
         """Replay the conversation and return a new recording of the replay.
 
         Builds the graph with a ``RecordedChatModel`` that serves recorded
-        responses, then feeds each user message through the graph.
+        responses, then feeds the selected user-message slice through the
+        graph.
+
+        Parameters
+        ----------
+        start_at:
+            User-turn index to begin replay at (inclusive). Python slice
+            semantics — negative values count from the end. Defaults to 0
+            (full replay from the start). NB: skipping turns does *not*
+            replay their side effects (memory writes, tool invocations);
+            graph state for the skipped prefix is whatever the
+            ``checkpointer`` / ``store`` provide. Pass a pre-warmed
+            checkpointer if downstream behavior depends on prior state.
+        stop_at:
+            User-turn index to stop *before* (exclusive). Python slice
+            semantics — negative values count from the end, ``None``
+            means "run to the end" (default).
+        overrides:
+            Per-LLM-call output overrides applied at lookup time. See
+            :class:`RecordingOverrides`. The recording on disk is never
+            mutated.
+
+        Examples
+        --------
+        Replay only the third and fourth user turns::
+
+            await runner.run(start_at=2, stop_at=4)
+
+        Run the whole conversation but force a different LLM response at
+        the second LLM call to see if the agent still reaches the same
+        conclusion::
+
+            await runner.run(
+                overrides=RecordingOverrides(
+                    llm_outputs={1: {"content": "Different answer"}}
+                )
+            )
         """
         from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
             HumanMessage,
         )
 
         recording = self.original
-        mock_llm = RecordedChatModel(recording=recording, fuzzy_match=self.fuzzy_match)
+        mock_llm = RecordedChatModel(
+            recording=recording,
+            fuzzy_match=self.fuzzy_match,
+            overrides=overrides,
+        )
 
         # Build graph with the mock LLM. ``llm_kwarg`` defaults to "llm"
         # but can be set to e.g. "model" for builders that use that name.
@@ -97,8 +143,11 @@ class ReplayRunner:
             "callbacks": [replay_recorder],
         }
 
-        # Extract user messages from the original recording's LLM interactions
-        user_messages = _extract_user_turns(recording)
+        # Extract user messages from the original recording's LLM
+        # interactions, then narrow to the requested slice. Slice
+        # semantics match Python's list slicing exactly so callers can
+        # use negative indices without us inventing new conventions.
+        user_messages = _extract_user_turns(recording)[start_at:stop_at]
 
         for user_content in user_messages:
             input_data = {"messages": [HumanMessage(content=user_content)]}
@@ -110,12 +159,21 @@ class ReplayRunner:
         self,
         *,
         check_tool_args: bool = True,
+        start_at: int = 0,
+        stop_at: int | None = None,
+        overrides: RecordingOverrides | None = None,
     ) -> ReplayAssertions:
         """Run the replay and return an assertions object.
 
         Convenience method that combines ``run()`` with ``ReplayAssertions``.
+        See :py:meth:`run` for ``start_at`` / ``stop_at`` / ``overrides``
+        semantics. Note that asserting "same tool calls" against a
+        partial replay or one with overrides will fail by design — those
+        modes are for divergence investigation, not regression checks.
         """
-        replayed = await self.run()
+        replayed = await self.run(
+            start_at=start_at, stop_at=stop_at, overrides=overrides
+        )
         assertions = ReplayAssertions(self.original, replayed)
         if check_tool_args:
             assertions.assert_same_tool_calls()
