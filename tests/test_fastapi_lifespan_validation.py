@@ -28,8 +28,9 @@ def _restore_config() -> Any:
     configure(original)
 
 
+@pytest.mark.usefixtures("_restore_config")
 @pytest.mark.asyncio
-async def test_lifespan_raises_on_invalid_database_url(_restore_config: Any) -> None:
+async def test_lifespan_raises_on_invalid_database_url() -> None:
     """A bad ``database_url`` scheme aborts startup with a readable message."""
     configure(AgentConfig(database_url="mysql://localhost/db"))
     lifespan_factory = create_app_lifespan(register_agents=lambda *_a, **_kw: None)
@@ -39,8 +40,9 @@ async def test_lifespan_raises_on_invalid_database_url(_restore_config: Any) -> 
             pass
 
 
+@pytest.mark.usefixtures("_restore_config")
 @pytest.mark.asyncio
-async def test_lifespan_raises_on_negative_token_budget(_restore_config: Any) -> None:
+async def test_lifespan_raises_on_negative_token_budget() -> None:
     """A negative ``token_budget_per_thread`` aborts startup."""
     configure(AgentConfig(token_budget_per_thread=-1))
     lifespan_factory = create_app_lifespan(register_agents=lambda *_a, **_kw: None)
@@ -50,9 +52,10 @@ async def test_lifespan_raises_on_negative_token_budget(_restore_config: Any) ->
             pass
 
 
+@pytest.mark.usefixtures("_restore_config")
 @pytest.mark.asyncio
 async def test_lifespan_logs_warnings_but_does_not_raise(
-    caplog: pytest.LogCaptureFixture, _restore_config: Any
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """Warnings (e.g. half-set Langfuse credentials) log but don't abort startup.
 
@@ -63,13 +66,15 @@ async def test_lifespan_logs_warnings_but_does_not_raise(
     configure(AgentConfig(langfuse_public_key="pk_only"))
     lifespan_factory = create_app_lifespan(register_agents=lambda *_a, **_kw: None)
 
-    with caplog.at_level(logging.WARNING, logger="langgraph_kit.contrib.fastapi"):
-        # Real persistence will eventually try to connect; that's
-        # outside the scope of this test. Suppress whatever it raises
-        # so we can inspect the warning that fired before it.
-        with suppress(Exception):
-            async with lifespan_factory(FastAPI()):
-                pass
+    # Real persistence will eventually try to connect; that's outside
+    # the scope of this test. Suppress whatever it raises so we can
+    # inspect the warning that fired before it.
+    with (
+        caplog.at_level(logging.WARNING, logger="langgraph_kit.contrib.fastapi"),
+        suppress(Exception),
+    ):
+        async with lifespan_factory(FastAPI()):
+            pass
 
     warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
     assert any("AgentConfig warning:" in w for w in warnings), warnings
