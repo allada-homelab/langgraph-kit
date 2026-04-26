@@ -7,6 +7,20 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Interactive REPL (`langgraph-kit shell`).** New
+  `langgraph_kit.shell.run_shell` entry point and CLI subcommand
+  drop you into a single-agent REPL. Loads the requested
+  `agent-id` from the in-process registry (auto-runs
+  `register_all` to expose built-ins; pass `--module my_app.agents`
+  to import a user-supplied module first), invokes the graph
+  in-process per turn, prints the final assistant text. `/exit` /
+  `/quit` / `/q` end the session; Ctrl-D / Ctrl-C also exit
+  cleanly. Optional `--thread-id` and `--user-id` flow through to
+  the run config. Token streaming, `prompt_toolkit` line editing,
+  HITL interrupt prompts, and transcript writing are intentionally
+  deferred — this lands the foundation. Closes part of
+  [#37](https://github.com/allada-homelab/langgraph-kit/issues/37).
+
 - **Static graph visualization.** New
   `langgraph_kit.core.visualization.print_graph(graph, *, format=...,
   expand_subgraphs=False)` returns Mermaid (default) or ASCII markup
