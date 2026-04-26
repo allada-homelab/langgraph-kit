@@ -159,6 +159,7 @@ def build_deep_agent(
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
     output_schema: type[BaseModel] | None = None,
     coordinator: bool = False,
+    llm_callbacks: list[Any] | None = None,
 ) -> tuple[Any, Any]:
     """Build a deep agent with the standard skeleton.
 
@@ -226,6 +227,12 @@ def build_deep_agent(
     )
 
     llm = build_llm()
+    if llm_callbacks:
+        # Bind callbacks via with_config so they participate in every
+        # LLM call the graph makes — TokenTrackingCallback / Langfuse
+        # callbacks live here. Caller owns the callback object so they
+        # can poll counters after invocation.
+        llm = llm.with_config({"callbacks": list(llm_callbacks)})
     memory_mgr = PersistentMemoryManager(
         store, embedding_fn=get_config().memory_embedding_fn
     )

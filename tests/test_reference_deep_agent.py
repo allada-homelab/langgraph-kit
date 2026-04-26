@@ -1478,3 +1478,107 @@ def test_reference_hitl_demo_disabled_keeps_custom_tools(mock_store: Any) -> Non
     }
     assert "current_environment" in tool_names
     assert "confirm_destructive_demo" not in tool_names
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: llm_callbacks wiring
+# ---------------------------------------------------------------------------
+# ``llm_callbacks=`` is the integration point for cost / budget /
+# tracing callbacks. The kit binds them onto the LLM via
+# ``with_config`` so they participate in every model call. Caller owns
+# the callback object for post-run inspection.
+
+
+def test_reference_llm_callbacks_bound_to_model(mock_store: Any) -> None:
+    """``llm_callbacks=[cb]`` flows into ``llm.with_config({"callbacks": ...})``."""
+    from langgraph_kit.core.cost.callback import TokenTrackingCallback
+
+    tracker = TokenTrackingCallback()
+
+    fake_llm = MagicMock(name="fake_llm")
+    # ``with_config`` returns a wrapped LLM; test that the wrapper's
+    # constructor was called with our callback in the dict.
+    wrapped = MagicMock(name="wrapped_llm")
+    fake_llm.with_config.return_value = wrapped
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=fake_llm,
+        ),
+    ):
+        build_reference_deep_agent(
+            checkpointer=MagicMock(),
+            store=mock_store,
+            llm_callbacks=[tracker],
+        )
+
+    fake_llm.with_config.assert_called_once_with({"callbacks": [tracker]})
+    # The wrapped LLM (not the raw one) reaches deepagents.
+    assert deepagents_mod.create_deep_agent.call_args.kwargs["model"] is wrapped
+
+
+def test_reference_no_llm_callbacks_skips_with_config(mock_store: Any) -> None:
+    """No ``llm_callbacks=`` → builder doesn't wrap the LLM."""
+    fake_llm = MagicMock(name="fake_llm")
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=fake_llm,
+        ),
+    ):
+        build_reference_deep_agent(
+            checkpointer=MagicMock(),
+            store=mock_store,
+        )
+
+    # The raw LLM (no with_config wrap) reaches deepagents.
+    assert deepagents_mod.create_deep_agent.call_args.kwargs["model"] is fake_llm
+    fake_llm.with_config.assert_not_called()
+
+
+def test_reference_token_tracking_records_usage_via_callback(mock_store: Any) -> None:
+    """Round-trip: callback's on_llm_end records into the tracker.
+
+    Smoke-tests the wiring at the callback level: feeding a synthetic
+    ``LLMResult`` through the bound callback exercises the same path
+    the LLM would take during a real run, without requiring a live
+    model.
+    """
+    import asyncio
+
+    from langchain_core.outputs import (
+        ChatGeneration,
+        LLMResult,
+    )
+    from langchain_openai import ChatOpenAI
+
+    from langgraph_kit.core.cost.callback import TokenTrackingCallback
+
+    tracker = TokenTrackingCallback()
+
+    # Build a real ChatOpenAI shell (no key needed for with_config) and
+    # bind the callback — this proves the kit's wiring contract works
+    # against a real LangChain model surface, not just a MagicMock.
+    base = ChatOpenAI.model_construct(model="x", api_key="dummy")
+    bound = base.with_config({"callbacks": [tracker]})
+
+    # ``with_config`` returns a RunnableBinding whose .config carries
+    # the callbacks; assert they're there.
+    binding_callbacks = getattr(bound, "config", {}).get("callbacks", [])
+    assert tracker in binding_callbacks
+
+    # Fire the callback directly with a synthetic OpenAI-style result.
+    fake_response = LLMResult(
+        generations=[[ChatGeneration(message=AIMessage(content="ok"))]],
+        llm_output={"token_usage": {"prompt_tokens": 7, "completion_tokens": 3}},
+    )
+    asyncio.run(tracker.on_llm_end(fake_response, run_id=None))
+    total = tracker.get_total()
+    assert total.input_tokens == 7
+    assert total.output_tokens == 3

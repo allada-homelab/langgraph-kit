@@ -136,6 +136,7 @@ def build_reference_deep_agent(
     extra_providers: list[Any] | None = None,
     output_schema: type[BaseModel] | None = None,
     coordinator: bool = False,
+    llm_callbacks: list[Any] | None = None,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
 
@@ -223,6 +224,17 @@ def build_reference_deep_agent(
     prompt sections are merged. Use the
     :func:`build_reference_coordinator_agent` convenience wrapper
     when you want this profile by default.
+
+    ``llm_callbacks`` are bound to the LLM via ``with_config`` so they
+    participate in every model call the graph makes. Use this entry
+    point for cost / budget instrumentation
+    (:class:`~langgraph_kit.core.cost.callback.TokenTrackingCallback`),
+    Langfuse handlers, or any other LangChain
+    :class:`~langchain_core.callbacks.AsyncCallbackHandler`. The
+    caller owns the callback object so they can poll its counters
+    after the run; pair with
+    :class:`~langgraph_kit.core.cost.budget.BudgetManager` for
+    per-thread budget enforcement on the Store.
     """
     stop_hooks: list[Any] = []
     if enable_default_stop_hooks:
@@ -270,6 +282,7 @@ def build_reference_deep_agent(
         extra_providers=providers or None,
         output_schema=output_schema,
         coordinator=coordinator,
+        llm_callbacks=llm_callbacks,
     )
 
 
