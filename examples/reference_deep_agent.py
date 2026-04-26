@@ -32,6 +32,7 @@ import asyncio
 
 from examples._lib import (
     answer,
+    assert_real_llm_or_skip,
     banner,
     configure_real_llm,
     hermetic,
@@ -60,6 +61,7 @@ async def main() -> None:
             with patch_build_llm(llm):
                 await _run(workspace, user_message)
         else:
+            assert_real_llm_or_skip()
             configure_real_llm(workspace)
             await _run(workspace, user_message)
 
