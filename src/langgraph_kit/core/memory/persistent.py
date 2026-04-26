@@ -5,8 +5,9 @@ from __future__ import annotations
 import logging
 import re
 from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal, overload
 
 from langgraph_kit.core._vector_math import cosine_similarity
 from langgraph_kit.core.memory.models import (
@@ -14,6 +15,42 @@ from langgraph_kit.core.memory.models import (
     MemoryScope,
     MemoryType,
 )
+
+# Default cosine-similarity threshold above which two records are
+# considered duplicates. Conservative bias: 0.92 trades occasional
+# near-duplicates for never silently merging two distinct memories.
+DEFAULT_DEDUP_THRESHOLD = 0.92
+
+
+@dataclass(frozen=True)
+class DuplicateMatch:
+    """The closest existing record above the dedup threshold.
+
+    Returned by :meth:`PersistentMemoryManager.find_duplicate` when an
+    incoming record's embedding cosine-similarity to an existing
+    record meets or exceeds the configured threshold.
+    """
+
+    existing_id: str
+    similarity: float
+    record: MemoryRecord
+
+
+class DuplicateMemoryError(RuntimeError):
+    """Raised by :meth:`PersistentMemoryManager.create` when a duplicate is found.
+
+    Only fires under ``on_duplicate="raise"`` mode. The exception
+    carries the :class:`DuplicateMatch` so callers can decide whether
+    to merge into the existing record.
+    """
+
+    def __init__(self, match: DuplicateMatch) -> None:
+        super().__init__(
+            f"Duplicate of existing memory {match.existing_id!r} "
+            f"(similarity={match.similarity:.3f})"
+        )
+        self.match = match
+
 
 logger = logging.getLogger(__name__)
 
@@ -131,8 +168,133 @@ class PersistentMemoryManager:
     # CRUD
     # ------------------------------------------------------------------
 
-    async def create(self, record: MemoryRecord) -> MemoryRecord:
-        """Persist a new memory record and return it."""
+    async def find_duplicate(
+        self,
+        record: MemoryRecord,
+        threshold: float = DEFAULT_DEDUP_THRESHOLD,
+    ) -> DuplicateMatch | None:
+        """Return the highest-similarity existing record at or above *threshold*.
+
+        Per-scope only — duplicates across scopes (e.g. a user-scope
+        and a project-scope record with identical text) are
+        intentionally not merged because the scope distinction is
+        load-bearing.
+
+        No-op when ``embedding_fn`` is unset: returns ``None``. There
+        is no keyword-based dedup fallback — false positives at write
+        time would silently merge distinct memories, which is a worse
+        failure mode than missing a near-duplicate.
+        """
+        embedding_fn = self._embedding_fn
+        if embedding_fn is None:
+            return None
+
+        q_vectors = await embedding_fn([_text_for_embedding(record)])
+        if not q_vectors:
+            return None
+        q_vec = list(q_vectors[0])
+
+        ns = self._embedding_namespace(record.scope)
+        items: list[Any] = await self._store.asearch(ns, limit=1000)
+
+        best_sim = -1.0
+        best_id: str | None = None
+        best_type: str = ""
+        for item in items:
+            # Skip the candidate itself if it happens to already be
+            # indexed (e.g. when callers re-run create() defensively).
+            if item.key == record.id:
+                continue
+            payload = item.value
+            vec = payload.get("vector") or []
+            sim = _cosine(q_vec, vec)
+            if sim > best_sim:
+                best_sim = sim
+                best_id = item.key
+                best_type = payload.get("memory_type", "")
+
+        if best_id is None or best_sim < threshold:
+            return None
+
+        mt = MemoryType(best_type) if best_type else None
+        existing = await self.get(best_id, record.scope, mt)
+        if existing is None:
+            # Embedding row outlived the record (out-of-band delete).
+            return None
+        return DuplicateMatch(
+            existing_id=best_id,
+            similarity=best_sim,
+            record=existing,
+        )
+
+    @overload
+    async def create(
+        self,
+        record: MemoryRecord,
+    ) -> MemoryRecord: ...
+
+    @overload
+    async def create(
+        self,
+        record: MemoryRecord,
+        *,
+        on_duplicate: Literal["create"],
+        threshold: float | None = None,
+    ) -> MemoryRecord: ...
+
+    @overload
+    async def create(
+        self,
+        record: MemoryRecord,
+        *,
+        on_duplicate: Literal["skip"],
+        threshold: float | None = None,
+    ) -> MemoryRecord | DuplicateMatch: ...
+
+    @overload
+    async def create(
+        self,
+        record: MemoryRecord,
+        *,
+        on_duplicate: Literal["raise"],
+        threshold: float | None = None,
+    ) -> MemoryRecord: ...
+
+    async def create(
+        self,
+        record: MemoryRecord,
+        *,
+        on_duplicate: Literal["create", "skip", "raise"] = "create",
+        threshold: float | None = None,
+    ) -> MemoryRecord | DuplicateMatch:
+        """Persist a new memory record.
+
+        Modes:
+
+        - ``"create"`` (default) — always write. Preserves the
+          historical contract for callers that already do their own
+          dedup or don't care.
+        - ``"skip"`` — when a duplicate is found, return the
+          :class:`DuplicateMatch` and do not write. Used by
+          :class:`AutoMemoryExtractor` so write-time dedup acts as a
+          safety net behind the LLM-prompted "prefer update".
+        - ``"raise"`` — raise :class:`DuplicateMemoryError`. Used by
+          callers that want a hard failure on accidental duplicates.
+
+        ``threshold`` overrides the default cosine threshold (``0.92``).
+        Has no effect when ``on_duplicate="create"``.
+
+        When ``embedding_fn`` is unset, all modes degrade to plain
+        create — there is no keyword-based dedup fallback.
+        """
+        if on_duplicate != "create":
+            t = threshold if threshold is not None else DEFAULT_DEDUP_THRESHOLD
+            match = await self.find_duplicate(record, threshold=t)
+            if match is not None:
+                if on_duplicate == "raise":
+                    raise DuplicateMemoryError(match)
+                return match
+
         ns = self._namespace(record.scope, record.type)
         await self._store.aput(ns, record.id, record.to_store_value())
         await self._index_record(record)

@@ -110,7 +110,12 @@ def build_middleware_stack(
             PressureMiddleware(pressure_monitor, llm=llm),
             ResultPersistenceMiddleware(tool_registry=tool_registry),
             ExtractionMiddleware(
-                AutoMemoryExtractor(memory_mgr, llm), scope=MemoryScope.USER
+                AutoMemoryExtractor(
+                    memory_mgr,
+                    llm,
+                    dedup_threshold=get_config().memory_dedup_threshold,
+                ),
+                scope=MemoryScope.USER,
             ),
             EmptyTurnMiddleware(max_nudges=2),
             CompletionGuardMiddleware(min_tool_calls=1),

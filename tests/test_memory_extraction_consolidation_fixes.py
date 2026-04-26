@@ -203,3 +203,53 @@ def _msg(role: str, content: str) -> Any:
             self.content = c
 
     return _M(content)
+
+
+class _TagEmbedder:
+    """Tag-counting embedder for write-time dedup tests."""
+
+    TAGS = ("python", "rust")
+
+    async def __call__(self, texts: list[str]) -> list[list[float]]:
+        return [[float(t.lower().count(tag)) for tag in self.TAGS] for t in texts]
+
+
+@pytest.mark.asyncio
+async def test_extractor_skips_near_duplicate_writes() -> None:
+    """When ``embedding_fn`` is configured, the extractor's create
+    path must not write near-duplicates.
+
+    Regression test for #9: previously dedup was prompt-only and the
+    LLM occasionally produced duplicates that got persisted.
+    """
+    store = MockStore()
+    mgr = PersistentMemoryManager(store, embedding_fn=_TagEmbedder())
+    # Seed an existing record about Python.
+    await mgr.create(
+        MemoryRecord(
+            title="Likes Python",
+            summary="enjoys python",
+            body="python python python",
+            type=MemoryType.USER,
+            scope=MemoryScope.USER,
+        )
+    )
+
+    # LLM proposes another Python record — should be detected as a dup.
+    raw = (
+        '[{"action": "create", "title": "Python fan", "type": "user",'
+        ' "scope": "user", "summary": "loves python",'
+        ' "body": "python python python"}]'
+    )
+    extractor = AutoMemoryExtractor(mgr, _FakeLLM(raw))
+
+    results = await extractor.extract(
+        recent_messages=[_msg("human", "I love python")], scope=MemoryScope.USER
+    )
+
+    # Duplicate suppressed → no record returned by the extractor, and
+    # only the original survives in the store.
+    assert results == []
+    items = await mgr.list_by_scope(MemoryScope.USER, MemoryType.USER)
+    assert len(items) == 1
+    assert items[0].title == "Likes Python"

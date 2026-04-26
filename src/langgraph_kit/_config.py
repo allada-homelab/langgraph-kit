@@ -67,6 +67,15 @@ class AgentConfig:
         dataclasses.field(default=None, compare=False)
     )
 
+    # Memory: cosine-similarity threshold for write-time dedup.
+    # When ``memory_embedding_fn`` is set, ``AutoMemoryExtractor``
+    # asks ``PersistentMemoryManager`` to skip new records whose
+    # embedding is at or above this threshold against an existing
+    # record in the same scope. ``None`` (default) defers to the
+    # manager's hardcoded default of 0.92. Tune up for fewer false-
+    # positive merges; tune down to be more aggressive about dedup.
+    memory_dedup_threshold: float | None = None
+
     # Prompt overrides: {section_id → PromptSection} merged into the
     # SectionRegistry by ``build_deep_agent`` after the kit's
     # core/activation/plugin sections register. Caller wins on id
