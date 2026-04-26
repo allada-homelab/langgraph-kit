@@ -7,6 +7,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Multi-agent negotiation primitives (`propose` / `accept` /
+  `reject`).** Three thin helpers in
+  `langgraph_kit.core.orchestration.negotiation` that wrap the
+  existing `AgentMailbox` so a pair of agents can run a
+  propose/accept-reject conversation without re-deriving the
+  `AgentMessage` shape per caller. The helpers fix the message
+  `kind` and the `in_reply_to` chain; durable proposal state
+  belongs to `AgentWorkspace` if needed. Closes the negotiation
+  acceptance criterion on
+  [#20](https://github.com/allada-homelab/langgraph-kit/issues/20)
+  (workspace + mailbox already shipped).
+
 - **Trigger surfaces (webhook, schedule, watchers): optional audit
   emission.** All three trigger entry points
   (`create_webhook_router`, `ScheduledTriggerRunner`,
