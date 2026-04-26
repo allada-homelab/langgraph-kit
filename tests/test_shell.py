@@ -258,3 +258,27 @@ class TestRunShell:
         )
         assert rc == 0
         assert any("ok" in line for line in outputs)
+
+    @pytest.mark.asyncio
+    async def test_info_slash_command_prints_session_metadata(self) -> None:
+        """``/info`` reports agent / thread / user / module without invoking the agent."""
+        graph = _ScriptedGraph(reply="ignored")
+        registry.register("test-agent", graph)
+        outputs: list[str] = []
+        await run_shell(
+            "test-agent",
+            thread_id="my-thread",
+            user_id="me",
+            input_fn=_StubInputs(["/info"]),
+            output_fn=outputs.append,
+        )
+
+        info_lines = [line for line in outputs if "agent_id" in line]
+        assert info_lines, outputs
+        info = info_lines[0]
+        assert "test-agent" in info
+        assert "my-thread" in info
+        assert "me" in info
+        # /info must not invoke the graph — that would burn budget on a
+        # cosmetic introspection command.
+        assert graph.calls == []
