@@ -99,11 +99,16 @@ class AutoMemoryExtractor:
         llm: Any,
         *,
         max_candidates: int = _DEFAULT_MAX_CANDIDATES,
+        dedup_threshold: float | None = None,
     ) -> None:
         super().__init__()
         self._memory = memory_manager
         self._llm = llm
         self._max_candidates = max_candidates
+        # ``None`` defers to PersistentMemoryManager's default
+        # threshold; explicit override useful for evals where the
+        # caller wants tighter or looser dedup behavior.
+        self._dedup_threshold = dedup_threshold
 
     async def extract(
         self,
@@ -248,8 +253,27 @@ class AutoMemoryExtractor:
                     body=candidate.get("body", ""),
                     source="auto_extraction",
                 )
-                saved = await self._memory.create(record)
-                results.append(saved)
+                # Write-time dedup: when an embedding fn is configured
+                # the manager skips near-duplicates and returns a
+                # DuplicateMatch instead of the saved record. The
+                # extractor's contract is "no near-duplicates land
+                # under auto_extraction"; callers explicitly opting
+                # into duplication should call manager.create()
+                # directly.
+                saved = await self._memory.create(
+                    record,
+                    on_duplicate="skip",
+                    threshold=self._dedup_threshold,
+                )
+                if isinstance(saved, MemoryRecord):
+                    results.append(saved)
+                else:
+                    logger.info(
+                        "Skipped duplicate extraction candidate %r (matches %r, sim=%.3f)",
+                        candidate.get("title"),
+                        saved.existing_id,
+                        saved.similarity,
+                    )
 
             except Exception:
                 logger.exception(
