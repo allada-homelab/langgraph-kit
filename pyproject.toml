@@ -40,8 +40,9 @@ mcp = ["langchain-mcp-adapters>=0.2.2"]
 mcp-server = ["mcp>=1.27"]
 fastapi = ["fastapi>=0.136"]
 agui = ["ag-ui-protocol>=0.1.18"]
+schedule = ["apscheduler>=3.11"]
 all = [
-    "langgraph-kit[postgres,openai,anthropic,google,deepagents,langfuse,mcp,mcp-server,fastapi,agui]",
+    "langgraph-kit[postgres,openai,anthropic,google,deepagents,langfuse,mcp,mcp-server,fastapi,agui,schedule]",
 ]
 
 [build-system]

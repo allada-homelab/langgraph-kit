@@ -7,6 +7,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Cron-style scheduled triggers
+  (`langgraph_kit.contrib.schedule`).** New optional dependency
+  `langgraph-kit[schedule]` (apscheduler). `ScheduledSpec(id,
+  agent_id, cron, payload_template)` defines one cron-fired
+  invocation; `ScheduledRegistry` collects them; cron expressions
+  are validated at registration time so typos fail at deploy
+  instead of at first fire. `ScheduledTriggerRunner(registry,
+  graph_resolver=...)` is an async context manager that drives
+  apscheduler's `AsyncIOScheduler`; `fire_now(spec_id)` triggers
+  out of band for tests and manual ops. **UTC-only** by design —
+  local-time cron is a footgun across multi-region deployments.
+  Multi-worker advisory-lock coordination is intentionally
+  deferred (depends on the wider Postgres-coordination work in
+  #27); run one scheduler per deployment for now. Closes
+  [#81](https://github.com/allada-homelab/langgraph-kit/issues/81).
+
 - **`ReplayRunner.step()` — async-iterator replay variant.** New
   `step(*, start_at=0, stop_at=None, overrides=None)` async
   generator yields one `TurnResult(turn_index, user_input,
