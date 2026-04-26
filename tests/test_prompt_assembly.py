@@ -321,3 +321,200 @@ class TestPromptCache:
         assert change_map["a"] == "unchanged"
         # Volatile always re-computed, but id is not new so it's "updated"
         assert change_map["b"] == "updated"
+
+
+# ---------------------------------------------------------------------------
+# Versioning — issue #18.
+# ---------------------------------------------------------------------------
+
+
+class TestPromptVersioning:
+    @staticmethod
+    def _section(
+        section_id: str = "core_role",
+        content: str = "v1 content",
+        version: str = "1",
+        priority: int = 0,
+        stability: SectionStability = SectionStability.STABLE,
+        condition: str | None = None,
+    ) -> PromptSection:
+        return PromptSection(
+            id=section_id,
+            content=content,
+            version=version,
+            priority=priority,
+            stability=stability,
+            condition=condition,
+        )
+
+    @staticmethod
+    def _require(
+        registry: SectionRegistry,
+        section_id: str,
+        version: str | None = None,
+    ) -> PromptSection:
+        """Get-or-fail wrapper so test assertions can read attributes
+        on the result without basedpyright Optional-narrowing noise.
+        """
+        section = registry.get(section_id, version=version)
+        assert section is not None, (
+            f"expected section {section_id!r} version {version!r} to be registered"
+        )
+        return section
+
+    def test_default_version_is_one_string(self) -> None:
+        section = self._section()
+        assert section.version == "1"
+
+    def test_version_round_trips_through_serialization(self) -> None:
+        original = self._section(version="2026-04-15")
+        round_tripped = PromptSection.model_validate_json(original.model_dump_json())
+        assert round_tripped.version == "2026-04-15"
+
+    def test_register_promotes_first_version_implicitly(self) -> None:
+        registry = SectionRegistry()
+        v1 = self._section(version="1")
+        registry.register(v1)
+        assert registry.current_version("core_role") == "1"
+        assert self._require(registry, "core_role") is v1
+
+    def test_register_with_set_current_false_keeps_existing_current(self) -> None:
+        """Staging a candidate version doesn't auto-promote it."""
+        registry = SectionRegistry()
+        v1 = self._section(version="1", content="live")
+        v2 = self._section(version="2", content="staged")
+        registry.register(v1)
+        registry.register(v2, set_current=False)
+        assert registry.current_version("core_role") == "1"
+        assert self._require(registry, "core_role").content == "live"
+        assert self._require(registry, "core_role", version="2").content == "staged"
+        assert registry.list_versions("core_role") == ["1", "2"]
+
+    def test_register_default_promotes_new_version(self) -> None:
+        """Plain register() of a new version makes it current."""
+        registry = SectionRegistry()
+        registry.register(self._section(version="1", content="old"))
+        registry.register(self._section(version="2", content="new"))
+        assert registry.current_version("core_role") == "2"
+        assert self._require(registry, "core_role").content == "new"
+
+    def test_set_current_switches_active_version(self) -> None:
+        registry = SectionRegistry()
+        registry.register(self._section(version="1", content="v1"))
+        registry.register(self._section(version="2", content="v2"), set_current=False)
+        assert self._require(registry, "core_role").content == "v1"
+        registry.set_current("core_role", "2")
+        assert self._require(registry, "core_role").content == "v2"
+
+    def test_set_current_unknown_id_raises(self) -> None:
+        registry = SectionRegistry()
+        with pytest.raises(KeyError, match="Unknown section id"):
+            registry.set_current("missing", "1")
+
+    def test_set_current_unknown_version_raises(self) -> None:
+        registry = SectionRegistry()
+        registry.register(self._section(version="1"))
+        with pytest.raises(KeyError, match="Unknown version 'nope'"):
+            registry.set_current("core_role", "nope")
+
+    def test_get_explicit_version_bypasses_current(self) -> None:
+        registry = SectionRegistry()
+        registry.register(self._section(version="1", content="v1"))
+        registry.register(self._section(version="2", content="v2"))
+        assert self._require(registry, "core_role", version="1").content == "v1"
+        assert self._require(registry, "core_role", version="2").content == "v2"
+
+    def test_get_unknown_id_returns_none(self) -> None:
+        assert SectionRegistry().get("missing") is None
+
+    def test_get_unknown_version_returns_none(self) -> None:
+        registry = SectionRegistry()
+        registry.register(self._section(version="1"))
+        assert registry.get("core_role", version="99") is None
+
+    def test_get_active_uses_current_version_only(self) -> None:
+        """get_active() must not return every version — only the current one."""
+        registry = SectionRegistry()
+        registry.register(self._section(version="1", content="v1"))
+        registry.register(self._section(version="2", content="v2"))
+        active = registry.get_active()
+        assert len(active) == 1
+        assert active[0].content == "v2"
+        registry.set_current("core_role", "1")
+        active = registry.get_active()
+        assert len(active) == 1
+        assert active[0].content == "v1"
+
+    def test_get_active_respects_conditions_per_current_version(self) -> None:
+        """Conditional gating still works after version switching."""
+        registry = SectionRegistry()
+        registry.register(
+            self._section(
+                version="1",
+                stability=SectionStability.CONDITIONAL,
+                condition="memory",
+            )
+        )
+        assert registry.get_active(conditions=set()) == []
+        active = registry.get_active(conditions={"memory"})
+        assert len(active) == 1
+
+    def test_current_versions_snapshot(self) -> None:
+        registry = SectionRegistry()
+        registry.register(self._section(section_id="a", version="1"))
+        registry.register(self._section(section_id="b", version="2"))
+        snapshot = registry.current_versions()
+        assert snapshot == {"a": "1", "b": "2"}
+        # Snapshot is a copy — mutating it doesn't affect the registry.
+        snapshot["a"] = "999"
+        assert registry.current_version("a") == "1"
+
+    def test_remove_specific_version_keeps_others(self) -> None:
+        registry = SectionRegistry()
+        registry.register(self._section(version="1", content="v1"))
+        registry.register(self._section(version="2", content="v2"))
+        registry.remove("core_role", version="1")
+        assert registry.list_versions("core_role") == ["2"]
+        assert self._require(registry, "core_role").content == "v2"
+
+    def test_remove_current_version_promotes_next(self) -> None:
+        """Dropping the active version shouldn't leave the id orphaned."""
+        registry = SectionRegistry()
+        registry.register(self._section(version="1", content="v1"))
+        registry.register(self._section(version="2", content="v2"), set_current=False)
+        # Currently pointing at "1"; remove it.
+        registry.remove("core_role", version="1")
+        assert registry.current_version("core_role") == "2"
+        assert self._require(registry, "core_role").content == "v2"
+
+    def test_remove_no_version_drops_entire_id(self) -> None:
+        """Legacy ``remove(id)`` semantics: drop everything for that id."""
+        registry = SectionRegistry()
+        registry.register(self._section(version="1"))
+        registry.register(self._section(version="2"))
+        registry.remove("core_role")
+        assert registry.list_versions("core_role") == []
+        assert registry.current_version("core_role") is None
+
+    def test_re_register_same_id_version_overwrites(self) -> None:
+        """Same (id, version) re-registered replaces the prior content."""
+        registry = SectionRegistry()
+        registry.register(self._section(version="1", content="first"))
+        registry.register(self._section(version="1", content="second"))
+        assert self._require(registry, "core_role").content == "second"
+        assert registry.list_versions("core_role") == ["1"]
+
+    def test_legacy_single_version_callers_unchanged(self) -> None:
+        """Callers that never set ``version`` see the same behavior as before."""
+        registry = SectionRegistry()
+        # Construct via the same kwargs the existing tests use — no version.
+        section = PromptSection(
+            id="core_role",
+            content="hello",
+            stability=SectionStability.STABLE,
+        )
+        registry.register(section)
+        # get(id) still returns the section, list_versions has the default.
+        assert self._require(registry, "core_role") is section
+        assert registry.list_versions("core_role") == ["1"]
+        assert registry.current_version("core_role") == "1"

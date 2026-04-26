@@ -135,3 +135,65 @@ def test_build_agent_run_config_attaches_budget_callback_when_enabled() -> None:
     callbacks = config.get("callbacks", [])
     assert callbacks, "Token-budget tracking should attach a callback"
     assert "_budget_callback" in config["metadata"]
+
+
+def test_build_agent_run_config_includes_prompt_versions_when_provided() -> None:
+    """Issue #18: active prompt versions surface in run metadata for cohort analysis."""
+    with patch(
+        "langgraph_kit.observability.get_config",
+        return_value=_config(environment="dev"),
+    ):
+        config = build_agent_run_config(
+            agent_id="agent",
+            thread_id="t",
+            current_user=_User(),
+            endpoint="invoke",
+            prompt_versions={"core_role": "v2", "memory_instructions": "v1"},
+        )
+
+    assert config["metadata"]["prompt_versions"] == {
+        "core_role": "v2",
+        "memory_instructions": "v1",
+    }
+
+
+def test_build_agent_run_config_omits_prompt_versions_when_unset_or_empty() -> None:
+    """Don't pollute metadata when callers don't track versions."""
+    with patch(
+        "langgraph_kit.observability.get_config",
+        return_value=_config(environment="dev"),
+    ):
+        config_unset = build_agent_run_config(
+            agent_id="agent",
+            thread_id="t",
+            current_user=_User(),
+            endpoint="invoke",
+        )
+        config_empty = build_agent_run_config(
+            agent_id="agent",
+            thread_id="t",
+            current_user=_User(),
+            endpoint="invoke",
+            prompt_versions={},
+        )
+
+    assert "prompt_versions" not in config_unset["metadata"]
+    assert "prompt_versions" not in config_empty["metadata"]
+
+
+def test_build_agent_run_config_copies_prompt_versions_defensively() -> None:
+    """Mutating the source mapping after the call must not retroactively edit the config."""
+    versions = {"core_role": "v1"}
+    with patch(
+        "langgraph_kit.observability.get_config",
+        return_value=_config(environment="dev"),
+    ):
+        config = build_agent_run_config(
+            agent_id="agent",
+            thread_id="t",
+            current_user=_User(),
+            endpoint="invoke",
+            prompt_versions=versions,
+        )
+    versions["core_role"] = "v999"
+    assert config["metadata"]["prompt_versions"] == {"core_role": "v1"}

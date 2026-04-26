@@ -122,21 +122,40 @@ def build_agent_run_config(
     thread_id: str,
     current_user: UserInfo,
     endpoint: str,
+    prompt_versions: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Build a LangChain/LangGraph runnable config for an agent request."""
+    """Build a LangChain/LangGraph runnable config for an agent request.
+
+    Parameters
+    ----------
+    prompt_versions:
+        Optional mapping of ``section_id`` → currently-active version,
+        typically obtained from
+        :py:meth:`SectionRegistry.current_versions`. When provided, the
+        mapping is added to ``metadata["prompt_versions"]`` so it shows
+        up in Langfuse / trace exports — useful for cohort-analyzing a
+        prompt rollout (see issue #18). Omit for runs that don't
+        differentiate prompt versions; the metadata key is left out
+        entirely rather than set to an empty dict.
+    """
     cfg = get_config()
+    metadata: dict[str, Any] = {
+        "agent_id": agent_id,
+        "thread_id": thread_id,
+        "endpoint": endpoint,
+        "environment": cfg.environment,
+        "user_id": str(current_user.id),
+        "user_email": current_user.email,
+    }
+    if prompt_versions:
+        # Copy the mapping so a later registry mutation doesn't
+        # retroactively rewrite the metadata of in-flight runs.
+        metadata["prompt_versions"] = dict(prompt_versions)
     config: dict[str, Any] = {
         "configurable": {"thread_id": thread_id},
         "run_name": f"{agent_id}.{endpoint}",
         "tags": ["agents", agent_id, endpoint],
-        "metadata": {
-            "agent_id": agent_id,
-            "thread_id": thread_id,
-            "endpoint": endpoint,
-            "environment": cfg.environment,
-            "user_id": str(current_user.id),
-            "user_email": current_user.email,
-        },
+        "metadata": metadata,
     }
 
     callbacks: list[Any] = []
