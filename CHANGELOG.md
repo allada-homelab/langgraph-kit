@@ -7,6 +7,24 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Config validation (`validate_config` + `langgraph-kit
+  validate-config`).** New `langgraph_kit._config.validate_config(cfg)
+  returns a frozen `ValidationReport(errors, warnings, is_ok)` without
+  raising; the CLI subcommand prints both lists and exits 1 on errors,
+  0 on warnings-only, 0 on clean. Catches: bad / empty `database_url`
+  scheme (sqlite, postgresql, postgresql+psycopg only), empty
+  `llm_model`, negative `token_budget_per_thread` /
+  `shutdown_timeout_seconds`, unknown `prompt_injection_mode` /
+  `output_safety_mode` (typos that silently fall through to defaults
+  today), Langfuse public/secret key mismatch (warn — tracing
+  silently disables), `langfuse_tracing_enabled=True` without
+  complete credentials (error), invalid `mcp_servers` JSON. Pure
+  function — no I/O. Lifespan integration and Pydantic migration of
+  `AgentConfig` are intentionally deferred to follow-ups; this lands
+  the validator + CLI surface so callers can run pre-flight checks
+  today. Closes part of
+  [#41](https://github.com/allada-homelab/langgraph-kit/issues/41).
+
 - **`langgraph-kit openapi` subcommand.** Mounts the agent router on
   a temporary FastAPI app and dumps `app.openapi()` as JSON, either
   to stdout or to `--output spec.json`. `--indent 0` emits compact

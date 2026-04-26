@@ -192,3 +192,154 @@ def _coerce(field: dataclasses.Field[Any], value: Any) -> Any:
     if field.type == "str" and not isinstance(value, str):
         return str(value)
     return value
+
+
+# ---------------------------------------------------------------------------
+# Configuration validation
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ValidationReport:
+    """Result of running :func:`validate_config` against an :class:`AgentConfig`.
+
+    Two-tier surface: ``errors`` would prevent the kit from running
+    correctly (bad URL scheme, negative budget); ``warnings`` are
+    suspicious but not fatal (Langfuse public key set without secret,
+    embedding-fn unset when memory is heavily used).
+
+    Frozen so callers can hand the report around without worrying
+    about downstream mutation. Helpers like :py:meth:`is_ok` keep the
+    common "did anything fail?" check terse.
+    """
+
+    errors: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
+
+    @property
+    def is_ok(self) -> bool:
+        """``True`` iff no errors. Warnings don't fail this gate."""
+        return not self.errors
+
+
+_VALID_DB_SCHEMES = ("sqlite://", "postgresql://", "postgresql+psycopg://")
+"""URL schemes ``create_persistence`` recognizes. SQLite for dev,
+Postgres (with the optional psycopg driver suffix) for production.
+Unknown schemes silently fall through to "checkpointer + store can't
+be built" failures deep in the stack — better to catch up front."""
+
+
+_VALID_PROMPT_INJECTION_MODES = ("off", "warn")
+"""Modes accepted by :pyattr:`AgentConfig.prompt_injection_mode`.
+
+The ``"quarantine"`` mode is reserved for a follow-up PR; if a caller
+sets it today the scanner falls back to ``"warn"`` semantics. Validate
+against the actual accepted set so typos are caught."""
+
+
+_VALID_OUTPUT_SAFETY_MODES = ("off", "warn", "redact")
+"""Modes accepted by :pyattr:`AgentConfig.output_safety_mode`."""
+
+
+def validate_config(cfg: AgentConfig) -> ValidationReport:
+    """Surface configuration mistakes without raising.
+
+    Returns a :class:`ValidationReport` with separate ``errors`` and
+    ``warnings`` tuples. Caller decides what to do — the kit's CLI
+    ``validate-config`` subcommand prints both and exits non-zero on
+    errors; production callers can wire this into their startup path
+    for fail-loud-and-early behavior.
+
+    Pure function — no I/O, no side effects. A separate
+    ``--check-connections`` pass that actually opens the database is
+    deferred to a follow-up; it would change this contract.
+
+    Checks performed:
+
+    1. ``database_url`` uses a recognized scheme.
+    2. ``llm_model`` is non-empty (every code path needs one).
+    3. ``token_budget_per_thread`` is non-negative.
+    4. ``shutdown_timeout_seconds`` is non-negative.
+    5. ``prompt_injection_mode`` is one of :data:`_VALID_PROMPT_INJECTION_MODES`.
+    6. ``output_safety_mode`` is one of :data:`_VALID_OUTPUT_SAFETY_MODES`.
+    7. Langfuse keys appear in matching pairs; loud warning when only
+       one half is set (the kit silently disables tracing in that
+       case, which is a reliable source of confusion).
+    8. ``langfuse_tracing_enabled=True`` requires both keys; warns
+       when tracing is on but credentials are incomplete.
+    9. ``mcp_servers`` parses as JSON when non-empty.
+    """
+    import json  # local import — keeps validation cheap when not invoked
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    # 1. database_url scheme
+    if not cfg.database_url:
+        errors.append("database_url is empty; set a sqlite:// or postgresql:// URL")
+    elif not cfg.database_url.startswith(_VALID_DB_SCHEMES):
+        errors.append(
+            f"database_url uses an unsupported scheme: {cfg.database_url!r} "
+            f"(expected one of {_VALID_DB_SCHEMES})"
+        )
+
+    # 2. llm_model
+    if not cfg.llm_model:
+        errors.append("llm_model is empty; the kit requires a default model")
+
+    # 3-4. Numeric bounds
+    if cfg.token_budget_per_thread < 0:
+        errors.append(
+            f"token_budget_per_thread must be >= 0 (0 = unlimited); "
+            f"got {cfg.token_budget_per_thread}"
+        )
+    if cfg.shutdown_timeout_seconds < 0:
+        errors.append(
+            f"shutdown_timeout_seconds must be >= 0 "
+            f"(0 = cancel immediately); got {cfg.shutdown_timeout_seconds}"
+        )
+
+    # 5-6. Mode strings
+    if cfg.prompt_injection_mode not in _VALID_PROMPT_INJECTION_MODES:
+        errors.append(
+            f"prompt_injection_mode={cfg.prompt_injection_mode!r} "
+            f"is not one of {_VALID_PROMPT_INJECTION_MODES}"
+        )
+    if cfg.output_safety_mode not in _VALID_OUTPUT_SAFETY_MODES:
+        errors.append(
+            f"output_safety_mode={cfg.output_safety_mode!r} "
+            f"is not one of {_VALID_OUTPUT_SAFETY_MODES}"
+        )
+
+    # 7. Langfuse pair consistency
+    has_public = bool(cfg.langfuse_public_key)
+    has_secret = bool(cfg.langfuse_secret_key)
+    if has_public and not has_secret:
+        warnings.append(
+            "langfuse_public_key is set but langfuse_secret_key is empty; "
+            "Langfuse tracing will be disabled at runtime"
+        )
+    elif has_secret and not has_public:
+        warnings.append(
+            "langfuse_secret_key is set but langfuse_public_key is empty; "
+            "Langfuse tracing will be disabled at runtime"
+        )
+
+    # 8. Tracing-enabled guard
+    if cfg.langfuse_tracing_enabled:
+        if not has_public or not has_secret:
+            errors.append(
+                "langfuse_tracing_enabled=True requires both "
+                "langfuse_public_key and langfuse_secret_key"
+            )
+        if not cfg.langfuse_host:
+            errors.append("langfuse_tracing_enabled=True requires a langfuse_host URL")
+
+    # 9. mcp_servers JSON
+    if cfg.mcp_servers:
+        try:
+            json.loads(cfg.mcp_servers)
+        except ValueError as exc:
+            errors.append(f"mcp_servers is not valid JSON: {exc}")
+
+    return ValidationReport(errors=tuple(errors), warnings=tuple(warnings))
