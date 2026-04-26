@@ -17,7 +17,11 @@ from langchain_core.outputs import (  # pyright: ignore[reportMissingModuleSourc
     ChatResult,
 )
 
-from langgraph_kit.replay.models import ConversationRecording, LLMInteraction
+from langgraph_kit.replay.models import (
+    ConversationRecording,
+    LLMInteraction,
+    RecordingOverrides,
+)
 
 if TYPE_CHECKING:
     from langchain_core.language_models import (  # pyright: ignore[reportMissingModuleSource]
@@ -51,6 +55,9 @@ class RecordedChatModel(BaseChatModel):
     # or an input doesn't line up. Safer for CI assertions but harder on
     # minor prompt edits. Leave True for human-friendly reproduction.
     fuzzy_match: bool = True
+    # Optional per-index overrides applied at lookup time without
+    # mutating the recording on disk. See ``RecordingOverrides``.
+    overrides: RecordingOverrides | None = None
     _call_index: int = 0
 
     model_config: ClassVar[dict[str, Any]] = {"arbitrary_types_allowed": True}
@@ -68,11 +75,19 @@ class RecordedChatModel(BaseChatModel):
     ) -> ChatResult:
         """Serve the next recorded response."""
         llm_interactions = self.recording.llm_interactions
+        resolved_overrides = (
+            self.overrides.resolve(len(llm_interactions))
+            if self.overrides is not None
+            else {}
+        )
 
         # Try sequential match first
         if self._call_index < len(llm_interactions):
             interaction = llm_interactions[self._call_index]
+            override = resolved_overrides.get(self._call_index)
             self._call_index += 1
+            if override is not None:
+                return _override_to_result(interaction, override)
             return _interaction_to_result(interaction)
 
         last_content = _extract_content(messages[-1]) if messages else ""
@@ -132,6 +147,29 @@ def _interaction_to_result(interaction: LLMInteraction) -> ChatResult:
     output = interaction.output_message
     content = output.get("content", "")
     tool_calls = output.get("tool_calls", [])
+
+    message = AIMessage(
+        content=content,
+        tool_calls=tool_calls if tool_calls else [],
+    )
+
+    return ChatResult(
+        generations=[ChatGeneration(message=message)],
+        llm_output=interaction.token_usage or {},
+    )
+
+
+def _override_to_result(
+    interaction: LLMInteraction, override: dict[str, Any]
+) -> ChatResult:
+    """Substitute *override* for *interaction*'s recorded output_message.
+
+    Token usage from the original interaction is preserved on the
+    ChatResult — overrides only swap the assistant text/tool_calls,
+    not the metering (which is descriptive of the original run).
+    """
+    content = override.get("content", "")
+    tool_calls = override.get("tool_calls", [])
 
     message = AIMessage(
         content=content,

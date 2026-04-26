@@ -27,6 +27,7 @@ from langgraph_kit.replay.assertions import (
 from langgraph_kit.replay.models import (
     ConversationRecording,
     LLMInteraction,
+    RecordingOverrides,
     ToolInteraction,
 )
 from langgraph_kit.replay.player import RecordedChatModel, ReplayMismatchError
@@ -38,6 +39,7 @@ __all__ = [
     "ConversationRecording",
     "LLMInteraction",
     "RecordedChatModel",
+    "RecordingOverrides",
     "ReplayAssertions",
     "ReplayMismatchError",
     "ReplayRunner",

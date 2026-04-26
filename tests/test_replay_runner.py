@@ -43,8 +43,10 @@ from langgraph_kit.replay.assertions import ReplayAssertions
 from langgraph_kit.replay.models import (
     ConversationRecording,
     LLMInteraction,
+    RecordingOverrides,
     ToolInteraction,
 )
+from langgraph_kit.replay.player import RecordedChatModel
 from langgraph_kit.replay.runner import ReplayRunner, _extract_user_turns
 from tests.conftest import MockStore
 
@@ -381,3 +383,255 @@ def test_recording_json_round_trip(recording_path: Path) -> None:
     assert raw["agent_id"] == "runner-test"
     assert "interactions" in raw
     assert raw["interactions"][0]["kind"] == "llm"
+
+
+# ---------------------------------------------------------------------------
+# Partial replay (start_at / stop_at) and RecordingOverrides — issue #15.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def multi_turn_recording_path(tmp_path: Path) -> Path:
+    """Four-turn recording with distinct user messages per turn."""
+    recording = ConversationRecording(
+        id=str(uuid4()),
+        agent_id="multi-turn-test",
+        thread_id="multi-thread",
+        created_at="2026-04-25T00:00:00Z",
+        user_messages=[{"role": "user", "content": f"turn-{i}"} for i in range(4)],
+        interactions=[
+            LLMInteraction(
+                sequence_num=i + 1,
+                output_message={"content": f"reply-{i}", "tool_calls": []},
+            )
+            for i in range(4)
+        ],
+    )
+    path = tmp_path / "multi.json"
+    path.write_text(recording.model_dump_json())
+    return path
+
+
+@pytest.mark.asyncio
+async def test_run_start_at_skips_leading_turns(
+    multi_turn_recording_path: Path,
+) -> None:
+    """``start_at=2`` runs only turns 2 and 3 (4-turn recording)."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    replayed = await runner.run(start_at=2)
+    user_inputs = [
+        msg.get("content", "")
+        for interaction in replayed.llm_interactions
+        for msg in interaction.input_messages
+        if msg.get("role") == "user"
+    ]
+    assert "turn-2" in user_inputs
+    assert "turn-3" in user_inputs
+    assert "turn-0" not in user_inputs
+    assert "turn-1" not in user_inputs
+
+
+@pytest.mark.asyncio
+async def test_run_stop_at_truncates_trailing_turns(
+    multi_turn_recording_path: Path,
+) -> None:
+    """``stop_at=2`` runs only turns 0 and 1."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    replayed = await runner.run(stop_at=2)
+    user_inputs = [
+        msg.get("content", "")
+        for interaction in replayed.llm_interactions
+        for msg in interaction.input_messages
+        if msg.get("role") == "user"
+    ]
+    assert "turn-0" in user_inputs
+    assert "turn-1" in user_inputs
+    assert "turn-2" not in user_inputs
+    assert "turn-3" not in user_inputs
+
+
+@pytest.mark.asyncio
+async def test_run_start_and_stop_at_compose(
+    multi_turn_recording_path: Path,
+) -> None:
+    """``start_at=1, stop_at=3`` runs only turns 1 and 2."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    replayed = await runner.run(start_at=1, stop_at=3)
+    user_inputs = [
+        msg.get("content", "")
+        for interaction in replayed.llm_interactions
+        for msg in interaction.input_messages
+        if msg.get("role") == "user"
+    ]
+    assert sorted(set(user_inputs)) == ["turn-1", "turn-2"]
+
+
+@pytest.mark.asyncio
+async def test_run_negative_indices_match_python_slice_semantics(
+    multi_turn_recording_path: Path,
+) -> None:
+    """``stop_at=-1`` should drop the last turn (Python slice semantics)."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    replayed = await runner.run(stop_at=-1)
+    user_inputs = [
+        msg.get("content", "")
+        for interaction in replayed.llm_interactions
+        for msg in interaction.input_messages
+        if msg.get("role") == "user"
+    ]
+    assert "turn-3" not in user_inputs
+    assert "turn-0" in user_inputs
+
+
+@pytest.mark.asyncio
+async def test_run_default_args_full_replay_unchanged(
+    multi_turn_recording_path: Path,
+) -> None:
+    """Calling ``run()`` with no slice args replays everything (no regression)."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    replayed = await runner.run()
+    user_inputs = {
+        msg.get("content", "")
+        for interaction in replayed.llm_interactions
+        for msg in interaction.input_messages
+        if msg.get("role") == "user"
+    }
+    assert {"turn-0", "turn-1", "turn-2", "turn-3"}.issubset(user_inputs)
+
+
+# ----- RecordingOverrides -------------------------------------------------
+
+
+def test_overrides_resolve_normalizes_negative_indices() -> None:
+    """``-1`` resolves to ``total - 1``; out-of-range keys silently dropped."""
+    overrides = RecordingOverrides(
+        llm_outputs={
+            0: {"content": "first"},
+            -1: {"content": "last"},
+            -2: {"content": "second-to-last"},
+            99: {"content": "out-of-range"},
+            -99: {"content": "out-of-range-negative"},
+        }
+    )
+    resolved = overrides.resolve(total_llm_interactions=4)
+    assert resolved == {
+        0: {"content": "first"},
+        2: {"content": "second-to-last"},
+        3: {"content": "last"},
+    }
+
+
+def test_overrides_resolve_empty_recording_drops_everything() -> None:
+    overrides = RecordingOverrides(
+        llm_outputs={0: {"content": "x"}, -1: {"content": "y"}}
+    )
+    assert overrides.resolve(total_llm_interactions=0) == {}
+
+
+def test_recorded_chat_model_serves_override_in_place_of_recording() -> None:
+    """When an override is set for index N, that index returns the override text."""
+    recording = ConversationRecording(
+        interactions=[
+            LLMInteraction(sequence_num=1, output_message={"content": "original-0"}),
+            LLMInteraction(sequence_num=2, output_message={"content": "original-1"}),
+        ],
+    )
+    overrides = RecordingOverrides(
+        llm_outputs={1: {"content": "OVERRIDDEN"}},
+    )
+    model = RecordedChatModel(recording=recording, overrides=overrides)
+    first = model._generate(messages=[HumanMessage(content="ignored")])
+    second = model._generate(messages=[HumanMessage(content="ignored")])
+    # First call serves the recording verbatim (no override at index 0).
+    assert first.generations[0].message.content == "original-0"
+    # Second call serves the override.
+    assert second.generations[0].message.content == "OVERRIDDEN"
+
+
+def test_recorded_chat_model_no_overrides_unchanged_behavior() -> None:
+    """A model with ``overrides=None`` behaves identically to baseline."""
+    recording = ConversationRecording(
+        interactions=[
+            LLMInteraction(sequence_num=1, output_message={"content": "untouched"}),
+        ],
+    )
+    model = RecordedChatModel(recording=recording)
+    result = model._generate(messages=[HumanMessage(content="ignored")])
+    assert result.generations[0].message.content == "untouched"
+
+
+def test_recorded_chat_model_override_replaces_tool_calls_too() -> None:
+    """Override can swap tool_calls, not just content — supports trajectory forks."""
+    recording = ConversationRecording(
+        interactions=[
+            LLMInteraction(
+                sequence_num=1,
+                output_message={
+                    "content": "",
+                    "tool_calls": [{"name": "real_tool", "args": {}, "id": "call_a"}],
+                },
+            ),
+        ],
+    )
+    overrides = RecordingOverrides(
+        llm_outputs={
+            0: {
+                "content": "",
+                "tool_calls": [
+                    {"name": "alt_tool", "args": {"q": "x"}, "id": "call_b"}
+                ],
+            }
+        },
+    )
+    model = RecordedChatModel(recording=recording, overrides=overrides)
+    result = model._generate(messages=[HumanMessage(content="ignored")])
+    msg = result.generations[0].message
+    assert isinstance(msg, AIMessage)
+    assert [c["name"] for c in msg.tool_calls] == ["alt_tool"]
+
+
+@pytest.mark.asyncio
+async def test_run_with_overrides_changes_replayed_output(
+    multi_turn_recording_path: Path,
+) -> None:
+    """End-to-end: override at index 0 surfaces in the replayed recording."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    overrides = RecordingOverrides(
+        llm_outputs={0: {"content": "FORKED-REPLY"}},
+    )
+    replayed = await runner.run(stop_at=1, overrides=overrides)
+    contents = [
+        interaction.output_message.get("content", "")
+        for interaction in replayed.llm_interactions
+    ]
+    assert any("FORKED-REPLY" in c for c in contents if isinstance(c, str))

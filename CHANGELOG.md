@@ -7,6 +7,19 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Partial replay + recording overrides.** `ReplayRunner.run()` now
+  accepts `start_at` / `stop_at` (Python slice semantics, negative
+  indices supported) to replay a sub-range of recorded user turns —
+  useful for debugging "show me what happens after turn 5" without
+  rerunning the prefix verbatim. New `RecordingOverrides` model lets
+  callers swap an LLM `output_message` at specific call ordinals
+  without mutating the recording on disk, supporting "what if the
+  model had said X here?" trajectory experiments. Both knobs are
+  optional; default behavior is unchanged. `step_mode` (yielding
+  pause-points between turns) is intentionally deferred — separate
+  API surface, easy to add later. Fixes
+  [#15](https://github.com/allada-homelab/langgraph-kit/issues/15).
+
 - **Dev-mode hot-reload primitive.** New `langgraph_kit.dev.Reloader`
   watches a list of paths via stdlib mtime polling and fires a
   callback (sync or async) on each batch of changes. Default ignore
