@@ -7,6 +7,24 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Curated prompt-template library (`langgraph_kit.prompt_templates`).**
+  Nine shipped, versioned `PromptSection` instances covering the
+  common prompt families: `core_identity`, `operate_carefully`,
+  `be_concise`, `completion_signal`, `memory_awareness` (conditional
+  on `"memory"`), `tool_use_discipline` (conditional on `"tools"`),
+  `error_handling`, plus a paired `output_format_natural` /
+  `output_format_structured` sharing the `"output_format"` id with
+  distinct versions (composes with #18's per-id versioning so a
+  single registry can swap formats via `set_current`). New
+  `diff_section(custom, baseline) -> str` helper renders unified
+  diffs of any customization vs the shipped baseline — useful as a
+  startup-log entry for deploys that customize prompts. Sections
+  are importable today; auto-registration on `SectionRegistry()`
+  and `AgentConfig.prompt_overrides` lifecycle integration are
+  intentionally deferred to follow-ups so this PR doesn't change
+  graph-build semantics for existing callers. Closes part of
+  [#43](https://github.com/allada-homelab/langgraph-kit/issues/43).
+
 - **Public testing utilities (`langgraph_kit.testing`).** New module
   promotes the kit's internal `MockStore` test fixture to a stable
   public `FakeStore` (Fake = behaves like the real thing; Mock = can
