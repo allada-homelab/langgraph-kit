@@ -2,14 +2,21 @@ docs:
   - all:
     - changed-files:
       - any-glob-to-any-file:
-        - '**/*.md'
+        # Match true documentation surfaces. CHANGELOG.md is intentionally
+        # excluded — it's updated alongside feature/fix PRs by convention,
+        # so matching it would auto-add ``docs`` to every functional PR
+        # and trip the "exactly 1 label" rule in check-labels.
+        - 'README.md'
+        - 'CONTRIBUTING.md'
         - 'docs/**'
         - 'mkdocs.yml'
+        - 'docs/**/*.md'
       - all-globs-to-all-files:
         - '!.github/**'
         - '!scripts/**'
         - '!.gitignore'
         - '!.pre-commit-config.yaml'
+        - '!CHANGELOG.md'
 
 internal:
   - all:
