@@ -7,6 +7,17 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: default HITL demo tool.**
+  `build_reference_deep_agent` now ships
+  `confirm_destructive_demo`, a no-op stub whose capability sets
+  `interrupt_before=True` so `AutoInterruptMiddleware` fires its
+  pause-and-prompt path on every call. The middleware was always in
+  the stack but had no shipped tool to drive it, leaving the HITL
+  gating path dead in the showcase. New kwarg
+  `enable_default_hitl_demo` (default `True`) toggles this
+  independently of `enable_default_custom_tools`. Closes
+  [#104](https://github.com/allada-homelab/langgraph-kit/issues/104).
+
 - **Coordinator variant of the reference agent.** New
   `build_reference_coordinator_agent` (and a `coordinator: bool =
   False` kwarg on `build_reference_deep_agent`) flips the build into

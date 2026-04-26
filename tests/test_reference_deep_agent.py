@@ -860,6 +860,7 @@ def _build_reference_with_capture(
     extra_deferred_tools: Any | None = None,
     enable_default_custom_tools: bool | None = None,
     extra_configure_tools: Any | None = None,
+    enable_default_hitl_demo: bool | None = None,
     enable_default_extra_providers: bool | None = None,
     extra_providers: list[Any] | None = None,
 ) -> MagicMock:
@@ -882,6 +883,8 @@ def _build_reference_with_capture(
         kwargs["enable_default_custom_tools"] = enable_default_custom_tools
     if extra_configure_tools is not None:
         kwargs["extra_configure_tools"] = extra_configure_tools
+    if enable_default_hitl_demo is not None:
+        kwargs["enable_default_hitl_demo"] = enable_default_hitl_demo
     if enable_default_extra_providers is not None:
         kwargs["enable_default_extra_providers"] = enable_default_extra_providers
     if extra_providers is not None:
@@ -1409,3 +1412,69 @@ def test_reference_default_is_not_coordinator(mock_store: Any) -> None:
 
     system_prompt = create.call_args.kwargs["system_prompt"]
     assert "# Coordinator Mode" not in system_prompt
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: HITL demo tool wiring
+# ---------------------------------------------------------------------------
+# AutoInterruptMiddleware is always in the stack but only fires when a
+# tool's capability sets ``interrupt_before=True``. Without a shipped
+# tool wearing the flag, the middleware path was dead in the showcase.
+# The reference now ships ``confirm_destructive_demo`` as the trigger.
+
+
+def test_reference_default_hitl_demo_tool_is_registered(mock_store: Any) -> None:
+    """Default build registers ``confirm_destructive_demo`` on the bound tool surface."""
+    create = _build_reference_with_capture(mock_store)
+
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {
+        str(getattr(fn, "__name__", getattr(fn, "name", "")) or "") for fn in tools
+    }
+    assert "confirm_destructive_demo" in tool_names
+
+
+def test_reference_default_hitl_demo_tool_can_be_disabled(mock_store: Any) -> None:
+    """``enable_default_hitl_demo=False`` strips the HITL demo from the surface."""
+    create = _build_reference_with_capture(mock_store, enable_default_hitl_demo=False)
+
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {
+        str(getattr(fn, "__name__", getattr(fn, "name", "")) or "") for fn in tools
+    }
+    assert "confirm_destructive_demo" not in tool_names
+    # The other reference defaults must still be present so the
+    # toggle is independent.
+    assert "current_environment" in tool_names
+
+
+def test_reference_hitl_demo_capability_has_interrupt_before(mock_store: Any) -> None:
+    """The registered capability for the demo tool must carry ``interrupt_before=True``.
+
+    Without that flag, ``AutoInterruptMiddleware`` is a no-op and the
+    HITL gating path stays dead — that is exactly the regression the
+    demo guards against.
+    """
+    from langgraph_kit.core.tools.registry import ToolRegistry
+    from langgraph_kit.graphs._reference_custom_tools import (
+        register_reference_hitl_demo_tool,
+    )
+
+    registry = ToolRegistry()
+    register_reference_hitl_demo_tool(registry)
+    cap = registry.find_by_tool_name("confirm_destructive_demo")
+    assert cap is not None
+    assert cap.interrupt_before is True
+    assert cap.risk.value == "mutating"
+
+
+def test_reference_hitl_demo_disabled_keeps_custom_tools(mock_store: Any) -> None:
+    """Disabling HITL demo doesn't strip ``current_environment`` (independent toggle)."""
+    create = _build_reference_with_capture(mock_store, enable_default_hitl_demo=False)
+
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {
+        str(getattr(fn, "__name__", getattr(fn, "name", "")) or "") for fn in tools
+    }
+    assert "current_environment" in tool_names
+    assert "confirm_destructive_demo" not in tool_names
