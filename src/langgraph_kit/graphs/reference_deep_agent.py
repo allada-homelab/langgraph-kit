@@ -17,6 +17,7 @@ from langgraph_kit.core.prompt_assembly.sections import (
     PromptSection,
     SectionStability,
 )
+from langgraph_kit.core.resilience.stop_hooks import TurnTelemetryStopHook
 from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT, build_deep_agent
 
 # ---------------------------------------------------------------------------
@@ -114,6 +115,8 @@ def build_reference_deep_agent(
     mcp_tools: list[Any] | None = None,
     plugins: Any = None,
     recursion_limit: int = DEFAULT_RECURSION_LIMIT,
+    enable_default_stop_hooks: bool = True,
+    extra_stop_hooks: list[Any] | None = None,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
 
@@ -125,7 +128,23 @@ def build_reference_deep_agent(
     ``PluginContribution`` objects whose tools, prompt sections, and
     worker definitions are merged into the build. See
     :func:`langgraph_kit.graphs._builder.build_deep_agent` for details.
+
+    ``enable_default_stop_hooks`` (default ``True``) registers a
+    :class:`~langgraph_kit.core.resilience.stop_hooks.TurnTelemetryStopHook`
+    against :class:`StopHooksMiddleware` so the lifecycle-hook path is
+    exercised by the reference build. Set to ``False`` to opt out.
+
+    ``extra_stop_hooks`` is appended after the default so callers can
+    stack additional hooks alongside (or instead of) the telemetry hook.
+    Each entry should expose an awaitable ``on_turn_complete(state)``;
+    set ``blocking=True`` on a hook to make its exceptions fail the turn
+    rather than be logged and swallowed.
     """
+    stop_hooks: list[Any] = []
+    if enable_default_stop_hooks:
+        stop_hooks.append(TurnTelemetryStopHook())
+    if extra_stop_hooks:
+        stop_hooks.extend(extra_stop_hooks)
     return build_deep_agent(
         agent_name="reference-deep-agent",
         core_sections=_CORE_SECTIONS,
@@ -135,4 +154,5 @@ def build_reference_deep_agent(
         mcp_tools=mcp_tools,
         plugins=plugins,
         recursion_limit=recursion_limit,
+        stop_hooks=stop_hooks or None,
     )

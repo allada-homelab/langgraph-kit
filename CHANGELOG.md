@@ -7,6 +7,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: default `TurnTelemetryStopHook`.**
+  `build_reference_deep_agent` now wires a non-blocking
+  `TurnTelemetryStopHook` against `StopHooksMiddleware` so the
+  lifecycle-hook path is exercised by default — closing the
+  docstring/reality mismatch where "stop hooks" was advertised but
+  never populated. The hook emits a single `logger.debug` line per turn
+  with the message count and the tool-call count from the final
+  `AIMessage`. Two new kwargs let callers compose: `enable_default_stop_hooks`
+  (default `True`) opts out, and `extra_stop_hooks` is appended after
+  the default for richer telemetry. Closes
+  [#98](https://github.com/allada-homelab/langgraph-kit/issues/98).
+
 - **Live graph overlay — `node_entered` / `node_exited` SSE
   events.** `stream_agent_events` now emits
   `{"node_entered": {"id", "name"}}` and
