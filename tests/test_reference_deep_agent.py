@@ -952,11 +952,25 @@ def test_reference_extra_only_when_default_disabled(mock_store: Any) -> None:
             return None
 
     extra = _Marker()
-    create = _build_reference_with_capture(
-        mock_store, enable_default_stop_hooks=False, extra_stop_hooks=[extra]
-    )
+    # Disable both default hooks (telemetry + audit) so only the
+    # caller-supplied hook remains.
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_deep_agent(
+            checkpointer=MagicMock(),
+            store=mock_store,
+            enable_default_stop_hooks=False,
+            enable_default_audit=False,
+            extra_stop_hooks=[extra],
+        )
 
-    middleware = create.call_args.kwargs["middleware"]
+    middleware = deepagents_mod.create_deep_agent.call_args.kwargs["middleware"]
     stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
     hooks = stop_mw._hooks
     assert hooks == [extra]
@@ -1674,3 +1688,123 @@ def test_reference_no_graph_callbacks_skips_callbacks_with_config(
     assert not callback_calls, (
         f"Expected no callbacks with_config call; got {callback_calls!r}"
     )
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: default audit sink wiring
+# ---------------------------------------------------------------------------
+# The audit subsystem ships independently but had no reference wiring.
+# The reference now attaches a ``ReferenceAuditStopHook`` that emits one
+# AGENT_RUN_COMPLETE entry per turn via AuditStore. Records are
+# metadata-only — no message bodies / tool args — so the audit log
+# never leaks conversation contents.
+
+
+def test_reference_default_audit_hook_is_wired(mock_store: Any) -> None:
+    """Default build registers a ReferenceAuditStopHook on StopHooksMiddleware."""
+    from langgraph_kit.graphs._reference_audit import ReferenceAuditStopHook
+
+    create = _build_reference_with_capture(mock_store)
+    middleware = create.call_args.kwargs["middleware"]
+    stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
+    hooks = stop_mw._hooks
+    assert any(isinstance(h, ReferenceAuditStopHook) for h in hooks), (
+        f"ReferenceAuditStopHook must be wired by default; got {hooks!r}"
+    )
+
+
+def test_reference_default_audit_can_be_disabled(mock_store: Any) -> None:
+    """``enable_default_audit=False`` removes the audit hook from the stack."""
+    from langgraph_kit.graphs._reference_audit import ReferenceAuditStopHook
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_deep_agent(
+            checkpointer=MagicMock(),
+            store=mock_store,
+            enable_default_audit=False,
+        )
+
+    middleware = deepagents_mod.create_deep_agent.call_args.kwargs["middleware"]
+    stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
+    assert not any(isinstance(h, ReferenceAuditStopHook) for h in stop_mw._hooks)
+
+
+def test_reference_audit_store_caller_supplied_is_used(mock_store: Any) -> None:
+    """A caller-supplied ``audit_store=`` overrides the default-on-the-build store."""
+    from langgraph_kit.core.audit import AuditStore
+    from langgraph_kit.graphs._reference_audit import ReferenceAuditStopHook
+
+    custom_store = AuditStore(MagicMock(name="custom_audit_store"))
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_deep_agent(
+            checkpointer=MagicMock(),
+            store=mock_store,
+            audit_store=custom_store,
+        )
+
+    middleware = deepagents_mod.create_deep_agent.call_args.kwargs["middleware"]
+    stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
+    audit_hooks = [h for h in stop_mw._hooks if isinstance(h, ReferenceAuditStopHook)]
+    assert audit_hooks
+    assert audit_hooks[0]._audit_store is custom_store
+
+
+@pytest.mark.asyncio
+async def test_reference_audit_hook_writes_metadata_only_no_pii(
+    mock_store: Any,
+) -> None:
+    """Audit entries written by the default hook must contain no message bodies.
+
+    PII guard: the showcase's audit must capture *what happened* without
+    leaking conversation contents. If a future change accidentally
+    surfaces message text into ``metadata=``, this test catches it.
+    """
+    from langgraph_kit.core.audit import AuditAction, AuditStore
+    from langgraph_kit.graphs._reference_audit import ReferenceAuditStopHook
+
+    audit_store = AuditStore(mock_store)
+    hook = ReferenceAuditStopHook(audit_store)
+
+    sentinel = "PROBABLY_PRIVATE_STUFF_NOBODY_SHOULD_LEAK"
+    state = {
+        "messages": [
+            HumanMessage(content=f"please {sentinel} for me"),
+            AIMessage(
+                content=f"sure, processing {sentinel}",
+                tool_calls=[{"name": "thinker", "args": {"q": sentinel}, "id": "tc1"}],
+            ),
+        ]
+    }
+
+    await hook.on_turn_complete(state)
+
+    # The mock_store records all writes; pull every audit entry written
+    # and assert the sentinel never appears anywhere in the serialized
+    # entry payload.
+    entries = await audit_store.query(action=AuditAction.AGENT_RUN_COMPLETE, limit=10)
+    assert entries, "audit hook must emit at least one entry per turn"
+    for entry in entries:
+        serialized = entry.model_dump_json()
+        assert sentinel not in serialized, (
+            f"PII leak: audit entry contained message body / tool args.\n"
+            f"Entry: {serialized}"
+        )
+        assert entry.action is AuditAction.AGENT_RUN_COMPLETE
+        # Metadata must contain counts but not the actual content keys.
+        assert "message_count" in entry.metadata
+        assert "content" not in entry.metadata
+        assert "args" not in entry.metadata
