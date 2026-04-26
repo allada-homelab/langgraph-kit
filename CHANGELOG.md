@@ -7,6 +7,17 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **`create_app_lifespan` validates `AgentConfig` at startup.** The
+  FastAPI lifespan now calls `validate_config` before any other
+  initialization. Errors raise `RuntimeError` with a readable list
+  of failures so misconfiguration aborts startup loud and early
+  instead of throwing obscure exceptions deep in the stack.
+  Warnings (e.g. half-set Langfuse credentials) are logged but
+  don't block startup. Closes the lifespan acceptance criterion on
+  [#41](https://github.com/allada-homelab/langgraph-kit/issues/41);
+  the standalone `validate_config` function and CLI subcommand
+  shipped earlier.
+
 - **CLI reference docs for `openapi` + `shell`.** Adds the typed-client
   recipe (Python via `openapi-python-client`, TS via
   `openapi-generator-cli`) the `openapi` subcommand was always

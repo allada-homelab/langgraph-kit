@@ -123,8 +123,22 @@ def create_app_lifespan(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
+        from langgraph_kit._config import validate_config
         from langgraph_kit.observability import init_langfuse, shutdown_langfuse
         from langgraph_kit.persistence import create_persistence
+
+        # Fail loud and early on bad config — bad ``database_url`` schemes,
+        # negative budgets, mismatched Langfuse credentials. Errors raise
+        # ``RuntimeError`` so the FastAPI startup phase aborts with a
+        # readable message instead of throwing obscure exceptions deep in
+        # the stack later. Warnings are logged but don't block startup.
+        report = validate_config(get_config())
+        for warning in report.warnings:
+            logger.warning("AgentConfig warning: %s", warning)
+        if not report.is_ok:
+            joined = "; ".join(report.errors)
+            msg = f"AgentConfig failed validation: {joined}"
+            raise RuntimeError(msg)
 
         init_langfuse()
         mcp_mgr = None
