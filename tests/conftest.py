@@ -1,61 +1,20 @@
-"""Conftest for agent tests — shared fixtures, no database required."""
+"""Conftest for agent tests — shared fixtures, no database required.
+
+Issue #42 promoted ``MockStore`` / ``MockItem`` to a public
+``langgraph_kit.testing`` module as ``FakeStore`` / ``FakeItem``.
+This conftest re-exports the legacy names so the (large) existing
+test corpus keeps working without a sweeping rename. New tests
+should import from ``langgraph_kit.testing`` directly.
+"""
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 
+from langgraph_kit.testing import FakeItem as MockItem
+from langgraph_kit.testing import FakeStore as MockStore
 
-class MockItem:
-    """Mimics a LangGraph Store Item."""
-
-    def __init__(
-        self, key: str, value: dict[str, Any], namespace: tuple[str, ...]
-    ) -> None:
-        self.key = key
-        self.value = value
-        self.namespace = namespace
-
-
-class MockStore:
-    """In-memory mock of LangGraph BaseStore for testing."""
-
-    def __init__(self) -> None:
-        self._data: dict[tuple[str, ...], dict[str, dict[str, Any]]] = {}
-
-    async def aput(
-        self, namespace: tuple[str, ...], key: str, value: dict[str, Any]
-    ) -> None:
-        if namespace not in self._data:
-            self._data[namespace] = {}
-        self._data[namespace][key] = value
-
-    async def aget(self, namespace: tuple[str, ...], key: str) -> MockItem | None:
-        val = self._data.get(namespace, {}).get(key)
-        if val is None:
-            return None
-        return MockItem(key=key, value=val, namespace=namespace)
-
-    async def asearch(
-        self,
-        namespace: tuple[str, ...],
-        query: str | None = None,
-        limit: int = 10,
-    ) -> list[MockItem]:
-        return [
-            MockItem(key=k, value=v, namespace=namespace)
-            for k, v in list(self._data.get(namespace, {}).items())[:limit]
-        ]
-
-    async def adelete(self, namespace: tuple[str, ...], key: str) -> None:
-        if namespace in self._data:
-            self._data[namespace].pop(key, None)
-
-    async def alist_namespaces(self, prefix: tuple[str, ...]) -> list[tuple[str, ...]]:
-        return [
-            ns for ns in self._data if ns[: len(prefix)] == prefix and self._data[ns]
-        ]
+__all__ = ["MockItem", "MockStore"]
 
 
 @pytest.fixture

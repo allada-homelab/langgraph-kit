@@ -7,6 +7,23 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Public testing utilities (`langgraph_kit.testing`).** New module
+  promotes the kit's internal `MockStore` test fixture to a stable
+  public `FakeStore` (Fake = behaves like the real thing; Mock = can
+  be inspected — we want behavior). `FakeStore` is a process-local
+  `BaseStore` substitute implementing the kit's read+write surface
+  (`aput` / `aget` / `asearch` / `adelete` / `alist_namespaces`);
+  `FakeItem` is the matching wrapper shape. `assert_namespace_contains`
+  and `assert_namespace_empty` are async assertion helpers that wrap
+  Store reads with clear `AssertionError` messages — good for
+  "did the thing-under-test write what I expected to this Store
+  namespace?" tests. `tests/conftest.py` re-exports the legacy
+  `MockStore` / `MockItem` names so the existing test corpus keeps
+  working without a sweeping rename. `FakeCheckpointer`, scripted-LLM
+  builders, and a pytest entry-point plugin are intentionally
+  deferred to follow-ups. Closes part of
+  [#42](https://github.com/allada-homelab/langgraph-kit/issues/42).
+
 - **Config validation (`validate_config` + `langgraph-kit
   validate-config`).** New `langgraph_kit._config.validate_config(cfg)
   returns a frozen `ValidationReport(errors, warnings, is_ok)` without
