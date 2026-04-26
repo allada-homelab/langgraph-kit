@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from langchain_core.messages import AIMessage, HumanMessage
 
 from langgraph_kit.core.orchestration.workers import GENERAL_WORKERS
 from langgraph_kit.core.resilience.runtime_state import RuntimeStateMiddleware
-from langgraph_kit.core.resilience.stop_hooks import StopHooksMiddleware
+from langgraph_kit.core.resilience.stop_hooks import (
+    StopHooksMiddleware,
+    TurnTelemetryStopHook,
+)
 from langgraph_kit.graphs.reference_deep_agent import build_reference_deep_agent
 
 # ---------------------------------------------------------------------------
@@ -777,3 +782,160 @@ def test_explicit_deferred_tools_condition_with_populated_registry_is_kept(
 
     system_prompt = deepagents_mod.create_deep_agent.call_args.kwargs["system_prompt"]
     assert _DEFERRED_SECTION_MARKER in system_prompt
+
+
+# ---------------------------------------------------------------------------
+# TurnTelemetryStopHook tests
+# ---------------------------------------------------------------------------
+# The hook is the default observability hook wired by
+# ``build_reference_deep_agent``. It must be non-blocking and emit a
+# stable debug log on every turn so the StopHooksMiddleware path is
+# exercised end-to-end without affecting agent behavior.
+
+
+class TestTurnTelemetryStopHook:
+    @pytest.mark.asyncio
+    async def test_logs_message_and_tool_call_count(
+        self, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """Hook emits one debug line with the expected counts."""
+        hook = TurnTelemetryStopHook()
+        state = {
+            "messages": [
+                HumanMessage(content="hi"),
+                AIMessage(
+                    content="working on it",
+                    tool_calls=[
+                        {"name": "search", "args": {}, "id": "tc1"},
+                        {"name": "read", "args": {}, "id": "tc2"},
+                    ],
+                ),
+            ]
+        }
+        with caplog.at_level(
+            logging.DEBUG, logger="langgraph_kit.core.resilience.stop_hooks"
+        ):
+            await hook.on_turn_complete(state)
+
+        records = [r for r in caplog.records if r.name.endswith("stop_hooks")]
+        assert any(
+            "messages=2" in r.getMessage() and "tool_calls=2" in r.getMessage()
+            for r in records
+        ), [r.getMessage() for r in records]
+
+    @pytest.mark.asyncio
+    async def test_zero_tool_calls_when_last_is_human(self) -> None:
+        """A trailing HumanMessage produces tool_calls=0 (no AIMessage)."""
+        hook = TurnTelemetryStopHook()
+        await hook.on_turn_complete(
+            {"messages": [AIMessage(content="ok"), HumanMessage(content="next")]}
+        )
+
+    @pytest.mark.asyncio
+    async def test_handles_missing_messages_key(self) -> None:
+        """Empty / missing state keys must not raise."""
+        hook = TurnTelemetryStopHook()
+        await hook.on_turn_complete({})
+        await hook.on_turn_complete({"messages": []})
+        await hook.on_turn_complete({"messages": "not-a-list"})
+
+    @pytest.mark.asyncio
+    async def test_is_non_blocking(self) -> None:
+        """Hook declares blocking=False so StopHooksMiddleware swallows failures."""
+        hook = TurnTelemetryStopHook()
+        assert hook.blocking is False
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: stop_hooks wiring
+# ---------------------------------------------------------------------------
+
+
+def _build_reference_with_capture(
+    mock_store: Any,
+    *,
+    enable_default_stop_hooks: bool | None = None,
+    extra_stop_hooks: list[Any] | None = None,
+) -> MagicMock:
+    """Helper: build the reference graph under mocked deepagents+llm.
+
+    Returns the mocked ``deepagents.create_deep_agent`` so callers can
+    inspect the kwargs the builder forwarded.
+    """
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    kwargs: dict[str, Any] = {"checkpointer": MagicMock(), "store": mock_store}
+    if enable_default_stop_hooks is not None:
+        kwargs["enable_default_stop_hooks"] = enable_default_stop_hooks
+    if extra_stop_hooks is not None:
+        kwargs["extra_stop_hooks"] = extra_stop_hooks
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_deep_agent(**kwargs)
+    return deepagents_mod.create_deep_agent
+
+
+def test_reference_default_stop_hook_is_wired(mock_store: Any) -> None:
+    """Default build attaches a TurnTelemetryStopHook via StopHooksMiddleware."""
+    create = _build_reference_with_capture(mock_store)
+
+    middleware = create.call_args.kwargs["middleware"]
+    stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
+    hooks = stop_mw._hooks
+    assert any(isinstance(h, TurnTelemetryStopHook) for h in hooks), (
+        "TurnTelemetryStopHook must be wired by default; otherwise the "
+        "reference docstring's 'stop hooks' claim is false"
+    )
+
+
+def test_reference_default_stop_hook_can_be_disabled(mock_store: Any) -> None:
+    """``enable_default_stop_hooks=False`` opts out of the telemetry hook."""
+    create = _build_reference_with_capture(mock_store, enable_default_stop_hooks=False)
+
+    middleware = create.call_args.kwargs["middleware"]
+    stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
+    assert not any(isinstance(h, TurnTelemetryStopHook) for h in stop_mw._hooks)
+
+
+def test_reference_extra_stop_hooks_appended_after_default(mock_store: Any) -> None:
+    """``extra_stop_hooks=`` runs *after* the default so user hooks observe the same state."""
+
+    class _Marker:
+        blocking = False
+
+        async def on_turn_complete(self, state: Any) -> None:
+            return None
+
+    extra = _Marker()
+    create = _build_reference_with_capture(mock_store, extra_stop_hooks=[extra])
+
+    middleware = create.call_args.kwargs["middleware"]
+    stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
+    hooks = stop_mw._hooks
+    # Default hook present, extra appended after it.
+    assert any(isinstance(h, TurnTelemetryStopHook) for h in hooks)
+    assert hooks[-1] is extra
+
+
+def test_reference_extra_only_when_default_disabled(mock_store: Any) -> None:
+    """Disabling the default leaves only the caller-supplied hooks."""
+
+    class _Marker:
+        blocking = False
+
+        async def on_turn_complete(self, state: Any) -> None:
+            return None
+
+    extra = _Marker()
+    create = _build_reference_with_capture(
+        mock_store, enable_default_stop_hooks=False, extra_stop_hooks=[extra]
+    )
+
+    middleware = create.call_args.kwargs["middleware"]
+    stop_mw = next(m for m in middleware if isinstance(m, StopHooksMiddleware))
+    hooks = stop_mw._hooks
+    assert hooks == [extra]
