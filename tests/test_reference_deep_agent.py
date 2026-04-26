@@ -858,6 +858,8 @@ def _build_reference_with_capture(
     extra_stop_hooks: list[Any] | None = None,
     enable_default_deferred_tools: bool | None = None,
     extra_deferred_tools: Any | None = None,
+    enable_default_custom_tools: bool | None = None,
+    extra_configure_tools: Any | None = None,
 ) -> MagicMock:
     """Helper: build the reference graph under mocked deepagents+llm.
 
@@ -874,6 +876,10 @@ def _build_reference_with_capture(
         kwargs["enable_default_deferred_tools"] = enable_default_deferred_tools
     if extra_deferred_tools is not None:
         kwargs["extra_deferred_tools"] = extra_deferred_tools
+    if enable_default_custom_tools is not None:
+        kwargs["enable_default_custom_tools"] = enable_default_custom_tools
+    if extra_configure_tools is not None:
+        kwargs["extra_configure_tools"] = extra_configure_tools
     with (
         patch.dict(sys.modules, module_patches),
         patch(
@@ -1044,3 +1050,101 @@ def test_reference_extra_deferred_tools_alone_when_default_disabled(
     tools = create.call_args.kwargs["tools"]
     tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
     assert "tool_search" in tool_names
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: configure_tools= wiring
+# ---------------------------------------------------------------------------
+# The reference must showcase the configure_tools= extension point so
+# new domain agents have an in-tree pattern other than the
+# coding-specific worktree tools. The default registers a single
+# read-only ``current_environment`` tool.
+
+
+def test_reference_default_custom_tool_is_registered(mock_store: Any) -> None:
+    """Default build registers ``current_environment`` on the active tool surface."""
+    create = _build_reference_with_capture(mock_store)
+
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
+    assert "current_environment" in tool_names
+
+
+def test_reference_default_custom_tool_can_be_disabled(mock_store: Any) -> None:
+    """``enable_default_custom_tools=False`` strips the demo tool from the surface."""
+    create = _build_reference_with_capture(
+        mock_store, enable_default_custom_tools=False
+    )
+
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
+    assert "current_environment" not in tool_names
+
+
+def test_reference_extra_configure_tools_runs_after_default(mock_store: Any) -> None:
+    """``extra_configure_tools=`` runs after the default — caller can inspect/override."""
+    captured: dict[str, Any] = {}
+
+    async def custom_caller_tool() -> str:
+        return "custom"
+
+    def _extra(registry: Any) -> None:
+        captured["pre_extra_caps"] = sorted(c.id for c in registry.list_all())
+        # Register a brand-new caller-only tool to confirm the callback ran.
+        from langgraph_kit.core.graph_builder.tools import register_tool
+        from langgraph_kit.core.tools.capability import ToolRisk
+
+        register_tool(
+            registry,
+            custom_caller_tool,
+            id_prefix="caller",
+            tags=["caller"],
+            risk=ToolRisk.READ_ONLY,
+        )
+
+    create = _build_reference_with_capture(mock_store, extra_configure_tools=_extra)
+
+    # Default ran before extra: the demo tool is present in the registry
+    # snapshot taken inside the callback.
+    assert "reference_current_environment" in captured["pre_extra_caps"]
+
+    # And the caller's tool reaches the bound surface.
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
+    assert "custom_caller_tool" in tool_names
+
+
+def test_reference_extra_configure_tools_alone_when_default_disabled(
+    mock_store: Any,
+) -> None:
+    """With default disabled, ``extra_configure_tools=`` is the sole tool callback."""
+    captured: dict[str, Any] = {}
+
+    async def solo_tool() -> str:
+        return ""
+
+    def _extra(registry: Any) -> None:
+        captured["pre_extra_caps"] = sorted(c.id for c in registry.list_all())
+        from langgraph_kit.core.graph_builder.tools import register_tool
+        from langgraph_kit.core.tools.capability import ToolRisk
+
+        register_tool(
+            registry,
+            solo_tool,
+            id_prefix="solo",
+            tags=["solo"],
+            risk=ToolRisk.READ_ONLY,
+        )
+
+    create = _build_reference_with_capture(
+        mock_store,
+        enable_default_custom_tools=False,
+        extra_configure_tools=_extra,
+    )
+
+    # Default did NOT run — the demo tool isn't in the snapshot.
+    assert "reference_current_environment" not in captured["pre_extra_caps"]
+    tools = create.call_args.kwargs["tools"]
+    tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
+    assert "solo_tool" in tool_names
+    assert "current_environment" not in tool_names

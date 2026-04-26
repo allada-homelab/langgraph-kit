@@ -7,6 +7,18 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: default custom tool via
+  `configure_tools=`.** `build_reference_deep_agent` now registers a
+  read-only `current_environment` tool through the `configure_tools=`
+  extension callback so the path has an in-tree exemplar that isn't
+  domain-specific (the existing example was the coding agent's
+  worktree tools). The tool reports Python version, OS, kit version,
+  and whether the working directory is a git repo. Two new kwargs:
+  `enable_default_custom_tools` (default `True`) opts out, and
+  `extra_configure_tools` is a callback `(ToolRegistry) -> None` that
+  runs after the default so caller-registered ids override the demo.
+  Closes [#100](https://github.com/allada-homelab/langgraph-kit/issues/100).
+
 - **Reference deep agent: default deferred-tool catalog.**
   `build_reference_deep_agent` now populates the
   `DeferredToolRegistry` with three side-effect-free demo tools
