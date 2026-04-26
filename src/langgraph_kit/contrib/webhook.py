@@ -210,6 +210,7 @@ def create_webhook_router(
     *,
     graph_resolver: Callable[[str], Any],
     prefix: str = "/webhooks",
+    audit_store: Any = None,
 ) -> "APIRouter":
     # graph_resolver is ``(agent_id: str) -> compiled graph``. The
     # router calls ``graph.ainvoke({"messages": [HumanMessage(...)]})``
@@ -290,6 +291,15 @@ def create_webhook_router(
                 "agent_id": spec.agent_id,
                 "thread_id": thread_id,
             },
+        )
+        from langgraph_kit.contrib.schedule import emit_trigger_audit
+
+        await emit_trigger_audit(
+            audit_store,
+            source="webhook",
+            spec_id=spec.id,
+            agent_id=spec.agent_id,
+            thread_id=thread_id,
         )
         return {"thread_id": thread_id, "agent_id": spec.agent_id}
 
