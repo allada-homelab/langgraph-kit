@@ -7,6 +7,13 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **CLI reference docs for `openapi` + `shell`.** Adds the typed-client
+  recipe (Python via `openapi-python-client`, TS via
+  `openapi-generator-cli`) the `openapi` subcommand was always
+  meant to anchor, plus a slash-command table for the REPL.
+  Closes the docs acceptance criterion on
+  [#39](https://github.com/allada-homelab/langgraph-kit/issues/39).
+
 - **`langgraph-kit shell`: `/info` slash command.** The interactive
   REPL now responds to `/info` with the active agent id, thread
   id, user id, and user-supplied module path — without invoking
