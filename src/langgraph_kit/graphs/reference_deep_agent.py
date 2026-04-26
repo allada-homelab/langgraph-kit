@@ -134,6 +134,7 @@ def build_reference_deep_agent(
     enable_default_extra_providers: bool = True,
     extra_providers: list[Any] | None = None,
     output_schema: type[BaseModel] | None = None,
+    coordinator: bool = False,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
 
@@ -204,6 +205,14 @@ def build_reference_deep_agent(
     middleware injects a retry nudge with the JSON-Schema rendering
     of the model. ``None`` (default) leaves structured-output
     validation off.
+
+    ``coordinator`` (default ``False``) flips the build into
+    coordinator mode (see :class:`~langgraph_kit.core.coordinator.CoordinatorMode`):
+    the active tool surface is narrowed to ``ToolRisk.READ_ONLY``
+    capabilities + the delegation tools, and coordinator-specific
+    prompt sections are merged. Use the
+    :func:`build_reference_coordinator_agent` convenience wrapper
+    when you want this profile by default.
     """
     stop_hooks: list[Any] = []
     if enable_default_stop_hooks:
@@ -234,7 +243,7 @@ def build_reference_deep_agent(
         providers.extend(extra_providers)
 
     return build_deep_agent(
-        agent_name="reference-deep-agent",
+        agent_name=("reference-coordinator" if coordinator else "reference-deep-agent"),
         core_sections=_CORE_SECTIONS,
         subagents=GENERAL_WORKERS,
         checkpointer=checkpointer,
@@ -247,4 +256,35 @@ def build_reference_deep_agent(
         configure_deferred_tools=configure_deferred_tools,
         extra_providers=providers or None,
         output_schema=output_schema,
+        coordinator=coordinator,
     )
+
+
+def build_reference_coordinator_agent(
+    checkpointer: Any,
+    store: Any,
+    **kwargs: Any,
+) -> Any:
+    """Build the reference deep agent in coordinator mode.
+
+    Thin wrapper over :func:`build_reference_deep_agent` with
+    ``coordinator=True``. Use this when the agent should delegate
+    work via :class:`~langgraph_kit.core.coordinator.CoordinatorMode`
+    rather than execute mutating operations itself: the bound tool
+    surface is narrowed to ``ToolRisk.READ_ONLY`` capabilities + the
+    delegation ``task`` tool, and the system prompt picks up the
+    coordinator's delegation / synthesis sections.
+
+    All other kwargs are forwarded as-is to
+    :func:`build_reference_deep_agent`, so the same opt-outs
+    (``enable_default_stop_hooks``, ``enable_default_deferred_tools``,
+    ``enable_default_custom_tools``, ``enable_default_extra_providers``)
+    apply.
+    """
+    if "coordinator" in kwargs:
+        msg = (
+            "build_reference_coordinator_agent forces coordinator=True; "
+            "remove the kwarg or call build_reference_deep_agent directly."
+        )
+        raise TypeError(msg)
+    return build_reference_deep_agent(checkpointer, store, coordinator=True, **kwargs)
