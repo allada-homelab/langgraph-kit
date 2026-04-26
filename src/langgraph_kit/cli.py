@@ -323,6 +323,28 @@ def main() -> None:
     # list command
     sub.add_parser("list", help="List available agent templates")
 
+    # shell command — interactive REPL for a registered agent.
+    shell_parser = sub.add_parser(
+        "shell", help="Interactive REPL for a registered agent"
+    )
+    shell_parser.add_argument("agent_id", help="Registered agent id (e.g. echo-agent)")
+    shell_parser.add_argument(
+        "--module",
+        help="Python module path to import before lookup (e.g. my_app.agents). "
+        "Use this when the agent isn't one of the kit's built-ins; the module "
+        "must call langgraph_kit.registry.register() at import time.",
+    )
+    shell_parser.add_argument(
+        "--thread-id",
+        help="Reuse a specific thread id within the session "
+        "(persistence is in-memory, so threads still don't survive across runs).",
+    )
+    shell_parser.add_argument(
+        "--user-id",
+        default="shell-user",
+        help="User id surfaced in run metadata (default: shell-user).",
+    )
+
     # examples command (with nested list / run subcommands)
     examples_parser = sub.add_parser(
         "examples", help="Discover and run the bundled feature examples"
@@ -367,6 +389,23 @@ def main() -> None:
             sys.exit(_cmd_examples_run(args.name, real_llm=args.real_llm))
         else:
             examples_parser.print_help()
+    elif args.command == "shell":
+        # Lazy import — keeps ``langgraph-kit new`` / ``list`` etc.
+        # cheap when the user isn't using the REPL.
+        import asyncio
+
+        from langgraph_kit.shell import run_shell
+
+        sys.exit(
+            asyncio.run(
+                run_shell(
+                    args.agent_id,
+                    user_module=args.module,
+                    thread_id=args.thread_id,
+                    user_id=args.user_id,
+                )
+            )
+        )
     else:
         parser.print_help()
 
