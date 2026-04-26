@@ -1305,3 +1305,107 @@ def test_reference_no_output_schema_omits_structured_output_middleware(
     create = _build_reference_with_capture(mock_store)
     middleware = create.call_args.kwargs["middleware"]
     assert not any(isinstance(m, StructuredOutputMiddleware) for m in middleware)
+
+
+# ---------------------------------------------------------------------------
+# Coordinator variant
+# ---------------------------------------------------------------------------
+# ``build_reference_coordinator_agent`` is a thin wrapper that forces
+# ``coordinator=True`` on the reference build. The CoordinatorMode
+# implementation (read-only filter, prompt sections) lives in
+# core/coordinator.py and is unit-tested there; these tests pin the
+# wiring at the reference layer.
+
+
+def test_reference_coordinator_narrows_tools_to_read_only(mock_store: Any) -> None:
+    """Coordinator mode strips mutating tools (e.g. save_memory) from the surface."""
+    from langgraph_kit.graphs.reference_deep_agent import (
+        build_reference_coordinator_agent,
+    )
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_coordinator_agent(checkpointer=MagicMock(), store=mock_store)
+
+    tools = deepagents_mod.create_deep_agent.call_args.kwargs["tools"]
+    tool_names = {
+        str(getattr(fn, "__name__", getattr(fn, "name", "")) or "") for fn in tools
+    }
+    # save_memory is MUTATING in the standard registration; coordinator
+    # mode must filter it out.
+    assert "save_memory" not in tool_names, (
+        f"save_memory must be stripped in coordinator mode; got {sorted(tool_names)}"
+    )
+
+
+def test_reference_coordinator_includes_delegation_sections(mock_store: Any) -> None:
+    """Coordinator system prompt must include the delegation/synthesis sections."""
+    from langgraph_kit.graphs.reference_deep_agent import (
+        build_reference_coordinator_agent,
+    )
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_coordinator_agent(checkpointer=MagicMock(), store=mock_store)
+
+    system_prompt = deepagents_mod.create_deep_agent.call_args.kwargs["system_prompt"]
+    assert "# Coordinator Mode" in system_prompt
+    assert "# Delegation Rules" in system_prompt
+    assert "# Synthesis Discipline" in system_prompt
+
+
+def test_reference_coordinator_uses_distinct_agent_name(mock_store: Any) -> None:
+    """Coordinator build uses ``reference-coordinator`` so logs distinguish profiles."""
+    from langgraph_kit.graphs.reference_deep_agent import (
+        build_reference_coordinator_agent,
+    )
+
+    module_patches, deepagents_mod, _ = _mock_deepagents_env()
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_coordinator_agent(checkpointer=MagicMock(), store=mock_store)
+
+    assert (
+        deepagents_mod.create_deep_agent.call_args.kwargs["name"]
+        == "reference-coordinator"
+    )
+
+
+def test_reference_coordinator_rejects_explicit_coordinator_kwarg(
+    mock_store: Any,
+) -> None:
+    """Passing ``coordinator=`` to the wrapper raises — the wrapper forces True."""
+    from langgraph_kit.graphs.reference_deep_agent import (
+        build_reference_coordinator_agent,
+    )
+
+    with pytest.raises(TypeError, match="forces coordinator=True"):
+        build_reference_coordinator_agent(
+            checkpointer=MagicMock(), store=mock_store, coordinator=False
+        )
+
+
+def test_reference_default_is_not_coordinator(mock_store: Any) -> None:
+    """Default ``build_reference_deep_agent`` does NOT activate coordinator mode."""
+    create = _build_reference_with_capture(mock_store)
+    assert create.call_args.kwargs["name"] == "reference-deep-agent"
+
+    system_prompt = create.call_args.kwargs["system_prompt"]
+    assert "# Coordinator Mode" not in system_prompt

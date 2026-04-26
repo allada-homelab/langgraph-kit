@@ -7,6 +7,16 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Coordinator variant of the reference agent.** New
+  `build_reference_coordinator_agent` (and a `coordinator: bool =
+  False` kwarg on `build_reference_deep_agent`) flips the build into
+  `CoordinatorMode`: the active tool surface is narrowed to
+  `ToolRisk.READ_ONLY` capabilities + the `task` delegation tool,
+  and the system prompt picks up the coordinator's role / delegation
+  / synthesis sections. The coordinator build identifies as
+  `reference-coordinator` so logs distinguish the two profiles.
+  Closes [#103](https://github.com/allada-homelab/langgraph-kit/issues/103).
+
 - **Reference deep agent: opt-in `output_schema=` kwarg.**
   `build_reference_deep_agent` now accepts an `output_schema:
   type[BaseModel] | None = None` kwarg and forwards it to
