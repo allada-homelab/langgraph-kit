@@ -6,6 +6,11 @@ import dataclasses
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+# Runtime (not TYPE_CHECKING) import so the ``prompt_overrides``
+# field annotation resolves under ruff's F821 undefined-name check
+# on dataclass fields.
+from langgraph_kit.core.prompt_assembly.sections import PromptSection
+
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
@@ -60,6 +65,18 @@ class AgentConfig:
     # the only signal that semantic search is enabled.
     memory_embedding_fn: Callable[[list[str]], Awaitable[list[list[float]]]] | None = (
         dataclasses.field(default=None, compare=False)
+    )
+
+    # Prompt overrides: {section_id → PromptSection} merged into the
+    # SectionRegistry by ``build_deep_agent`` after the kit's
+    # core/activation/plugin sections register. Caller wins on id
+    # collisions — same upsert-by-id precedence as plugin tools. Pairs
+    # with the curated ``langgraph_kit.prompt_templates`` library so
+    # consumers can swap any shipped prompt without forking the kit.
+    # ``compare=False`` so the dict (unhashable) doesn't break
+    # AgentConfig's frozen-dataclass hashability.
+    prompt_overrides: dict[str, PromptSection] = dataclasses.field(
+        default_factory=dict, compare=False
     )
 
     # Security: inbound prompt-injection scanner mode.
