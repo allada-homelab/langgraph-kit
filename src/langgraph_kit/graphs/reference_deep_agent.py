@@ -131,6 +131,7 @@ def build_reference_deep_agent(
     extra_deferred_tools: Any | None = None,
     enable_default_custom_tools: bool = True,
     extra_configure_tools: Any | None = None,
+    enable_default_hitl_demo: bool = True,
     enable_default_extra_providers: bool = True,
     extra_providers: list[Any] | None = None,
     output_schema: type[BaseModel] | None = None,
@@ -185,6 +186,15 @@ def build_reference_deep_agent(
     registration so caller registrations under matching ids override
     the defaults — same upsert-by-id precedence as plugin tools.
 
+    ``enable_default_hitl_demo`` (default ``True``) registers a
+    ``confirm_destructive_demo`` capability whose
+    ``interrupt_before=True`` flag triggers
+    :class:`~langgraph_kit.core.hitl.auto_interrupt.AutoInterruptMiddleware`
+    on every call — exercising the HITL gating path that otherwise
+    has no shipped tool to drive it. Toggleable independently from
+    ``enable_default_custom_tools`` so callers who want the
+    diagnostic tool but no HITL flow can opt out.
+
     ``enable_default_extra_providers`` (default ``True``) registers a
     :class:`~langgraph_kit.core.prompt_assembly.system_context.SystemContextProvider`
     on the prompt composer, mirroring how ``coding_agent`` ships
@@ -230,7 +240,10 @@ def build_reference_deep_agent(
         configure_deferred_tools = None
 
     if enable_default_custom_tools:
-        configure_tools = make_reference_configure_tools(extra=extra_configure_tools)
+        configure_tools = make_reference_configure_tools(
+            extra=extra_configure_tools,
+            include_hitl_demo=enable_default_hitl_demo,
+        )
     elif extra_configure_tools is not None:
         configure_tools = extra_configure_tools
     else:
