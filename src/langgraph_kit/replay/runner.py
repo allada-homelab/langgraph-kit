@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from langgraph_kit.replay.assertions import ReplayAssertions
@@ -10,8 +11,46 @@ from langgraph_kit.replay.player import RecordedChatModel
 from langgraph_kit.replay.recorder import ConversationRecorder
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import AsyncIterator, Callable
     from pathlib import Path
+
+
+@dataclass(frozen=True)
+class TurnResult:
+    """One turn's worth of a step-mode replay.
+
+    Yielded by :py:meth:`ReplayRunner.step` after each user turn is
+    fed through the graph; the ``async for`` loop is the natural
+    pause point — callers inspect the result and resume by advancing
+    the iterator (a more idiomatic shape than the
+    ``continue_replay()`` callback the original issue spec
+    proposed).
+
+    Frozen so a turn handed off via the iterator is the snapshot the
+    caller saw — mutation downstream would be confusing if the
+    runner kept references to the same lists internally.
+    """
+
+    turn_index: int
+    """Zero-based ordinal of this turn across the replay (matches
+    the ``start_at`` / ``stop_at`` slice indices)."""
+
+    user_input: str
+    """The user message that drove this turn — the same string from
+    the recording's ``user_messages`` (or extracted via
+    :func:`_extract_user_turns`)."""
+
+    new_messages: list[Any] = field(default_factory=list)
+    """Messages the graph appended during this turn — the diff
+    between ``cumulative_messages`` before and after ``ainvoke``.
+    Empty if the graph somehow produced no output."""
+
+    tool_calls: list[dict[str, Any]] = field(default_factory=list)
+    """Tool calls observed in :pyattr:`new_messages` (flattened from
+    AIMessage.tool_calls). Each entry has ``name`` and ``args`` keys
+    matching the kit's standard tool-call shape; useful for
+    inspecting "did this turn invoke the tool I expected?" without
+    walking the message list manually."""
 
 
 class ReplayRunner:
@@ -154,6 +193,111 @@ class ReplayRunner:
             await graph.ainvoke(input_data, config=config)
 
         return replay_recorder.get_recording()
+
+    async def step(
+        self,
+        *,
+        start_at: int = 0,
+        stop_at: int | None = None,
+        overrides: RecordingOverrides | None = None,
+    ) -> AsyncIterator[TurnResult]:
+        """Async-iterator variant of :py:meth:`run` — yields one
+        :class:`TurnResult` per user turn.
+
+        Use when you want to inspect or branch on agent behavior
+        between turns (the inspector UI in #36, debugging
+        "what happens after turn 3?", interactive replay).
+        Composes with the same ``start_at`` / ``stop_at`` /
+        ``overrides`` knobs ``run`` accepts; the slice they describe
+        is the same set of turns ``step`` yields.
+
+        Eager-drain equivalence::
+
+            collected = [turn async for turn in runner.step(...)]
+
+        round-trips identically to ``await runner.run(...)`` modulo
+        the recording artifact (``run`` returns a
+        :class:`ConversationRecording` aggregated by
+        :class:`ConversationRecorder`; ``step`` is per-turn and
+        doesn't materialize the recording — call ``run`` instead
+        when you want the recording).
+
+        The pause point is the iterator boundary, not a
+        ``continue_replay()`` callback: the iterator stays paused
+        between ``__anext__`` calls, so a caller doing
+        ``async for turn in runner.step(...): await something_slow(turn)``
+        gets full control of when each turn fires without any
+        explicit resume API.
+        """
+        from langchain_core.messages import (  # pyright: ignore[reportMissingModuleSource]
+            AIMessage,
+            HumanMessage,
+        )
+
+        recording = self.original
+        mock_llm = RecordedChatModel(
+            recording=recording,
+            fuzzy_match=self.fuzzy_match,
+            overrides=overrides,
+        )
+        graph = self.graph_builder(
+            self.checkpointer,
+            self.store,
+            **{self.llm_kwarg: mock_llm},
+        )
+
+        # ``step`` deliberately does NOT attach a
+        # ConversationRecorder — the per-turn TurnResult shape is
+        # the caller-visible artifact. Anyone who wants the
+        # ConversationRecording shape should use ``run`` instead.
+        config: dict[str, Any] = {
+            "configurable": {"thread_id": f"replay-{recording.thread_id}"},
+        }
+
+        all_user_turns = _extract_user_turns(recording)
+        sliced = all_user_turns[start_at:stop_at]
+        # Map the slice back to absolute indices so ``turn_index``
+        # matches what callers passed in via ``start_at``.
+        absolute_offset = (
+            start_at if start_at >= 0 else max(0, len(all_user_turns) + start_at)
+        )
+
+        # Track the running message list across turns. ``ainvoke``
+        # returns the cumulative messages, but we need to surface
+        # only the *new* ones each turn so callers don't have to
+        # diff manually.
+        prev_message_count = 0
+
+        for offset, user_content in enumerate(sliced):
+            input_data = {"messages": [HumanMessage(content=user_content)]}
+            result = await graph.ainvoke(input_data, config=config)
+
+            cumulative_messages = (
+                result["messages"]
+                if isinstance(result, dict) and "messages" in result
+                else []
+            )
+            new_messages = cumulative_messages[prev_message_count:]
+            prev_message_count = len(cumulative_messages)
+
+            tool_calls: list[dict[str, Any]] = []
+            for msg in new_messages:
+                if isinstance(msg, AIMessage) and getattr(msg, "tool_calls", None):
+                    for call in msg.tool_calls:
+                        if isinstance(call, dict):
+                            tool_calls.append(
+                                {
+                                    "name": call.get("name"),
+                                    "args": call.get("args"),
+                                }
+                            )
+
+            yield TurnResult(
+                turn_index=absolute_offset + offset,
+                user_input=user_content,
+                new_messages=list(new_messages),
+                tool_calls=tool_calls,
+            )
 
     async def run_and_assert(
         self,

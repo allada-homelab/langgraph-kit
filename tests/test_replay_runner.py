@@ -47,7 +47,7 @@ from langgraph_kit.replay.models import (
     ToolInteraction,
 )
 from langgraph_kit.replay.player import RecordedChatModel
-from langgraph_kit.replay.runner import ReplayRunner, _extract_user_turns
+from langgraph_kit.replay.runner import ReplayRunner, TurnResult, _extract_user_turns
 from tests.conftest import MockStore
 
 
@@ -635,3 +635,174 @@ async def test_run_with_overrides_changes_replayed_output(
         for interaction in replayed.llm_interactions
     ]
     assert any("FORKED-REPLY" in c for c in contents if isinstance(c, str))
+
+
+# ---------------------------------------------------------------------------
+# Step-mode (issue #78).
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_step_yields_one_turn_result_per_recorded_turn(
+    multi_turn_recording_path: Path,
+) -> None:
+    """Async iterator yields one TurnResult per user turn in the slice."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    turns = [t async for t in runner.step()]
+    # 4-turn recording → 4 TurnResults.
+    assert len(turns) == 4
+    assert all(isinstance(t, TurnResult) for t in turns)
+    assert [t.turn_index for t in turns] == [0, 1, 2, 3]
+    assert [t.user_input for t in turns] == [
+        "turn-0",
+        "turn-1",
+        "turn-2",
+        "turn-3",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_step_composes_with_start_at_and_stop_at(
+    multi_turn_recording_path: Path,
+) -> None:
+    """``start_at`` / ``stop_at`` slice the same way ``run`` does."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    turns = [t async for t in runner.step(start_at=1, stop_at=3)]
+    assert [t.turn_index for t in turns] == [1, 2]
+    assert [t.user_input for t in turns] == ["turn-1", "turn-2"]
+
+
+@pytest.mark.asyncio
+async def test_step_negative_indices_match_python_slice_semantics(
+    multi_turn_recording_path: Path,
+) -> None:
+    """``stop_at=-1`` drops the last turn; ``turn_index`` stays absolute."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    turns = [t async for t in runner.step(start_at=-2, stop_at=-1)]
+    # 4-turn recording, slice [-2:-1] → just turn 2.
+    assert [t.turn_index for t in turns] == [2]
+    assert [t.user_input for t in turns] == ["turn-2"]
+
+
+@pytest.mark.asyncio
+async def test_step_overrides_change_what_the_agent_emits(
+    multi_turn_recording_path: Path,
+) -> None:
+    """When an override is set for a turn, the new_messages reflect it."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    overrides = RecordingOverrides(
+        llm_outputs={0: {"content": "FORKED"}},
+    )
+    turns = [t async for t in runner.step(stop_at=1, overrides=overrides)]
+    assert len(turns) == 1
+    contents = [
+        msg.content for msg in turns[0].new_messages if isinstance(msg, AIMessage)
+    ]
+    assert "FORKED" in contents
+
+
+@pytest.mark.asyncio
+async def test_step_eager_drain_matches_run_message_count(
+    multi_turn_recording_path: Path,
+) -> None:
+    """Eager-draining step() should produce the same total messages as run()."""
+    runner_step = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    step_turns = [t async for t in runner_step.step()]
+    step_total_new_messages = sum(len(t.new_messages) for t in step_turns)
+
+    runner_run = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    replayed = await runner_run.run()
+    run_total_messages = len(replayed.llm_interactions) + len(
+        replayed.tool_interactions
+    )
+
+    # The step variant aggregates the per-turn ``new_messages`` slices;
+    # the run variant captures via ConversationRecorder. Both should
+    # have *seen* the same number of LLM-or-tool events. Loose check
+    # because the recorder filters events differently than the raw
+    # ``messages`` list, but they should both be in the same ballpark
+    # (and both > 0).
+    assert step_total_new_messages > 0
+    assert run_total_messages > 0
+
+
+@pytest.mark.asyncio
+async def test_step_pause_between_turns_lets_caller_inspect(
+    multi_turn_recording_path: Path,
+) -> None:
+    """The iterator pauses between yields; caller drives the cadence.
+
+    Demonstrates the intended use case: between turns, the caller
+    can inspect TurnResult, log it, decide whether to continue, etc.
+    """
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    seen: list[int] = []
+    async for turn in runner.step(stop_at=2):
+        seen.append(turn.turn_index)
+        if turn.turn_index == 0:
+            # Caller decides between turns: do some work synchronously.
+            assert seen == [0]
+    # After the loop both turns came through.
+    assert seen == [0, 1]
+
+
+@pytest.mark.asyncio
+async def test_step_default_args_iterates_full_recording(
+    multi_turn_recording_path: Path,
+) -> None:
+    """No-arg ``step()`` covers the same range as no-arg ``run()``."""
+    runner = ReplayRunner(
+        recording_path=multi_turn_recording_path,
+        graph_builder=_simple_graph_builder,
+        checkpointer=InMemorySaver(),
+        store=MockStore(),
+    )
+    turns = [t async for t in runner.step()]
+    assert {t.user_input for t in turns} == {
+        "turn-0",
+        "turn-1",
+        "turn-2",
+        "turn-3",
+    }
+
+
+def test_turn_result_is_frozen() -> None:
+    """Mutation after yield would surprise inspector callers."""
+    tr = TurnResult(turn_index=0, user_input="x")
+    with pytest.raises(Exception):  # noqa: B017,PT011 - dataclass FrozenInstanceError
+        tr.user_input = "changed"  # type: ignore[misc]

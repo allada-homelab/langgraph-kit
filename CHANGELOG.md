@@ -7,6 +7,17 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **`ReplayRunner.step()` — async-iterator replay variant.** New
+  `step(*, start_at=0, stop_at=None, overrides=None)` async
+  generator yields one `TurnResult(turn_index, user_input,
+  new_messages, tool_calls)` per recorded user turn. Pause point is
+  the `async for` boundary — caller drives cadence (inspect, log,
+  branch between turns) without a `continue_replay()` callback API.
+  Composes with the same `start_at` / `stop_at` / `overrides` knobs
+  as `run()` and uses the same slice semantics, so `[t async for t
+  in runner.step(...)]` covers the same turns `run(...)` would.
+  Closes [#78](https://github.com/allada-homelab/langgraph-kit/issues/78).
+
 - **Curated prompt-template library (`langgraph_kit.prompt_templates`).**
   Nine shipped, versioned `PromptSection` instances covering the
   common prompt families: `core_identity`, `operate_carefully`,
