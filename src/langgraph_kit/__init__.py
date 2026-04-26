@@ -21,6 +21,11 @@ from langgraph_kit._config import (
     configure_from_settings,
     get_config,
 )
+from langgraph_kit.cancellation import (
+    ThreadCancellationRegistry,
+    cancel_thread,
+    get_cancellation_registry,
+)
 from langgraph_kit.core.coordinator import COORDINATOR_SECTIONS, CoordinatorMode
 from langgraph_kit.core.memory.session import SessionNotebook
 from langgraph_kit.llm import build_llm
@@ -47,14 +52,17 @@ __all__ = [
     "InvokeRequest",
     "InvokeResponse",
     "SessionNotebook",
+    "ThreadCancellationRegistry",
     "UserInfo",
     "build_agent_run_config",
     "build_llm",
+    "cancel_thread",
     "configure",
     "configure_from_settings",
     "create_persistence",
     "get",
     "get_all",
+    "get_cancellation_registry",
     "get_config",
     "get_dispatcher",
     "get_metadata",

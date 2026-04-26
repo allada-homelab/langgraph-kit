@@ -27,6 +27,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from langgraph_kit._config import get_config
+from langgraph_kit.cancellation import get_cancellation_registry
 from langgraph_kit.core.hitl.models import (
     ResumeRequest,
     ThreadStateResponse,
@@ -320,6 +321,24 @@ async def _try_command(agent_id: str, messages: list[ChatMessage]) -> str | None
     return f"data: {json.dumps({'command_result': {'output': result.output}})}\n\ndata: [DONE]\n\n"
 
 
+async def _track_stream(
+    thread_id: str, gen: AsyncGenerator[str, None]
+) -> AsyncGenerator[str, None]:
+    """Yield from *gen* while registering its task in the cancellation registry.
+
+    The streaming handler returns a ``StreamingResponse`` immediately;
+    Starlette drives the generator from a separate task. Registering
+    the request-handler task in :py:meth:`get_cancellation_registry`
+    would cancel the wrong thing — by the time a user issues a
+    cancel, the handler task has already returned. We register the
+    *iterator's* task instead, which is what's actually awaiting on
+    the LLM.
+    """
+    async with get_cancellation_registry().track(thread_id):
+        async for chunk in gen:
+            yield chunk
+
+
 def _get_store(request: Request) -> Any:
     """Get the LangGraph Store from contextvar or app state (fallback)."""
     try:
@@ -441,7 +460,9 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
             await _ensure_thread(store, tid, current_user, agent_id, first_msg)
 
         return StreamingResponse(
-            stream_agent_events(graph, input_data, config, store=store),
+            _track_stream(
+                tid, stream_agent_events(graph, input_data, config, store=store)
+            ),
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
@@ -479,7 +500,8 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
             await _ensure_thread(store, tid, current_user, agent_id, first_msg)
 
         try:
-            result = await graph.ainvoke(input_data, config=config)
+            async with get_cancellation_registry().track(tid):
+                result = await graph.ainvoke(input_data, config=config)
             msgs = result.get("messages") or []
             last = msgs[-1] if msgs else None
             content: str = (
@@ -916,6 +938,35 @@ def create_agent_router(*, get_current_user: Any) -> APIRouter:
             )
         deleted = await mgr.delete(thread_id)
         return {"deleted": deleted}
+
+    @router.post("/{agent_id}/threads/{thread_id}/cancel")
+    async def cancel_thread_run(
+        agent_id: str,  # noqa: ARG001 — included for URL symmetry; not used
+        thread_id: str,
+        current_user: CurrentUser,  # type: ignore[valid-type]
+        http_request: Request,
+    ) -> dict[str, Any]:
+        """Cancel an in-flight run for *thread_id*.
+
+        Single-process scope. A cancel issued on this worker only
+        reaches runs started on this worker. ``cancelled=False``
+        means "no run is tracked here" — which can be "already
+        finished," "never started," or "running on a different
+        worker."
+
+        Idempotent — calling cancel on a not-running thread is not
+        an error.
+        """
+        store = _store_var.get(None) or getattr(http_request.app.state, "store", None)
+        # Allow cancel on unclaimed threads — the run might have
+        # registered before _ensure_thread completed (race window
+        # is small but real).
+        if store is not None:
+            await _verify_thread_owner(
+                store, thread_id, current_user, allow_unclaimed=True
+            )
+        cancelled = get_cancellation_registry().cancel(thread_id)
+        return {"thread_id": thread_id, "cancelled": cancelled}
 
     return router
 
