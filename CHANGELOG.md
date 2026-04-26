@@ -7,6 +7,20 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: default deferred-tool catalog.**
+  `build_reference_deep_agent` now populates the
+  `DeferredToolRegistry` with three side-effect-free demo tools
+  (`web_fetch_demo`, `code_indexer_demo`, `db_query_demo`), so the
+  `tool_search` / `call_deferred_tool` discovery loop is exercised by
+  default — closing the showcase gap where the reference always
+  tripped the "empty deferred → strip the search tools" branch and
+  the `deferred_tools` prompt condition never fired. Two new kwargs
+  let callers compose: `enable_default_deferred_tools` (default
+  `True`) opts out, and `extra_deferred_tools` is a configurator
+  callback run after the default so caller-registered ids override
+  the demos. Closes
+  [#99](https://github.com/allada-homelab/langgraph-kit/issues/99).
+
 - **Reference deep agent: default `TurnTelemetryStopHook`.**
   `build_reference_deep_agent` now wires a non-blocking
   `TurnTelemetryStopHook` against `StopHooksMiddleware` so the
