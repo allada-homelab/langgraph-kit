@@ -272,6 +272,70 @@ def _cmd_examples_list() -> int:
     return 0
 
 
+# ---------------------------------------------------------------------------
+# openapi — dump the FastAPI router's spec
+# ---------------------------------------------------------------------------
+
+
+def _cmd_openapi(output: Path | None = None, indent: int = 2) -> int:
+    """Mount the agent router on a temporary FastAPI app and dump its spec.
+
+    The spec describes the request/response schemas (``InvokeRequest``,
+    ``InvokeResponse``, ``QueueMessageRequest`` etc.) plus all routes
+    declared by ``create_agent_router`` — exactly what
+    ``app.openapi()`` would surface at runtime, just emitted to a file
+    so it can be fed into ``openapi-python-client`` /
+    ``openapi-generator-cli`` without spinning up a server. This is the
+    foundation #40 (typed SDK) consumes.
+
+    The ``get_current_user`` dependency is stubbed with a permissive
+    callable that returns a dict — the spec doesn't need real auth, it
+    only needs enough type information for FastAPI to introspect the
+    routes. ``indent=0`` emits compact JSON for machine consumers.
+    """
+    import json
+    from typing import Annotated
+
+    try:
+        from fastapi import Depends, FastAPI
+    except ImportError:
+        sys.stderr.write(
+            "openapi requires fastapi. Install via "
+            "``pip install langgraph-kit[fastapi]``.\n"
+        )
+        return 2
+
+    from langgraph_kit.contrib.fastapi import create_agent_router
+
+    def _stub_user() -> dict[str, str]:
+        return {"id": "openapi-introspection", "email": "openapi@example.invalid"}
+
+    current_user_dep = Annotated[dict[str, str], Depends(_stub_user)]
+
+    app = FastAPI(
+        title="langgraph-kit",
+        description=(
+            "Agent runtime endpoints. Generated via "
+            "``python -m langgraph_kit.cli openapi``."
+        ),
+    )
+    app.include_router(create_agent_router(get_current_user=current_user_dep))
+    spec = app.openapi()
+
+    text = (
+        json.dumps(spec, indent=indent if indent > 0 else None)
+        if indent > 0
+        else json.dumps(spec, separators=(",", ":"))
+    )
+
+    if output is not None:
+        output.write_text(text + "\n", encoding="utf-8")
+        _out(f"Wrote OpenAPI spec to {output}")
+    else:
+        _out(text)
+    return 0
+
+
 def _cmd_examples_run(name: str, *, real_llm: bool = False) -> int:
     examples_dir = _examples_dir()
     if examples_dir is None:
@@ -322,6 +386,23 @@ def main() -> None:
 
     # list command
     sub.add_parser("list", help="List available agent templates")
+
+    # openapi command — dump the OpenAPI spec for the FastAPI router.
+    openapi_parser = sub.add_parser(
+        "openapi", help="Dump the FastAPI agent router's OpenAPI spec"
+    )
+    openapi_parser.add_argument(
+        "--output",
+        "-o",
+        type=Path,
+        help="Write the spec to this file instead of stdout.",
+    )
+    openapi_parser.add_argument(
+        "--indent",
+        type=int,
+        default=2,
+        help="JSON indent level (default 2; pass 0 for compact).",
+    )
 
     # shell command — interactive REPL for a registered agent.
     shell_parser = sub.add_parser(
@@ -389,6 +470,8 @@ def main() -> None:
             sys.exit(_cmd_examples_run(args.name, real_llm=args.real_llm))
         else:
             examples_parser.print_help()
+    elif args.command == "openapi":
+        sys.exit(_cmd_openapi(output=args.output, indent=args.indent))
     elif args.command == "shell":
         # Lazy import — keeps ``langgraph-kit new`` / ``list`` etc.
         # cheap when the user isn't using the REPL.

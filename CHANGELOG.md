@@ -7,6 +7,16 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **`langgraph-kit openapi` subcommand.** Mounts the agent router on
+  a temporary FastAPI app and dumps `app.openapi()` as JSON, either
+  to stdout or to `--output spec.json`. `--indent 0` emits compact
+  JSON for machine consumers. The `get_current_user` dependency is
+  stubbed during introspection so the command works without auth
+  config — only the route shape and request/response schemas
+  matter for the spec. Foundation for issue #40 (typed SDK
+  generation via `openapi-python-client`). Closes part of
+  [#39](https://github.com/allada-homelab/langgraph-kit/issues/39).
+
 - **Interactive REPL (`langgraph-kit shell`).** New
   `langgraph_kit.shell.run_shell` entry point and CLI subcommand
   drop you into a single-agent REPL. Loads the requested
