@@ -8,14 +8,16 @@ replacement for ``InMemorySaver``: every kit module that takes a
 
 from __future__ import annotations
 
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-from langchain_core.runnables import (  # pyright: ignore[reportMissingModuleSource]
-    RunnableConfig,
-)
 from langgraph.checkpoint.memory import (  # pyright: ignore[reportMissingImports]
     InMemorySaver,
 )
+
+if TYPE_CHECKING:
+    from langchain_core.runnables import (  # pyright: ignore[reportMissingModuleSource]
+        RunnableConfig,
+    )
 
 
 class FakeCheckpointer(InMemorySaver):
