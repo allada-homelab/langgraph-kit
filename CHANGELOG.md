@@ -7,6 +7,23 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Prompt versioning + run-level version tagging.** `PromptSection`
+  gains a free-form `version: str` field (default `"1"`,
+  caller-controlled — not a content hash) and `SectionRegistry` now
+  keeps a per-id version map with explicit `set_current` /
+  `list_versions` / `current_versions` APIs. Re-registering the same
+  id with a new version auto-promotes it; pass `set_current=False` to
+  stage a candidate without going live. `get_active()` still returns
+  one section per id (the current one), so existing graph code
+  doesn't change. `build_agent_run_config` accepts an optional
+  `prompt_versions` mapping that's surfaced as
+  `metadata["prompt_versions"]` on the run — visible per-trace in
+  Langfuse for cohort analysis of a rollout. The A/B router and
+  persistence story (rollout strategies, multi-worker coordination)
+  are intentionally deferred — this PR ships the primitives #18
+  asked for, the higher-level orchestration is out of scope here.
+  Closes part of [#18](https://github.com/allada-homelab/langgraph-kit/issues/18).
+
 - **Partial replay + recording overrides.** `ReplayRunner.run()` now
   accepts `start_at` / `stop_at` (Python slice semantics, negative
   indices supported) to replay a sub-range of recorded user turns —
