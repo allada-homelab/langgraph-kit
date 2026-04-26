@@ -7,6 +7,20 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: default audit sink.**
+  `build_reference_deep_agent` now wires a
+  `ReferenceAuditStopHook` that writes one
+  `AuditAction.AGENT_RUN_COMPLETE` entry per turn via
+  `AuditStore`. Entries are metadata-only (turn count, message
+  count, tool-call count from the last `AIMessage`, plus
+  `thread_id` when discoverable from the LangGraph runtime config) —
+  no message bodies, no tool arguments. The audit log captures
+  *what happened* without leaking conversation contents. Two new
+  kwargs: `enable_default_audit` (default `True`) opts out, and
+  `audit_store` accepts a caller-supplied `AuditStore` (defaults to
+  one constructed over the same `store` that backs persistence).
+  Closes [#107](https://github.com/allada-homelab/langgraph-kit/issues/107).
+
 - **Reference deep agent: `graph_callbacks=` for full-coverage
   tracing.** `build_deep_agent` (and `build_reference_deep_agent`)
   now accept `graph_callbacks: list | None = None`. The kit binds

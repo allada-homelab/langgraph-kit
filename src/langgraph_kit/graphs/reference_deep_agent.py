@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from pydantic import BaseModel
 
+from langgraph_kit.core.audit import AuditStore
 from langgraph_kit.core.orchestration.workers import GENERAL_WORKERS
 from langgraph_kit.core.prompt_assembly.sections import (
     PromptSection,
@@ -23,6 +24,7 @@ from langgraph_kit.core.prompt_assembly.sections import (
 from langgraph_kit.core.prompt_assembly.system_context import SystemContextProvider
 from langgraph_kit.core.resilience.stop_hooks import TurnTelemetryStopHook
 from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT, build_deep_agent
+from langgraph_kit.graphs._reference_audit import ReferenceAuditStopHook
 from langgraph_kit.graphs._reference_custom_tools import (
     make_reference_configure_tools,
 )
@@ -138,6 +140,8 @@ def build_reference_deep_agent(
     coordinator: bool = False,
     llm_callbacks: list[Any] | None = None,
     graph_callbacks: list[Any] | None = None,
+    enable_default_audit: bool = True,
+    audit_store: AuditStore | None = None,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
 
@@ -245,10 +249,34 @@ def build_reference_deep_agent(
     Caller owns the callback object so they can call ``get_trace()``
     after the run and persist it via
     :class:`~langgraph_kit.core.tracing.TraceStore` if desired.
+
+    ``enable_default_audit`` (default ``True``) wires a
+    :class:`~langgraph_kit.graphs._reference_audit.ReferenceAuditStopHook`
+    that emits one ``AGENT_RUN_COMPLETE`` audit entry per turn via
+    :class:`~langgraph_kit.core.audit.AuditStore`. The entries are
+    metadata-only (turn boundaries, message counts, tool-call
+    counts) — no message bodies, no tool arguments — so the audit
+    log captures *what happened* without leaking conversation
+    contents. Set to ``False`` to opt out of default audit logging.
+
+    ``audit_store`` accepts a caller-supplied
+    :class:`~langgraph_kit.core.audit.AuditStore`. When ``None``
+    (default) and ``enable_default_audit`` is ``True``, the kit
+    constructs an ``AuditStore`` over the same ``store`` that backs
+    persistence — keeping audit data co-located with the agent's
+    other state without extra config.
     """
     stop_hooks: list[Any] = []
     if enable_default_stop_hooks:
         stop_hooks.append(TurnTelemetryStopHook())
+    if enable_default_audit:
+        effective_audit_store = audit_store or AuditStore(store)
+        stop_hooks.append(ReferenceAuditStopHook(effective_audit_store))
+    elif audit_store is not None:
+        # Caller passed an audit_store but disabled the default hook —
+        # they're rolling their own integration. Still wire the hook so
+        # the supplied store gets entries.
+        stop_hooks.append(ReferenceAuditStopHook(audit_store))
     if extra_stop_hooks:
         stop_hooks.extend(extra_stop_hooks)
 
