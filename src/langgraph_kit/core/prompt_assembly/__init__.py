@@ -10,6 +10,13 @@ from .context_providers import (
     ThreadContextProvider,
     ToolContextProvider,
 )
+from .routing import (
+    PromptVersionRouter,
+    RoutingStrategy,
+    RunContext,
+    percentage_rollout,
+    stable_bucket,
+)
 from .sections import PromptSection, SectionRegistry, SectionStability
 
 __all__ = [
@@ -18,8 +25,13 @@ __all__ = [
     "PromptCache",
     "PromptComposer",
     "PromptSection",
+    "PromptVersionRouter",
+    "RoutingStrategy",
+    "RunContext",
     "SectionRegistry",
     "SectionStability",
     "ThreadContextProvider",
     "ToolContextProvider",
+    "percentage_rollout",
+    "stable_bucket",
 ]
