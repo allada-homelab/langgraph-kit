@@ -860,6 +860,8 @@ def _build_reference_with_capture(
     extra_deferred_tools: Any | None = None,
     enable_default_custom_tools: bool | None = None,
     extra_configure_tools: Any | None = None,
+    enable_default_extra_providers: bool | None = None,
+    extra_providers: list[Any] | None = None,
 ) -> MagicMock:
     """Helper: build the reference graph under mocked deepagents+llm.
 
@@ -880,6 +882,10 @@ def _build_reference_with_capture(
         kwargs["enable_default_custom_tools"] = enable_default_custom_tools
     if extra_configure_tools is not None:
         kwargs["extra_configure_tools"] = extra_configure_tools
+    if enable_default_extra_providers is not None:
+        kwargs["enable_default_extra_providers"] = enable_default_extra_providers
+    if extra_providers is not None:
+        kwargs["extra_providers"] = extra_providers
     with (
         patch.dict(sys.modules, module_patches),
         patch(
@@ -1148,3 +1154,97 @@ def test_reference_extra_configure_tools_alone_when_default_disabled(
     tool_names = {getattr(fn, "__name__", getattr(fn, "name", None)) for fn in tools}
     assert "solo_tool" in tool_names
     assert "current_environment" not in tool_names
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: extra_providers wiring
+# ---------------------------------------------------------------------------
+# The reference must showcase the extra_providers= extension point so
+# new domain agents have an exemplar that doesn't assume git (the only
+# in-tree provider before this was GitContextProvider on coding_agent).
+
+
+def _captured_providers(mock_store: Any, **kwargs: Any) -> list[Any]:
+    """Build the reference with PromptComposer patched to capture provider list."""
+    captured: dict[str, list[Any]] = {}
+
+    from langgraph_kit.core.prompt_assembly.composer import PromptComposer as _Real
+
+    class _SpyComposer(_Real):
+        def __init__(self, sections: Any, providers: list[Any]) -> None:
+            captured["providers"] = providers
+            super().__init__(sections, providers)
+
+    module_patches, _, _ = _mock_deepagents_env()
+    full_kwargs: dict[str, Any] = {"checkpointer": MagicMock(), "store": mock_store}
+    full_kwargs.update(kwargs)
+
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+        patch("langgraph_kit.graphs._builder.PromptComposer", _SpyComposer),
+    ):
+        build_reference_deep_agent(**full_kwargs)
+
+    return captured["providers"]
+
+
+def test_reference_default_system_context_provider_is_wired(mock_store: Any) -> None:
+    """Default build registers a SystemContextProvider on the prompt composer."""
+    from langgraph_kit.core.prompt_assembly.system_context import SystemContextProvider
+
+    providers = _captured_providers(mock_store)
+    assert any(isinstance(p, SystemContextProvider) for p in providers), (
+        f"SystemContextProvider must be wired by default; got {providers!r}"
+    )
+
+
+def test_reference_default_system_context_provider_can_be_disabled(
+    mock_store: Any,
+) -> None:
+    """``enable_default_extra_providers=False`` removes the SystemContextProvider."""
+    from langgraph_kit.core.prompt_assembly.system_context import SystemContextProvider
+
+    providers = _captured_providers(mock_store, enable_default_extra_providers=False)
+    assert not any(isinstance(p, SystemContextProvider) for p in providers)
+
+
+def test_reference_extra_providers_appended_after_default(mock_store: Any) -> None:
+    """Caller-supplied ``extra_providers=`` are appended after the default."""
+    from langgraph_kit.core.prompt_assembly.system_context import SystemContextProvider
+
+    class _Marker:
+        async def provide(self, context: dict[str, Any]) -> str:
+            return "marker"
+
+    extra = _Marker()
+    providers = _captured_providers(mock_store, extra_providers=[extra])
+
+    # Default present, caller's provider appended after the kit's three +
+    # the SystemContextProvider default.
+    assert any(isinstance(p, SystemContextProvider) for p in providers)
+    assert providers[-1] is extra
+
+
+def test_reference_extra_providers_alone_when_default_disabled(
+    mock_store: Any,
+) -> None:
+    """With default disabled, only kit defaults + caller's providers appear."""
+    from langgraph_kit.core.prompt_assembly.system_context import SystemContextProvider
+
+    class _Marker:
+        async def provide(self, context: dict[str, Any]) -> str:
+            return "marker"
+
+    extra = _Marker()
+    providers = _captured_providers(
+        mock_store,
+        enable_default_extra_providers=False,
+        extra_providers=[extra],
+    )
+
+    assert not any(isinstance(p, SystemContextProvider) for p in providers)
+    assert providers[-1] is extra

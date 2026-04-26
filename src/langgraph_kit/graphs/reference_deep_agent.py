@@ -17,6 +17,7 @@ from langgraph_kit.core.prompt_assembly.sections import (
     PromptSection,
     SectionStability,
 )
+from langgraph_kit.core.prompt_assembly.system_context import SystemContextProvider
 from langgraph_kit.core.resilience.stop_hooks import TurnTelemetryStopHook
 from langgraph_kit.graphs._builder import DEFAULT_RECURSION_LIMIT, build_deep_agent
 from langgraph_kit.graphs._reference_custom_tools import (
@@ -127,6 +128,8 @@ def build_reference_deep_agent(
     extra_deferred_tools: Any | None = None,
     enable_default_custom_tools: bool = True,
     extra_configure_tools: Any | None = None,
+    enable_default_extra_providers: bool = True,
+    extra_providers: list[Any] | None = None,
 ) -> Any:
     """Build the reference deep agent with all kit features wired together.
 
@@ -176,6 +179,18 @@ def build_reference_deep_agent(
     ``(ToolRegistry) -> None`` that runs *after* the default tool
     registration so caller registrations under matching ids override
     the defaults — same upsert-by-id precedence as plugin tools.
+
+    ``enable_default_extra_providers`` (default ``True``) registers a
+    :class:`~langgraph_kit.core.prompt_assembly.system_context.SystemContextProvider`
+    on the prompt composer, mirroring how ``coding_agent`` ships
+    ``GitContextProvider``. The provider injects current UTC datetime,
+    platform name, OS name, and the kit version under a
+    ``# System Context`` heading.
+
+    ``extra_providers`` is appended after the default so callers can
+    stack additional :class:`~langgraph_kit.core.prompt_assembly.context_providers.ContextProvider`
+    instances. Each provider's ``async provide(context)`` is invoked
+    by :class:`PromptComposer` when a full prompt is composed.
     """
     stop_hooks: list[Any] = []
     if enable_default_stop_hooks:
@@ -199,6 +214,12 @@ def build_reference_deep_agent(
     else:
         configure_tools = None
 
+    providers: list[Any] = []
+    if enable_default_extra_providers:
+        providers.append(SystemContextProvider())
+    if extra_providers:
+        providers.extend(extra_providers)
+
     return build_deep_agent(
         agent_name="reference-deep-agent",
         core_sections=_CORE_SECTIONS,
@@ -211,4 +232,5 @@ def build_reference_deep_agent(
         stop_hooks=stop_hooks or None,
         configure_tools=configure_tools,
         configure_deferred_tools=configure_deferred_tools,
+        extra_providers=providers or None,
     )
