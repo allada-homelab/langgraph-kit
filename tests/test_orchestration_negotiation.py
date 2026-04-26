@@ -84,9 +84,7 @@ async def test_reject_requires_reason_and_threads_back(mock_store: Any) -> None:
 async def test_accept_rejects_non_propose_input(mock_store: Any) -> None:
     """accept() guards against being handed a non-propose message."""
     mailbox = AgentMailbox(mock_store)
-    proposal_id = await propose(
-        mailbox, sender="agent-a", recipient="agent-b", action="x"
-    )
+    await propose(mailbox, sender="agent-a", recipient="agent-b", action="x")
     proposal = (await mailbox.arecv("agent-b"))[0]
     await accept(mailbox, proposal, replier="agent-b")
     accept_msg = (await mailbox.arecv("agent-a"))[0]
