@@ -5,6 +5,22 @@ All notable changes to this project are documented here. This project adheres to
 
 ## [Unreleased]
 
+### Fixed
+
+- **`trace_to_mermaid` sequence-mode now renders nested chain
+  spans.** The pre-fix `depth == 0` gate silently dropped any
+  `kind="chain"` span deeper than the root from sequence diagrams,
+  so sub-graphs and worker invocations disappeared from the
+  rendered trace. Nested chains now render as
+  `Note over Agent: chain (...)` so they appear in the diagram
+  without breaking the outer User↔Agent request/response framing.
+  Both renderers also honor a new `max_depth` kwarg
+  (`DEFAULT_MAX_DEPTH = 10`) — past the cap, sequence emits a
+  `Note ... truncated at depth N` and flowchart emits a single
+  `...truncated` node, so pathological deep traces don't bloat
+  diagrams unboundedly. Closes
+  [#21](https://github.com/allada-homelab/langgraph-kit/issues/21).
+
 ### Added
 
 - **Multi-agent negotiation primitives (`propose` / `accept` /
