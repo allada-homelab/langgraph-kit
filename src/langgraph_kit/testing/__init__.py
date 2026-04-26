@@ -13,21 +13,23 @@ Currently exposes:
   Store-backed kit code without spinning up SQLite or Postgres.
 - :class:`FakeItem` — the ``aget`` / ``asearch`` return-shape
   (``key`` / ``value`` / ``namespace``).
-- :func:`assert_namespace_contains` — assertion helper for "did the
-  thing-under-test write what I expected to this Store namespace?"
-- :func:`assert_namespace_empty` — assertion helper for the
-  no-side-effect side of the same coin.
+- :class:`FakeCheckpointer` — :class:`InMemorySaver` subclass with
+  ``dump_state`` and ``assert_thread_has_messages`` for tests that
+  need to inspect what a graph wrote.
+- :func:`scripted_llm`, :func:`tool_call_turn`,
+  :func:`multi_tool_call_turn`, :func:`answer` — builders for the
+  :class:`RecordedChatModel` so tests can drive a graph
+  deterministically without touching a real LLM.
+- :func:`assert_tool_invoked`, :func:`last_ai_message` — assertions
+  for inspecting the resulting ``state["messages"]``.
+- :func:`assert_namespace_contains`, :func:`assert_namespace_empty` —
+  assertions for verifying what was written to a Store namespace.
 
-Deferred to follow-ups (each its own small PR):
-
-- ``FakeCheckpointer`` (thin wrapper over ``InMemorySaver`` with
-  ``dump_state`` and ``assert_thread_has_messages`` affordances).
-- ``scripted_llm`` / ``tool_call_turn`` / ``answer`` — the
-  ``RecordedChatModel`` script builders currently in
-  ``tests/e2e/conftest.py``.
-- Pytest ``entry_points.pytest11`` plugin so fixtures auto-register
-  on ``pytest`` invocation; today callers do
-  ``from langgraph_kit.testing import FakeStore`` explicitly.
+Pytest plugin: when this kit is installed in a downstream project,
+the ``langgraph_kit.testing.pytest_plugin`` module is auto-discovered
+via :pep:`517` ``[project.entry-points.pytest11]`` and exposes
+``fake_store``, ``fake_checkpointer``, and ``scripted_llm_factory``
+as fixtures with no explicit conftest wiring required.
 """
 
 from __future__ import annotations
@@ -36,11 +38,27 @@ from langgraph_kit.testing.assertions import (
     assert_namespace_contains,
     assert_namespace_empty,
 )
+from langgraph_kit.testing.checkpointer import FakeCheckpointer
 from langgraph_kit.testing.fakes import FakeItem, FakeStore
+from langgraph_kit.testing.llm import (
+    answer,
+    assert_tool_invoked,
+    last_ai_message,
+    multi_tool_call_turn,
+    scripted_llm,
+    tool_call_turn,
+)
 
 __all__ = [
+    "FakeCheckpointer",
     "FakeItem",
     "FakeStore",
+    "answer",
     "assert_namespace_contains",
     "assert_namespace_empty",
+    "assert_tool_invoked",
+    "last_ai_message",
+    "multi_tool_call_turn",
+    "scripted_llm",
+    "tool_call_turn",
 ]

@@ -29,6 +29,9 @@ Homepage = "https://github.com/allada-homelab/langgraph-kit"
 Source = "https://github.com/allada-homelab/langgraph-kit"
 Issues = "https://github.com/allada-homelab/langgraph-kit/issues"
 
+[project.entry-points.pytest11]
+langgraph_kit_testing = "langgraph_kit.testing.pytest_plugin"
+
 [project.optional-dependencies]
 postgres = ["langgraph-checkpoint-postgres>=3.0.5"]
 openai = ["langchain-openai>=1.2.0"]
