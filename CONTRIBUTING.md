@@ -137,13 +137,32 @@ The `release` workflow will:
 - Derive the version from the tag and overwrite `src/langgraph_kit/__version__.py`
   so the wheel metadata always matches the release label.
 - Build with `uv build`, publish to PyPI via OIDC trusted publishing, attach
-  artifacts to the GitHub release, and commit the version bump back to `main`.
+  artifacts to the GitHub release, and propagate the version bump back to `main`
+  (see "Post-release version bump" below).
 
 If the CHANGELOG has a section for the version, it's used as the GitHub
 release body; otherwise GitHub's auto-generated notes are used.
 
-The fallback `git tag vX.Y.Z && git push origin vX.Y.Z` path also works but
-skips the post-release bump on `main`.
+The fallback `git tag vX.Y.Z && git push origin vX.Y.Z` path also works.
+
+### Post-release version bump
+
+The `bump-main` job propagates the new version into `__version__.py` on `main`
+so future development starts from the post-release number. Two paths:
+
+- **Direct push** (fast path): used when `secrets.PRE_COMMIT` is set to a PAT
+  with bypass permission on `main`'s branch protection. Bumps land immediately
+  as a single `[skip ci]` commit. This is the same PAT the pre-commit
+  workflow uses to push autofixes back to PR branches.
+- **Bump PR** (fallback): when no bypass-capable token is available — or the
+  direct push is rejected — the workflow opens a PR titled
+  `chore: bump __version__ to X.Y.Z` (labeled `internal`). CI runs against
+  the PR; merge it once green. With repo-level "allow auto-merge" enabled this
+  can be set up to merge unattended; otherwise it sits open for review.
+
+Either way, published wheels are correct independently of this step (the
+build job rewrites `__version__.py` before `uv build`), so a stuck bump PR
+never affects PyPI artifacts — only the source-of-truth on `main`.
 
 ## Questions / bugs
 
