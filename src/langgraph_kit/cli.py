@@ -273,6 +273,41 @@ def _cmd_examples_list() -> int:
 
 
 # ---------------------------------------------------------------------------
+# validate-config — surface AgentConfig issues without raising
+# ---------------------------------------------------------------------------
+
+
+def _cmd_validate_config() -> int:
+    """Print the active config's validation report; exit non-zero on errors.
+
+    Reads the live config via :func:`get_config` so this checks
+    whatever ``configure(...)`` was last called with — typically the
+    config the running app would use. Pure check (no DB connection,
+    no LLM call); a future ``--check-connections`` flag can layer on
+    network probes.
+
+    Exit codes:
+
+    * ``0`` — clean, or warnings only.
+    * ``1`` — at least one error; deployment should not proceed.
+    """
+    from langgraph_kit._config import get_config, validate_config
+
+    report = validate_config(get_config())
+    for warning in report.warnings:
+        sys.stderr.write(f"WARN: {warning}\n")
+    for error in report.errors:
+        sys.stderr.write(f"FAIL: {error}\n")
+    if report.errors:
+        return 1
+    if report.warnings:
+        sys.stderr.write(f"Config valid with {len(report.warnings)} warning(s).\n")
+    else:
+        _out("Config is valid.")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # openapi — dump the FastAPI router's spec
 # ---------------------------------------------------------------------------
 
@@ -387,6 +422,12 @@ def main() -> None:
     # list command
     sub.add_parser("list", help="List available agent templates")
 
+    # validate-config command — surface AgentConfig issues without raising.
+    sub.add_parser(
+        "validate-config",
+        help="Check the active AgentConfig for errors and warnings",
+    )
+
     # openapi command — dump the OpenAPI spec for the FastAPI router.
     openapi_parser = sub.add_parser(
         "openapi", help="Dump the FastAPI agent router's OpenAPI spec"
@@ -470,6 +511,8 @@ def main() -> None:
             sys.exit(_cmd_examples_run(args.name, real_llm=args.real_llm))
         else:
             examples_parser.print_help()
+    elif args.command == "validate-config":
+        sys.exit(_cmd_validate_config())
     elif args.command == "openapi":
         sys.exit(_cmd_openapi(output=args.output, indent=args.indent))
     elif args.command == "shell":
