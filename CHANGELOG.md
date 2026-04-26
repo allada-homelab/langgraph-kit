@@ -7,6 +7,17 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: `llm_callbacks=` integration point.**
+  `build_reference_deep_agent` (and `build_deep_agent`) now accept
+  `llm_callbacks: list | None = None`; the kit binds them via
+  `llm.with_config({"callbacks": [...]})` so callbacks participate
+  in every LLM call. This is the integration point for cost/budget
+  instrumentation (`TokenTrackingCallback`), Langfuse handlers, and
+  any other LangChain async callback. Caller owns the callback
+  object for post-run inspection; pair with `BudgetManager` for
+  per-thread budget enforcement on the Store. Closes
+  [#105](https://github.com/allada-homelab/langgraph-kit/issues/105).
+
 - **Reference deep agent: default HITL demo tool.**
   `build_reference_deep_agent` now ships
   `confirm_destructive_demo`, a no-op stub whose capability sets
