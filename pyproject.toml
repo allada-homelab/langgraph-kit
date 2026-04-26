@@ -185,4 +185,6 @@ show_contexts = true
 [tool.codespell]
 # False-positives from test assertions that use partial-string matches
 # (e.g. `"sav" in content` to match both "save" and "saved").
-ignore-words-list = "sav,memor"
+# ``asend`` and ``acount`` are real async method names on
+# ``AgentMailbox``; codespell wants them to be ``ascend``/``account``.
+ignore-words-list = "sav,memor,asend,acount"

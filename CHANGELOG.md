@@ -7,6 +7,20 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Multi-agent communication primitives.** Two new Store-backed
+  modules under `langgraph_kit.core.orchestration`. `AgentWorkspace`
+  is a typed Pydantic document with optimistic-concurrency `apatch`
+  (rejects stale-revision writes via `WorkspaceConflict`) plus an
+  `apatch_with_retry` read-modify-write helper. `AgentMailbox` is a
+  per-agent FIFO inbox with `asend` / `arecv(mark_read=...)` /
+  `amark_read` / `acount`; `AgentMessage` declares `info` /
+  `propose` / `accept` / `reject` kinds so callers can build
+  cooperative protocols on top. The `Trigger` abstraction,
+  negotiation state-machine sugar, and `SupervisorAgent` integration
+  are intentionally deferred — the primitives shipped here are
+  what every higher-level pattern ends up needing first. Closes
+  part of [#20](https://github.com/allada-homelab/langgraph-kit/issues/20).
+
 - **Webhook trigger surface.** New `langgraph_kit.contrib.webhook`
   module turns inbound HTTP webhooks into agent runs. Define a
   `WebhookSpec(id, agent_id, secret, payload_template)`, register it
