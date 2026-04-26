@@ -65,6 +65,11 @@ from langgraph_kit.prompt_templates.diff import diff_section
 from langgraph_kit.prompt_templates.memory import (
     memory_awareness,
 )
+from langgraph_kit.prompt_templates.orchestration import (
+    delegation_discipline,
+    parallel_workers,
+    synthesis_discipline,
+)
 from langgraph_kit.prompt_templates.safety import (
     error_handling,
     output_format_natural,
@@ -76,11 +81,14 @@ __all__ = [
     "be_concise",
     "completion_signal",
     "core_identity",
+    "delegation_discipline",
     "diff_section",
     "error_handling",
     "memory_awareness",
     "operate_carefully",
     "output_format_natural",
     "output_format_structured",
+    "parallel_workers",
+    "synthesis_discipline",
     "tool_use_discipline",
 ]

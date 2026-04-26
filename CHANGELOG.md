@@ -7,6 +7,21 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **`AgentConfig.prompt_overrides` lifecycle integration + curated
+  orchestration sections (#43 v2).**
+  `build_deep_agent` now consults `AgentConfig.prompt_overrides`
+  (a `dict[str, PromptSection]`) after every other section
+  registration path (core / activation / plugin / extra_sections /
+  tool_guidance) so user-supplied overrides win on id collisions —
+  closing the lifecycle gap left by the v1 prompt-templates ship.
+  Three new curated sections in
+  `langgraph_kit.prompt_templates.orchestration`:
+  `delegation_discipline`, `synthesis_discipline`,
+  `parallel_workers` — `CONDITIONAL` on the
+  `"orchestration"` key so they activate only when the build
+  registers it. Closes
+  [#43](https://github.com/allada-homelab/langgraph-kit/issues/43).
+
 - **`create_app_lifespan` validates `AgentConfig` at startup.** The
   FastAPI lifespan now calls `validate_config` before any other
   initialization. Errors raise `RuntimeError` with a readable list

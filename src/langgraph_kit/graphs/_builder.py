@@ -298,6 +298,15 @@ def build_deep_agent(
             )
         )
 
+    # ``AgentConfig.prompt_overrides`` lands LAST so user-supplied
+    # overrides win against every other registration path
+    # (core, activation, plugin, extra_sections, tool_guidance). The
+    # registry upserts on (id, version), so an override under the same
+    # id replaces the shipped section's current version.
+    overrides = get_config().prompt_overrides
+    if overrides:
+        section_registry.register_many(list(overrides.values()))
+
     providers: list[Any] = [
         ThreadContextProvider(),
         MemoryContextProvider(),
