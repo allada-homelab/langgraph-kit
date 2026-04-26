@@ -32,7 +32,7 @@ from langgraph_kit.replay.models import (
 )
 from langgraph_kit.replay.player import RecordedChatModel, ReplayMismatchError
 from langgraph_kit.replay.recorder import ConversationRecorder
-from langgraph_kit.replay.runner import ReplayRunner
+from langgraph_kit.replay.runner import ReplayRunner, TurnResult
 
 __all__ = [
     "ConversationRecorder",
@@ -44,6 +44,7 @@ __all__ = [
     "ReplayMismatchError",
     "ReplayRunner",
     "ToolInteraction",
+    "TurnResult",
     "assert_replay_matches",
     "assert_tool_sequence",
 ]
