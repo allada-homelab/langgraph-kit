@@ -203,32 +203,109 @@ jobs:
           files: dist/*
 
   bump-main:
-    # After a successful publish, push the version bump back to main so
-    # future development starts from the post-release version. Idempotent:
-    # if main's ``__version__.py`` already matches (the common case for
-    # ad-hoc ``git tag`` pushes where the dev loop bumped it before
-    # tagging), the job no-ops and exits cleanly.
+    # After a successful publish, propagate the version bump back to main
+    # so future development starts from the post-release version.
+    #
+    # Direct push is impossible under main's branch protection (required
+    # status checks reject any push that hasn't run them — and a bare
+    # ``git push`` from the bot can't satisfy them). The earlier direct-
+    # push implementation silently failed every release after v0.9.10,
+    # leaving ``__version__.py`` stale on main while published wheels
+    # were correct (the build job rewrites the constant before
+    # ``uv build``, so PyPI artifacts always match the tag).
+    #
+    # Two-tier strategy:
+    #
+    # 1. Try a direct push first using the ``PRE_COMMIT`` PAT (if
+    #    configured). When the PAT belongs to a user with bypass
+    #    permission this is the fast path — bump lands on main
+    #    immediately, single commit, no PR noise.
+    # 2. If direct push isn't available or fails, fall back to opening
+    #    a PR via ``peter-evans/create-pull-request``. CI runs against
+    #    the PR, branch protection is satisfied, the PR auto-merges
+    #    when checks pass (requires repo-level "allow auto-merge"
+    #    setting). If auto-merge isn't enabled the PR sits open until
+    #    a human merges it — versions never silently drift.
+    #
+    # Idempotent throughout: if ``__version__.py`` already matches the
+    # release version (the common case for ad-hoc ``git tag`` pushes
+    # where the dev loop bumped it before tagging) every step no-ops
+    # and the job exits cleanly.
     runs-on: ubuntu-latest
     needs: [publish, build]
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v6
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Apply version bump to main
+          token: ${{ secrets.PRE_COMMIT || secrets.GITHUB_TOKEN }}
+      - name: Decide whether bump is needed
+        id: check
         run: |
           VERSION="${{ needs.build.outputs.version }}"
           CURRENT=$(grep -oE '"[0-9]+\.[0-9]+\.[0-9]+"' src/langgraph_kit/__version__.py | tr -d '"')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           if [ "$CURRENT" = "$VERSION" ]; then
-            echo "main already at $VERSION — nothing to commit."
-            exit 0
+            echo "main already at $VERSION — nothing to do."
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "main at $CURRENT, release is $VERSION — bump required."
+            echo "needed=true" >> "$GITHUB_OUTPUT"
           fi
+      - name: Apply version bump locally
+        if: steps.check.outputs.needed == 'true'
+        run: |
+          VERSION="${{ steps.check.outputs.version }}"
           echo "__version__ = \"$VERSION\"" > src/langgraph_kit/__version__.py
+      - name: Try direct push (fast path; requires bypass-capable PAT)
+        id: direct
+        if: steps.check.outputs.needed == 'true' && env.HAS_PAT == 'true'
+        env:
+          HAS_PAT: ${{ secrets.PRE_COMMIT != '' }}
+          VERSION: ${{ steps.check.outputs.version }}
+        continue-on-error: true
+        run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/langgraph_kit/__version__.py
           git commit -m "chore: bump __version__ to $VERSION [skip ci]"
-          git push origin main
+          if git push origin main; then
+            echo "pushed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Direct push rejected (likely branch protection); falling back to PR."
+            git reset --hard HEAD~1
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open bump PR (fallback path)
+        if: steps.check.outputs.needed == 'true' && (env.HAS_PAT != 'true' || steps.direct.outputs.pushed != 'true')
+        env:
+          HAS_PAT: ${{ secrets.PRE_COMMIT != '' }}
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ secrets.PRE_COMMIT || secrets.GITHUB_TOKEN }}
+          branch: chore/bump-version-${{ steps.check.outputs.version }}
+          base: main
+          delete-branch: true
+          commit-message: "chore: bump __version__ to ${{ steps.check.outputs.version }}"
+          title: "chore: bump __version__ to ${{ steps.check.outputs.version }}"
+          body: |
+            Automated post-release version bump after publishing v${{ steps.check.outputs.version }} to PyPI.
+
+            The published wheel already carries the correct constant (the build
+            job rewrites `__version__.py` before `uv build`); this PR keeps
+            `main`'s source in sync so future development starts from the
+            post-release number.
+
+            Auto-generated by `.github/workflows/release.yml` (`bump-main` job).
+          labels: internal
+      - name: Annotate result
+        if: always() && steps.check.outputs.needed == 'true'
+        run: |
+          if [ "${{ steps.direct.outputs.pushed }}" = "true" ]; then
+            echo "::notice::Bumped __version__ to ${{ steps.check.outputs.version }} via direct push."
+          else
+            echo "::notice::Opened PR to bump __version__ to ${{ steps.check.outputs.version }} (direct push not available — review and merge the PR labeled 'internal')."
+          fi
