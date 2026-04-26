@@ -1582,3 +1582,95 @@ def test_reference_token_tracking_records_usage_via_callback(mock_store: Any) ->
     total = tracker.get_total()
     assert total.input_tokens == 7
     assert total.output_tokens == 3
+
+
+# ---------------------------------------------------------------------------
+# build_reference_deep_agent: graph_callbacks wiring
+# ---------------------------------------------------------------------------
+# ``graph_callbacks=`` is the integration point for tracing handlers
+# (TraceCallbackHandler) — callbacks bound at the graph level so chain
+# / tool / LLM events all propagate to them.
+
+
+def test_reference_graph_callbacks_bound_to_compiled_graph(mock_store: Any) -> None:
+    """``graph_callbacks=[handler]`` flows into ``graph.with_config``."""
+    from langgraph_kit.core.tracing import TraceCallbackHandler
+
+    handler = TraceCallbackHandler(agent_id="ref-test", thread_id="t1")
+
+    fake_graph = MagicMock(name="compiled_graph")
+    fake_graph.with_config.return_value = fake_graph
+    deepagents_mod = MagicMock()
+    deepagents_mod.create_deep_agent.return_value = fake_graph
+
+    backends_mod = MagicMock()
+    module_patches = {
+        "deepagents": deepagents_mod,
+        "deepagents.backends": backends_mod,
+        "deepagents.backends.composite": backends_mod.composite,
+        "deepagents.backends.state": backends_mod.state,
+        "deepagents.backends.store": backends_mod.store,
+    }
+
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_deep_agent(
+            checkpointer=MagicMock(),
+            store=mock_store,
+            graph_callbacks=[handler],
+        )
+
+    # Two ``with_config`` calls happen: one in ``bind_kit_defaults``
+    # for recursion_limit, then one for callbacks. Verify the
+    # callbacks call is among them.
+    call_args_list = fake_graph.with_config.call_args_list
+    callback_calls = [
+        c for c in call_args_list if "callbacks" in (c.args[0] if c.args else {})
+    ]
+    assert callback_calls, (
+        f"Expected a with_config call with callbacks=; got {call_args_list!r}"
+    )
+    assert callback_calls[0].args[0]["callbacks"] == [handler]
+
+
+def test_reference_no_graph_callbacks_skips_callbacks_with_config(
+    mock_store: Any,
+) -> None:
+    """No ``graph_callbacks=`` → the callbacks ``with_config`` is not made."""
+    fake_graph = MagicMock(name="compiled_graph")
+    fake_graph.with_config.return_value = fake_graph
+    deepagents_mod = MagicMock()
+    deepagents_mod.create_deep_agent.return_value = fake_graph
+
+    backends_mod = MagicMock()
+    module_patches = {
+        "deepagents": deepagents_mod,
+        "deepagents.backends": backends_mod,
+        "deepagents.backends.composite": backends_mod.composite,
+        "deepagents.backends.state": backends_mod.state,
+        "deepagents.backends.store": backends_mod.store,
+    }
+
+    with (
+        patch.dict(sys.modules, module_patches),
+        patch(
+            "langgraph_kit.graphs._builder.build_llm",
+            return_value=MagicMock(name="fake_llm"),
+        ),
+    ):
+        build_reference_deep_agent(checkpointer=MagicMock(), store=mock_store)
+
+    # ``bind_kit_defaults`` makes one ``with_config({"recursion_limit": 100})``
+    # call; the callback wiring must not add any other.
+    call_args_list = fake_graph.with_config.call_args_list
+    callback_calls = [
+        c for c in call_args_list if "callbacks" in (c.args[0] if c.args else {})
+    ]
+    assert not callback_calls, (
+        f"Expected no callbacks with_config call; got {callback_calls!r}"
+    )

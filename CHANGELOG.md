@@ -7,6 +7,17 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Reference deep agent: `graph_callbacks=` for full-coverage
+  tracing.** `build_deep_agent` (and `build_reference_deep_agent`)
+  now accept `graph_callbacks: list | None = None`. The kit binds
+  them at the graph level via `with_config({"callbacks": [...]})` so
+  `on_chain_*`, `on_tool_*`, and `on_llm_*` events all propagate to
+  the handler — the integration point for `TraceCallbackHandler`
+  (which needs full event coverage rather than just LLM events from
+  `llm_callbacks=`). Pair with `TraceStore` to persist traces by
+  thread. Closes
+  [#106](https://github.com/allada-homelab/langgraph-kit/issues/106).
+
 - **Reference deep agent: `llm_callbacks=` integration point.**
   `build_reference_deep_agent` (and `build_deep_agent`) now accept
   `llm_callbacks: list | None = None`; the kit binds them via
