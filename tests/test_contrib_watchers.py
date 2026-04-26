@@ -298,3 +298,38 @@ class TestRunnerLifecycle:
             await asyncio.sleep(0.2)
 
         assert len(graph.calls) >= 1
+
+
+class TestWatcherAudit:
+    @pytest.mark.asyncio
+    async def test_fire_emits_audit_entry_when_audit_store_set(
+        self, mock_store: Any
+    ) -> None:
+        """Edge-triggered fire writes an AGENT_INVOKE entry tagged ``trigger:watcher``."""
+        from langgraph_kit.core.audit import AuditAction, AuditStore
+
+        # Pre-populate the watched namespace so the predicate fires.
+        ns = ("alerts", "unhandled")
+        for i in range(3):
+            await mock_store.aput(ns, f"a{i}", {"i": i})
+
+        registry = StoreWatcherRegistry()
+        registry.register(_spec(spec_id="batch", namespace=ns, threshold=3))
+        audit_store = AuditStore(mock_store)
+
+        async with StoreWatcherRunner(
+            registry,
+            store=mock_store,
+            graph_resolver=lambda _: _FakeGraph(),
+            audit_store=audit_store,
+        ) as runner:
+            fired = await runner.poll_now("batch")
+
+        assert fired
+        entries = await audit_store.query(action=AuditAction.AGENT_INVOKE, limit=10)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.actor == "trigger:watcher"
+        assert entry.metadata["trigger_source"] == "watcher"
+        assert entry.metadata["trigger_spec_id"] == "batch"
+        assert entry.metadata["agent_id"] == "batcher"

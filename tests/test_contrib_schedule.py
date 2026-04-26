@@ -210,3 +210,51 @@ class TestScheduledTriggerRunner:
             await runner.fire_now("schedule-x")
 
         assert seen == ["agent-y"]
+
+
+# ---------------------------------------------------------------------------
+# Audit emission
+# ---------------------------------------------------------------------------
+
+
+class TestScheduleAudit:
+    @pytest.mark.asyncio
+    async def test_fire_emits_audit_entry_when_audit_store_set(
+        self, mock_store: Any
+    ) -> None:
+        """Each fire writes an AGENT_INVOKE audit entry tagged with the trigger source."""
+        from langgraph_kit.core.audit import AuditAction, AuditStore
+
+        audit_store = AuditStore(mock_store)
+        registry = ScheduledRegistry()
+        registry.register(
+            ScheduledSpec(id="weekly", agent_id="reporter", cron="* * * * *")
+        )
+        async with ScheduledTriggerRunner(
+            registry,
+            graph_resolver=lambda _: _FakeGraph(),
+            audit_store=audit_store,
+        ) as runner:
+            await runner.fire_now("weekly")
+
+        entries = await audit_store.query(action=AuditAction.AGENT_INVOKE, limit=10)
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.actor == "trigger:schedule"
+        assert entry.target.startswith("thread:scheduled-weekly-")
+        assert entry.metadata["trigger_source"] == "schedule"
+        assert entry.metadata["trigger_spec_id"] == "weekly"
+        assert entry.metadata["agent_id"] == "reporter"
+
+    @pytest.mark.asyncio
+    async def test_fire_skips_audit_when_audit_store_none(self) -> None:
+        """No audit_store= → no audit emission, no exception."""
+        registry = ScheduledRegistry()
+        registry.register(
+            ScheduledSpec(id="weekly", agent_id="reporter", cron="* * * * *")
+        )
+        async with ScheduledTriggerRunner(
+            registry, graph_resolver=lambda _: _FakeGraph()
+        ) as runner:
+            # Just shouldn't raise.
+            await runner.fire_now("weekly")

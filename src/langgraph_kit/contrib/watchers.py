@@ -199,6 +199,7 @@ class StoreWatcherRunner:
         *,
         store: Any,
         graph_resolver: Callable[[str], Any],
+        audit_store: Any = None,
     ) -> None:
         super().__init__()
         self._registry = registry
@@ -206,6 +207,9 @@ class StoreWatcherRunner:
         # graph_resolver mirrors the webhook + scheduled-trigger
         # surfaces: ``(agent_id) -> compiled graph``.
         self._graph_resolver = graph_resolver
+        # ``audit_store`` (optional :class:`AuditStore`) records one
+        # ``AGENT_INVOKE`` entry per fire. ``None`` disables audit.
+        self._audit_store = audit_store
         self._tasks: dict[str, asyncio.Task[None]] = {}
         # Edge-trigger state: ``True`` means the predicate fired
         # last poll and we're waiting for it to flip back to
@@ -336,6 +340,15 @@ class StoreWatcherRunner:
                 "agent_id": spec.agent_id,
                 "thread_id": thread_id,
             },
+        )
+        from langgraph_kit.contrib.schedule import emit_trigger_audit
+
+        await emit_trigger_audit(
+            self._audit_store,
+            source="watcher",
+            spec_id=spec.id,
+            agent_id=spec.agent_id,
+            thread_id=thread_id,
         )
         return thread_id
 

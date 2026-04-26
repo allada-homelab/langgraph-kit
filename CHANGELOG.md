@@ -7,6 +7,21 @@ All notable changes to this project are documented here. This project adheres to
 
 ### Added
 
+- **Trigger surfaces (webhook, schedule, watchers): optional audit
+  emission.** All three trigger entry points
+  (`create_webhook_router`, `ScheduledTriggerRunner`,
+  `StoreWatcherRunner`) now accept an optional `audit_store=`
+  kwarg. When set, each fire writes one
+  `AuditAction.AGENT_INVOKE` entry tagged with
+  `actor=trigger:<source>`, `target=thread:<id>`, and metadata
+  identifying the trigger spec + agent. Closes the audit
+  acceptance criterion on
+  [#19](https://github.com/allada-homelab/langgraph-kit/issues/19);
+  triggers without an audit store remain silent (back-compat
+  default). Helper `emit_trigger_audit` is exported from
+  `langgraph_kit.contrib.schedule` for callers building their own
+  trigger surfaces.
+
 - **Reference deep agent: default audit sink.**
   `build_reference_deep_agent` now wires a
   `ReferenceAuditStopHook` that writes one

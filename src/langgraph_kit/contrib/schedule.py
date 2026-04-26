@@ -177,14 +177,19 @@ class ScheduledTriggerRunner:
         registry: ScheduledRegistry,
         *,
         graph_resolver: Callable[[str], Any],
+        audit_store: Any = None,
     ) -> None:
         super().__init__()
         # graph_resolver mirrors the webhook router's signature:
         # ``(agent_id) -> compiled graph``. Anything that quacks
         # like a LangGraph compiled graph works (real graph in
         # production, mock in tests).
+        # ``audit_store`` (optional :class:`AuditStore`) records one
+        # ``AGENT_INVOKE`` entry per fire so ops can answer "what
+        # caused this run". When ``None`` (default), no audit emission.
         self._registry = registry
         self._graph_resolver = graph_resolver
+        self._audit_store = audit_store
         self._scheduler: Any = None
 
     async def __aenter__(self) -> ScheduledTriggerRunner:
@@ -284,11 +289,57 @@ class ScheduledTriggerRunner:
                 "thread_id": thread_id,
             },
         )
+        await emit_trigger_audit(
+            self._audit_store,
+            source="schedule",
+            spec_id=spec.id,
+            agent_id=spec.agent_id,
+            thread_id=thread_id,
+        )
         return thread_id
+
+
+async def emit_trigger_audit(
+    audit_store: Any,
+    *,
+    source: str,
+    spec_id: str,
+    agent_id: str,
+    thread_id: str,
+) -> None:
+    """Emit one AGENT_INVOKE audit entry per fire.
+
+    Defined as a standalone helper rather than a base class so the
+    three trigger modules don't need a shared inheritance hierarchy
+    just for one optional sink. ``audit_store`` is ``Any`` (rather
+    than ``AuditStore``) so callers can disable auditing by passing
+    ``None`` without dragging the audit module into module-level
+    imports of every trigger.
+    """
+    if audit_store is None:
+        return
+    from langgraph_kit.core.audit import AuditAction
+
+    try:
+        await audit_store.write(
+            actor=f"trigger:{source}",
+            action=AuditAction.AGENT_INVOKE,
+            target=f"thread:{thread_id}",
+            metadata={
+                "trigger_source": source,
+                "trigger_spec_id": spec_id,
+                "agent_id": agent_id,
+            },
+        )
+    except Exception:
+        # Audit must never break a fire path; log via the module
+        # logger rather than re-raise.
+        logger.exception("Trigger audit emit failed for %s spec=%s", source, spec_id)
 
 
 __all__ = [
     "ScheduledRegistry",
     "ScheduledSpec",
     "ScheduledTriggerRunner",
+    "emit_trigger_audit",
 ]

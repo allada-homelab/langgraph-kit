@@ -42,12 +42,17 @@ class _FakeGraph:
 
 
 def _build_app(
-    registry: WebhookRegistry, graphs: dict[str, _FakeGraph]
+    registry: WebhookRegistry,
+    graphs: dict[str, _FakeGraph],
+    *,
+    audit_store: object = None,
 ) -> tuple[FastAPI, dict[str, _FakeGraph]]:
     app = FastAPI()
     app.include_router(
         create_webhook_router(
-            registry, graph_resolver=lambda agent_id: graphs[agent_id]
+            registry,
+            graph_resolver=lambda agent_id: graphs[agent_id],
+            audit_store=audit_store,
         )
     )
     return app, graphs
@@ -344,3 +349,44 @@ class TestWebhookRouter:
         )
         assert resp1.status_code == resp2.status_code == 200
         assert resp1.json()["thread_id"] != resp2.json()["thread_id"]
+
+
+class TestWebhookAudit:
+    def test_fire_emits_audit_entry_when_audit_store_set(self, mock_store: Any) -> None:
+        """A successful webhook fire writes an AGENT_INVOKE audit entry."""
+        import asyncio
+
+        from langgraph_kit.core.audit import AuditAction, AuditStore
+
+        audit_store = AuditStore(mock_store)
+        spec = WebhookSpec(
+            id="github-push",
+            agent_id="reviewer",
+            secret="whsec_audit",
+            payload_template="A new event arrived: {event}",
+        )
+        registry = WebhookRegistry()
+        registry.register(spec)
+        app, _ = _build_app(
+            registry, {"reviewer": _FakeGraph()}, audit_store=audit_store
+        )
+        client = TestClient(app)
+
+        body = b'{"event":"push"}'
+        sig = compute_signature(spec.secret, body)
+        resp = client.post(
+            f"/webhooks/{spec.id}",
+            content=body,
+            headers={spec.signature_header: sig, "content-type": "application/json"},
+        )
+        assert resp.status_code == 200
+
+        entries = asyncio.run(
+            audit_store.query(action=AuditAction.AGENT_INVOKE, limit=10)
+        )
+        assert len(entries) == 1
+        entry = entries[0]
+        assert entry.actor == "trigger:webhook"
+        assert entry.metadata["trigger_source"] == "webhook"
+        assert entry.metadata["trigger_spec_id"] == "github-push"
+        assert entry.metadata["agent_id"] == "reviewer"
