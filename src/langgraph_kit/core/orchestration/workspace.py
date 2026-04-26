@@ -214,9 +214,7 @@ class AgentWorkspace(Generic[T]):
             doc, revision = current
             new_doc = mutate(doc)
             try:
-                new_revision = await self.apatch(
-                    new_doc, expected_revision=revision
-                )
+                new_revision = await self.apatch(new_doc, expected_revision=revision)
             except WorkspaceConflict as exc:
                 last_error = exc
                 continue

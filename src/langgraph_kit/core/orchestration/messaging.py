@@ -112,9 +112,7 @@ class AgentMessage(BaseModel):
     responding to. Used by callers to thread conversations; the
     mailbox itself doesn't enforce reply-chain integrity."""
 
-    created_at: datetime = Field(
-        default_factory=lambda: datetime.now(UTC)
-    )
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     """Send-side wall-clock timestamp. The mailbox uses this for FIFO
     ordering on the recipient side."""
 
