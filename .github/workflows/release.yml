@@ -283,7 +283,7 @@ jobs:
         if: steps.check.outputs.needed == 'true' && (env.HAS_PAT != 'true' || steps.direct.outputs.pushed != 'true')
         env:
           HAS_PAT: ${{ secrets.PRE_COMMIT != '' }}
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.PRE_COMMIT || secrets.GITHUB_TOKEN }}
           branch: chore/bump-version-${{ steps.check.outputs.version }}
