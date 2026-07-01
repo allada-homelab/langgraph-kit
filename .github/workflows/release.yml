@@ -80,7 +80,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Derive version from tag
@@ -146,7 +146,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/download-artifact@v8
@@ -237,7 +237,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -283,7 +283,7 @@ jobs:
         if: steps.check.outputs.needed == 'true' && (env.HAS_PAT != 'true' || steps.direct.outputs.pushed != 'true')
         env:
           HAS_PAT: ${{ secrets.PRE_COMMIT != '' }}
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.PRE_COMMIT || secrets.GITHUB_TOKEN }}
           branch: chore/bump-version-${{ steps.check.outputs.version }}
