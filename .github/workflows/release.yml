@@ -109,7 +109,7 @@ jobs:
           VERSION="${{ steps.v.outputs.version }}"
           echo "__version__ = \"$VERSION\"" > src/langgraph_kit/__version__.py
           cat src/langgraph_kit/__version__.py
-      - uses: actions/setup-python@v6
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - uses: astral-sh/setup-uv@v7
